@@ -189,7 +189,17 @@ async function fetchDoc(url, signal) {
     throw new Error(`ページの取得に失敗しました (HTTP ${res.status}): ${url}`);
   }
   const html = await res.text();
-  return new DOMParser().parseFromString(html, "text/html");
+  return parseHtml(html);
+}
+
+// BOOTHのページにはreCAPTCHAなどの外部スクリプトタグが含まれる。
+// DOMParserが生成する文書は不活性でスクリプトは実行されないが、
+// タグが残っているとブラウザによっては読み込みが試行され、
+// 拡張ページのCSP(script-src 'self')違反としてコンソールにエラーが出る。
+// 集計に不要な要素なので、解析前に取り除いておく。
+function parseHtml(html) {
+  const withoutScripts = html.replace(/<script\b[\s\S]*?<\/script\s*>/gi, "");
+  return new DOMParser().parseFromString(withoutScripts, "text/html");
 }
 
 // 購入履歴一覧ページ1ページ分を解析し、注文の行情報と総ページ数を返す

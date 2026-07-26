@@ -22,6 +22,7 @@ extension/          読み込み対象の拡張機能本体
   popup.html/css/js ポップアップ(前回結果の概要表示と集計ページへの導線)
   dashboard.html/css/js
                     集計ページ(実行・中断・進捗表示・年別月別集計・注文内訳)
+test/               ブラウザ上で動く簡易テスト(test/README.md 参照)
 LICENSE             MIT License
 ```
 

@@ -1,0 +1,27 @@
+﻿<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="script-src 'self'; object-src 'self'">
+<title>dashboard test harness</title>
+</head>
+<body>
+<pre id="out">running...</pre>
+<button id="runBtn"></button>
+<button id="abortBtn" hidden></button>
+<input type="checkbox" id="forceRefresh">
+<div id="progress" hidden><div id="progressText"></div><div><div id="progressFill"></div></div></div>
+<div id="noticeBox" hidden></div>
+<div id="errorBox" hidden></div>
+<div id="result" hidden>
+  <span id="totalAmount"></span><span id="totalCount"></span><span id="skippedCount"></span>
+  <table><tbody id="periodTableBody"></tbody></table>
+  <table><tbody id="orderTableBody"></tbody></table>
+</div>
+<script src="stub.js"></script>
+<script src="../extension/common.js"></script>
+<script src="../extension/dashboard.js"></script>
+<script src="cases.js"></script>
+</body>
+</html>
+
