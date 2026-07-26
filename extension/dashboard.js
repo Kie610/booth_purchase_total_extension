@@ -37,6 +37,9 @@ const footYearLabel = document.getElementById("footYearLabel");
 const footYearTotal = document.getElementById("footYearTotal");
 const footYearCount = document.getElementById("footYearCount");
 const totalAmountEl = document.getElementById("totalAmount");
+const totalGiftEl = document.getElementById("totalGift");
+const footTotalGift = document.getElementById("footTotalGift");
+const footYearGift = document.getElementById("footYearGift");
 const totalCountEl = document.getElementById("totalCount");
 const pendingCountEl = document.getElementById("pendingCount");
 const skippedCountEl = document.getElementById("skippedCount");
@@ -441,6 +444,7 @@ async function collectAmounts(orders, force, signal) {
     const detail = parseDetailPage(doc);
     state.cache[order.id] = {
       amount: detail.amount,
+      gift: detail.gift,
       status: order.status,
       date: order.date,
     };
@@ -519,25 +523,34 @@ function parseListPage(doc) {
   return { orders, maxPage };
 }
 
-// 注文詳細ページを解析し、実際の支払金額を取得する
-function parseDetailPage(doc) {
-  let amount = null;
-  const candidates = Array.from(doc.querySelectorAll("div")).filter(
-    (d) => d.textContent.trim() === "お支払金額"
+// 「ラベル」と、その隣に金額が並ぶ形の明細から金額を拾う。
+// 見出しだけを対象にしたいので、呼び出し側で短いテキストに限定する
+function findAmountByLabel(doc, matches) {
+  const labels = Array.from(doc.querySelectorAll("div")).filter((d) =>
+    matches(d.textContent.trim())
   );
-  for (const label of candidates) {
+  for (const label of labels) {
     const value = label.nextElementSibling;
     if (value) {
       const parsed = parseYen(value.textContent);
-      if (parsed !== null) {
-        amount = parsed;
-        break;
-      }
+      if (parsed !== null) return parsed;
     }
   }
+  return null;
+}
+
+// 注文詳細ページを解析し、実際の支払金額と、そこに含まれるギフト分を取得する
+function parseDetailPage(doc) {
+  const amount = findAmountByLabel(doc, (t) => t === "お支払金額");
+  // ラベルの表記ゆれ(「ギフト」「ギフト券」など)を拾いつつ、
+  // 文字数で区切って外側のコンテナを誤って掴まないようにする
+  const gift = findAmountByLabel(
+    doc,
+    (t) => t.length <= 10 && t.includes("ギフト")
+  );
   const badge = doc.querySelector(".order-state");
   const status = extractStatusFromBadge(badge);
-  return { amount, status };
+  return { amount, gift, status };
 }
 
 // ---- 表示 --------------------------------------------------------------
@@ -566,6 +579,7 @@ function buildResults() {
       date: o.date,
       status: o.status,
       amount: state.cache[o.id] ? state.cache[o.id].amount : undefined,
+      gift: giftAmount(state.cache[o.id]),
     }));
   }
   // 索引が無い場合(旧バージョンからの移行時)はキャッシュだけで表示する
@@ -574,6 +588,7 @@ function buildResults() {
     date: entry.date,
     status: entry.status,
     amount: entry.amount,
+    gift: giftAmount(entry),
   }));
 }
 
@@ -787,8 +802,10 @@ function renderResult() {
   const pending = results.filter((r) => r.amount === undefined).length;
   const failed = results.filter((r) => r.amount === null).length;
   const total = valid.reduce((sum, r) => sum + r.amount, 0);
+  const gift = valid.reduce((sum, r) => sum + giftAmount(r), 0);
 
   totalAmountEl.textContent = formatYen(total);
+  totalGiftEl.textContent = giftText(gift);
   totalCountEl.textContent = `収集済み: ${valid.length}件`;
   pendingCountEl.textContent = pending > 0 ? `未収集: ${pending}件` : "";
   skippedCountEl.textContent =
@@ -813,11 +830,14 @@ function renderFooter(results) {
     return d !== null && d.year === thisYear;
   });
   const sum = (rows) => rows.reduce((total, r) => total + r.amount, 0);
+  const sumGift = (rows) => rows.reduce((total, r) => total + giftAmount(r), 0);
 
   footTotal.textContent = formatYen(sum(valid));
+  footTotalGift.textContent = giftText(sumGift(valid));
   footTotalCount.textContent = `収集済み ${valid.length}件`;
   footYearLabel.textContent = `${thisYear}年`;
   footYearTotal.textContent = formatYen(sum(ofThisYear));
+  footYearGift.textContent = giftText(sumGift(ofThisYear));
   footYearCount.textContent = `収集済み ${ofThisYear.length}件`;
 }
 
@@ -838,7 +858,7 @@ function renderPeriodTable(results) {
     yearRow.innerHTML = `
       <td><span class="toggle">${expanded ? "▾" : "▸"}</span> ${escapeHtml(year.label)}</td>
       <td class="num">${year.count}件</td>
-      <td class="num">${formatYen(year.total)}</td>
+      <td class="num">${giftMarkup(year.gift)}${formatYen(year.total)}</td>
     `;
     periodTableBody.appendChild(yearRow);
 
@@ -850,7 +870,7 @@ function renderPeriodTable(results) {
       monthRow.innerHTML = `
         <td>${escapeHtml(month.label)}</td>
         <td class="num">${month.count}件</td>
-        <td class="num">${formatYen(month.total)}</td>
+        <td class="num">${giftMarkup(month.gift)}${formatYen(month.total)}</td>
       `;
       periodTableBody.appendChild(monthRow);
     }
@@ -864,7 +884,7 @@ function renderOrderTable(results) {
     const tr = document.createElement("tr");
     let amountCell;
     if (typeof r.amount === "number") {
-      amountCell = `<td class="num">${formatYen(r.amount)}</td>`;
+      amountCell = `<td class="num">${giftMarkup(giftAmount(r))}${formatYen(r.amount)}</td>`;
     } else if (r.amount === null) {
       amountCell = `<td class="num amount-failed">取得失敗</td>`;
     } else {

@@ -42,8 +42,30 @@ const detailHtml = `<html><body>
 <div class="summary"><div>商品代金</div><div>¥1,000</div></div>
 <div class="summary"><div>お支払金額</div><div>¥1,234</div></div>
 </body></html>`;
-check("parseDetailPage 支払金額とステータス", parseDetailPage(parse(detailHtml)), { amount: 1234, status: "paid" });
-check("parseDetailPage 金額が無い場合", parseDetailPage(parse("<html><body></body></html>")), { amount: null, status: "unknown" });
+check("parseDetailPage 支払金額とステータス", parseDetailPage(parse(detailHtml)), { amount: 1234, gift: null, status: "paid" });
+check("parseDetailPage 金額が無い場合", parseDetailPage(parse("<html><body></body></html>")), { amount: null, gift: null, status: "unknown" });
+
+// 支払額に含まれるギフト分
+const giftHtml = `<html><body>
+<div class="badge order-state completed">発送完了</div>
+<div class="summary"><div>ギフト</div><div>¥800</div></div>
+<div class="summary"><div>お支払金額</div><div>¥1,234</div></div>
+</body></html>`;
+check("parseDetailPage ギフト分を取得", parseDetailPage(parse(giftHtml)), { amount: 1234, gift: 800, status: "completed" });
+const giftVariantHtml = giftHtml.replace(">ギフト<", ">ギフト券<");
+check("parseDetailPage ギフトの表記ゆれ", parseDetailPage(parse(giftVariantHtml)).gift, 800);
+// 長い文章を含む外側のコンテナを誤って掴まない
+const giftNoiseHtml = `<html><body>
+<div>この商品はギフトとして贈ることができます。ギフト設定は購入時に選べます。</div>
+<div>¥99999</div>
+<div class="summary"><div>お支払金額</div><div>¥1,234</div></div>
+</body></html>`;
+check("parseDetailPage ギフトの誤検出を避ける", parseDetailPage(parse(giftNoiseHtml)).gift, null);
+
+// 表示用のギフト表記(0のときは何も出さない)
+check("giftText あり", giftText(1500), "ギフト ¥1,500");
+check("giftText 0", giftText(0), "");
+check("giftAmount 未取得は0扱い", [giftAmount({ amount: 1 }), giftAmount(undefined), giftAmount({ gift: 300 })], [0, 0, 300]);
 
 const listHtml = `<html><body>
 <a class="nav-reverse" href="/orders/1001">
@@ -78,8 +100,8 @@ const INDEX_ORDERS = [
 ];
 state.index = { updatedAt: "2026-07-26T00:00:00.000Z", orders: INDEX_ORDERS };
 state.cache = {
-  a1: { amount: 1000, status: "completed", date: "2026年5月3日 12:34" },
-  c1: { amount: 3000, status: "completed", date: "2025年12月10日 10:00" },
+  a1: { amount: 1000, gift: 400, status: "completed", date: "2026年5月3日 12:34" },
+  c1: { amount: 3000, status: "completed", date: "2025年12月10日 10:00" }, // 旧キャッシュ(ギフト情報なし)
   c2: { amount: null, status: "unpaid", date: "2025年12月25日 10:00" }, // 取得失敗
 };
 
@@ -115,6 +137,7 @@ check("収集済みは数値", results.find(r => r.id === "a1").amount, 1000);
 // --- 描画 ---
 render();
 check("合計は収集済みのみ", document.getElementById("totalAmount").textContent, "¥4,000");
+check("合計のギフト表記", document.getElementById("totalGift").textContent, "ギフト ¥400");
 check("収集済み件数", document.getElementById("totalCount").textContent, "収集済み: 2件");
 check("未収集件数", document.getElementById("pendingCount").textContent, "未収集: 3件");
 check("除外と取得失敗", document.getElementById("skippedCount").textContent, "除外(キャンセル): 1件 / 金額取得失敗: 1件");
@@ -186,8 +209,10 @@ check("範囲選択で予定件数も更新される", plannedCount.textContent,
 // 年別・月別の集計(収集済みのみ)
 const yearRows = [...periodTableBody.querySelectorAll(".year-row")];
 check("年行の数", yearRows.length, 2);
-check("2026年の収集済み合計", [...yearRows[0].cells].map(c => c.textContent.trim()), ["▸ 2026年", "1件", "¥1,000"]);
-check("2025年の収集済み合計", [...yearRows[1].cells].map(c => c.textContent.trim()), ["▸ 2025年", "1件", "¥3,000"]);
+// 金額との間隔はCSSのマージンなので、テキスト上は連結される
+check("2026年の収集済み合計", [...yearRows[0].cells].map(c => c.textContent.trim()), ["▸ 2026年", "1件", "ギフト ¥400¥1,000"]);
+check("ギフトは金額の左に置く", yearRows[0].cells[2].firstElementChild.className, "gift");
+check("2025年はギフト情報が無いので出さない", [...yearRows[1].cells].map(c => c.textContent.trim()), ["▸ 2025年", "1件", "¥3,000"]);
 check("初期状態で月行は畳まれている", [...periodTableBody.querySelectorAll(".month-row")].every(r => r.hidden), true);
 yearRows[0].querySelector(".toggle").click();
 check("年行クリックで展開", [...periodTableBody.querySelectorAll('.month-row[data-year-key="2026"]')].every(r => !r.hidden), true);
@@ -196,16 +221,20 @@ check("年行クリックで展開", [...periodTableBody.querySelectorAll('.mont
 const orderRows = [...orderTableBody.querySelectorAll("tr")];
 check("内訳は日付の降順(日付不明は末尾)", orderRows.map(tr => tr.cells[3].textContent), ["a2", "a1", "b1", "c2", "c1", "e1"]);
 check("未収集の表示", orderRows.find(tr => tr.cells[3].textContent === "a2").cells[2].textContent, "未収集");
+check("内訳のギフト併記", orderRows.find(tr => tr.cells[3].textContent === "a1").cells[2].textContent, "ギフト ¥400¥1,000");
+check("ギフトが無い注文は金額のみ", orderRows.find(tr => tr.cells[3].textContent === "c1").cells[2].textContent, "¥3,000");
 check("取得失敗の表示", orderRows.find(tr => tr.cells[3].textContent === "c2").cells[2].textContent, "取得失敗");
 check("ステータス日本語化", orderRows.find(tr => tr.cells[3].textContent === "a2").cells[1].textContent, "支払済み");
 
 // 画面下部の固定フッター(収集済みのみを対象にする)
 const nowYear = new Date().getFullYear();
 check("フッター 合計", footTotal.textContent, "¥4,000");
+check("フッター 合計のギフト", footTotalGift.textContent, "ギフト ¥400");
 check("フッター 合計の収集済み件数", footTotalCount.textContent, "収集済み 2件");
 check("フッター 今年の見出し", footYearLabel.textContent, `${nowYear}年`);
 // テストデータは2026年のみ当年に該当する(年が変わったら0件になるのが正しい)
 check("フッター 今年の合計", footYearTotal.textContent, nowYear === 2026 ? "¥1,000" : "¥0");
+check("フッター 今年のギフト", footYearGift.textContent, nowYear === 2026 ? "ギフト ¥400" : "");
 check("フッター 今年の収集済み件数", footYearCount.textContent, nowYear === 2026 ? "収集済み 1件" : "収集済み 0件");
 
 // アコーディオンの件数表示

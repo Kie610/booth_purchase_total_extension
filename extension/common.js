@@ -21,6 +21,21 @@ function formatYen(n) {
   return `¥${Number(n).toLocaleString("ja-JP")}`;
 }
 
+// 支払額に含まれるギフト分。取得できていない注文や旧キャッシュでは0として扱う
+function giftAmount(entry) {
+  return entry && typeof entry.gift === "number" ? entry.gift : 0;
+}
+
+// 支払額の左に小さく添えるギフト表記(0のときは何も出さない)
+function giftText(total) {
+  return total > 0 ? `ギフト ${formatYen(total)}` : "";
+}
+
+function giftMarkup(total) {
+  const text = giftText(total);
+  return text ? `<span class="gift">${text}</span>` : "";
+}
+
 function escapeHtml(str) {
   const div = document.createElement("div");
   div.textContent = str == null ? "" : String(str);
@@ -127,19 +142,21 @@ function aggregateByPeriod(results) {
     const d = parseOrderDate(r.date);
     const yearKey = d ? d.year : null;
     if (!years.has(yearKey)) {
-      years.set(yearKey, { year: yearKey, count: 0, total: 0, months: new Map() });
+      years.set(yearKey, { year: yearKey, count: 0, total: 0, gift: 0, months: new Map() });
     }
     const year = years.get(yearKey);
     year.count++;
     year.total += r.amount;
+    year.gift += giftAmount(r);
 
     const monthKey = d ? d.month : null;
     if (!year.months.has(monthKey)) {
-      year.months.set(monthKey, { month: monthKey, count: 0, total: 0 });
+      year.months.set(monthKey, { month: monthKey, count: 0, total: 0, gift: 0 });
     }
     const month = year.months.get(monthKey);
     month.count++;
     month.total += r.amount;
+    month.gift += giftAmount(r);
   }
 
   const sortDesc = (a, b) => (b.key ?? -1) - (a.key ?? -1);
@@ -150,6 +167,7 @@ function aggregateByPeriod(results) {
       key: y.year,
       count: y.count,
       total: y.total,
+      gift: y.gift,
       months: Array.from(y.months.values())
         .map((m) => ({
           month: m.month,
@@ -157,6 +175,7 @@ function aggregateByPeriod(results) {
           key: m.month,
           count: m.count,
           total: m.total,
+          gift: m.gift,
         }))
         .sort(sortDesc),
     }))
