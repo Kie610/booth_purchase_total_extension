@@ -26,7 +26,9 @@
 <input type="checkbox" id="forceRefreshAll">
 
 <button id="fetchIndexBtn"></button>
-<span id="indexStatus"></span>
+<input type="checkbox" id="forceRefreshIndex">
+<div id="indexStatus"></div>
+<div id="indexCoverage" hidden></div>
 
 <div id="monthEmpty"></div>
 <div id="monthArea" hidden>
@@ -44,7 +46,7 @@
   <table><tbody id="periodTableBody"></tbody></table>
   <details class="accordion">
     <summary><h2>注文ごとの内訳<span id="orderRowCount"></span></h2></summary>
-    <table><tbody id="orderTableBody"></tbody></table>
+    <div class="table-scroll"><table><tbody id="orderTableBody"></tbody></table></div>
   </details>
 </div>
 

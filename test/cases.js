@@ -120,23 +120,50 @@ check("未収集件数", document.getElementById("pendingCount").textContent, "�
 check("除外と取得失敗", document.getElementById("skippedCount").textContent, "除外(キャンセル): 1件 / 金額取得失敗: 1件");
 check("索引の状態表示", indexStatus.textContent.includes("注文数: 6件"), true);
 
-const monthRows = [...monthTableBody.querySelectorAll("tr[data-month-key]")];
-check("月別テーブルの行数", monthRows.length, 4);
-check("未収集がある月は強調", monthRows[0].classList.contains("has-pending"), true);
-check("未収集が無い月は強調しない", monthRows[2].classList.contains("has-pending"), false);
+// 月別テーブルは年でまとめ、月は折りたたんだ状態で始まる
+const yearStats = buildYearStats(targetOrders(), state.cache);
+check("年のまとめ順", yearStats.map(y => y.label), ["2026年", "2025年", "日付不明"]);
+check("2026年の合算", [yearStats[0].count, yearStats[0].collected, yearStats[0].pending], [3, 1, 2]);
+check("年の中の月は新しい順", yearStats[0].months.map(m => m.key), ["2026-05", "2026-03"]);
+
+const monthYearRows = [...monthTableBody.querySelectorAll("tr.year-row")];
+const monthSubRows = [...monthTableBody.querySelectorAll("tr.month-row")];
+check("年の行数", monthYearRows.length, 2);
+check("月の行数", monthSubRows.length, 3);
+check("月は初期状態で畳まれている", monthSubRows.every(r => r.hidden), true);
+check("未収集がある年は強調", monthYearRows[0].classList.contains("has-pending"), true);
+check("未収集が無い年は強調しない", monthYearRows[1].classList.contains("has-pending"), false);
+check("日付不明は独立した行", [...monthTableBody.querySelectorAll("tr.unknown-row")].length, 1);
 check("範囲の選択肢は日付不明を除く", [...rangeFrom.options].map(o => o.value), ["2026-05", "2026-03", "2025-12"]);
 check("初期選択は未収集のある最新月", [rangeFrom.value, rangeTo.value], ["2026-05", "2026-05"]);
 
-// 行クリックでその月が範囲になる
-monthRows[1].click();
-check("行クリックで範囲設定", [rangeFrom.value, rangeTo.value], ["2026-03", "2026-03"]);
-check("選択範囲の行が強調される", [monthRows[0], monthRows[1], monthRows[2]].map(r => r.classList.contains("in-range")), [false, true, false]);
+// ▸ をクリックすると月別が開閉する
+monthYearRows[0].querySelector(".toggle").click();
+check("年の▸で展開", [...monthTableBody.querySelectorAll('tr.month-row[data-year-key="2026"]')].every(r => !r.hidden), true);
+check("他の年は畳まれたまま", [...monthTableBody.querySelectorAll('tr.month-row[data-year-key="2025"]')].every(r => r.hidden), true);
+check("展開しても範囲は変わらない", [rangeFrom.value, rangeTo.value], ["2026-05", "2026-05"]);
+
+// 年の行(▸以外)をクリックするとその年全体が範囲になる
+monthYearRows[0].click();
+check("年クリックでその年が範囲", [rangeFrom.value, rangeTo.value], ["2026-03", "2026-05"]);
+check("年の行が強調される", [monthYearRows[0].classList.contains("in-range"), monthYearRows[1].classList.contains("in-range")], [true, false]);
+
+// 月の行をクリックするとその月だけが範囲になる
+const may = monthTableBody.querySelector('tr.month-row[data-month-key="2026-05"]');
+may.click();
+check("月クリックで単月が範囲", [rangeFrom.value, rangeTo.value], ["2026-05", "2026-05"]);
+check("範囲外の年は強調されない", monthYearRows[0].classList.contains("in-range"), false);
+check("選択された月だけ強調される", monthSubRows.map(r => r.classList.contains("in-range")), [true, false, false]);
 
 // 日付不明の行はクリックしても範囲を変えない
-monthRows[3].click();
-check("日付不明の行は範囲に入らない", [rangeFrom.value, rangeTo.value], ["2026-03", "2026-03"]);
+monthTableBody.querySelector("tr.unknown-row").click();
+check("日付不明の行は範囲に入らない", [rangeFrom.value, rangeTo.value], ["2026-05", "2026-05"]);
 check("日付不明の案内が出る", unknownArea.hidden, false);
 check("日付不明は一括集計へ誘導する", unknownCount.textContent.includes("まとめて一括集計"), true);
+
+// 再描画しても開閉状態が保たれる
+render();
+check("再描画で展開状態が保たれる", [...monthTableBody.querySelectorAll('tr.month-row[data-year-key="2026"]')].every(r => !r.hidden), true);
 
 // 取得予定件数(ボタン横の表示)
 check("取得予定件数 未収集のみ", plannedCount.textContent, "取得予定: 1件");
@@ -192,20 +219,83 @@ check("進捗バーの幅", document.getElementById("progressFill").style.width,
 setRunning(false);
 check("終了で進捗表示とクラスが戻る", [document.getElementById("progress").hidden, document.body.classList.contains("has-progress")], [true, false]);
 
-// --- 索引が無い場合(旧バージョンからの移行)はキャッシュだけで表示する ---
-state.index = null;
-state.cache = { z1: { amount: 500, status: "completed", date: "2024年1月1日 00:00" } };
-render();
-check("索引が無くてもキャッシュから表示", document.getElementById("totalAmount").textContent, "¥500");
-check("索引が無い場合は取得を促す", monthEmpty.hidden, false);
+// --- ①注文履歴の取得: 既知の注文への到達と、取得できた範囲の記録 ---
 
-// --- HTMLエスケープ ---
-state.index = { updatedAt: "2026-07-26T00:00:00.000Z", orders: [{ id: "<img src=x onerror=alert(1)>", status: "completed", date: "2024年1月1日 00:00" }] };
-state.cache = {};
-render();
-check("HTMLエスケープ", orderTableBody.querySelector("tr").cells[3].querySelector("img"), null);
+// 一覧は新しい順なので、既知の注文に当たった時点で以降は取得済み
+const newRows = [{ id: "n1" }, { id: "n2" }, { id: "old1" }, { id: "n3" }];
+const collected = [];
+check("既知の注文で停止する", appendUntilKnown(collected, newRows, new Set(["old1"])), true);
+check("停止までの分だけ取り込む", collected.map(o => o.id), ["n1", "n2"]);
+const collected2 = [];
+check("既知が無ければ最後まで進む", appendUntilKnown(collected2, newRows, new Set()), false);
+check("全件取り込む", collected2.map(o => o.id), ["n1", "n2", "old1", "n3"]);
 
-setTimeout(() => {
+// v1.2以前はフラグを持たないが、全ページ巡回に成功したときだけ保存していた
+check("フラグが無い索引は完了扱い", indexIsComplete({ orders: [] }), true);
+check("complete:false は未完了", indexIsComplete({ orders: [], complete: false }), false);
+check("索引が無ければ未完了", indexIsComplete(null), false);
+
+const OLD = [{ id: "o1", status: "completed", date: "2025年1月1日 00:00" }];
+const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
+
+(async () => {
+  // 増分取得: 既知に接続でき、以前が完全なら全体として完全なまま
+  state.index = { updatedAt: "x", orders: OLD, complete: true };
+  let added = await commitIndex(NEW, { force: false, reachedKnown: true, finishedAllPages: false, previousComplete: true });
+  check("増分取得で既存と併合される", state.index.orders.map(o => o.id), ["o1", "n1"]);
+  check("増分取得の追加件数", added, 1);
+  check("既知に接続できれば完全なまま", state.index.complete, true);
+
+  // 以前が未完了なら、増分を足しても未完了のまま
+  state.index = { updatedAt: "x", orders: OLD, complete: false };
+  await commitIndex(NEW, { force: false, reachedKnown: true, finishedAllPages: false, previousComplete: false });
+  check("以前が未完了なら未完了のまま", state.index.complete, false);
+
+  // 中断: 既知にも最古にも到達していないので未完了として記録する
+  state.index = { updatedAt: "x", orders: OLD, complete: true };
+  await commitIndex(NEW, { force: false, reachedKnown: false, finishedAllPages: false, previousComplete: true });
+  check("途中で終わったら未完了として記録", state.index.complete, false);
+  check("途中で終わっても取得済みは残る", state.index.orders.map(o => o.id), ["o1", "n1"]);
+
+  // 全件再取得を最後までやり切った場合だけ、古い内容を置き換える
+  state.index = { updatedAt: "x", orders: OLD, complete: false };
+  await commitIndex(NEW, { force: true, reachedKnown: false, finishedAllPages: true, previousComplete: false });
+  check("全件再取得の完了で置き換える", state.index.orders.map(o => o.id), ["n1"]);
+  check("全件再取得の完了で完全になる", state.index.complete, true);
+
+  // 全件再取得が途中で終わった場合は、既存を消さない(消すと以前の範囲まで失う)
+  state.index = { updatedAt: "x", orders: OLD, complete: true };
+  await commitIndex(NEW, { force: true, reachedKnown: false, finishedAllPages: false, previousComplete: false });
+  check("全件再取得の中断では既存を残す", state.index.orders.map(o => o.id), ["o1", "n1"]);
+  check("全件再取得の中断は未完了", state.index.complete, false);
+
+  // 取得範囲のUI表示
+  state.cache = {};
+  state.index = { updatedAt: "2026-07-26T00:00:00.000Z", orders: [...OLD, ...NEW], complete: true };
+  render();
+  check("全期間の表示", indexCoverage.textContent, "取得済みの範囲: 全期間 (最古の注文 2025年1月1日 00:00)");
+  check("全期間では警告しない", indexCoverage.classList.contains("warn"), false);
+
+  state.index = { updatedAt: "2026-07-26T00:00:00.000Z", orders: [...OLD, ...NEW], complete: false };
+  render();
+  check("未完了は最古を示して警告する", indexCoverage.textContent.startsWith("取得済みの範囲: 最新 〜 2025年1月1日 00:00"), true);
+  check("未完了は再取得を案内する", indexCoverage.textContent.includes("全件再取得"), true);
+  check("未完了は警告色", indexCoverage.classList.contains("warn"), true);
+
+  // --- 索引が無い場合(旧バージョンからの移行)はキャッシュだけで表示する ---
+  state.index = null;
+  state.cache = { z1: { amount: 500, status: "completed", date: "2024年1月1日 00:00" } };
+  render();
+  check("索引が無くてもキャッシュから表示", document.getElementById("totalAmount").textContent, "¥500");
+  check("索引が無い場合は取得を促す", monthEmpty.hidden, false);
+  check("索引が無ければ範囲表示も出さない", indexCoverage.hidden, true);
+
+  // --- HTMLエスケープ ---
+  state.index = { updatedAt: "2026-07-26T00:00:00.000Z", complete: true, orders: [{ id: "<img src=x onerror=alert(1)>", status: "completed", date: "2024年1月1日 00:00" }] };
+  state.cache = {};
+  render();
+  check("HTMLエスケープ", orderTableBody.querySelector("tr").cells[3].querySelector("img"), null);
+
   document.getElementById("out").textContent =
     lines.join("\n") + `\n\n---- ${failures === 0 ? "ALL PASS" : failures + " FAILED"} (${lines.length} checks) ----`;
-}, 800);
+})();

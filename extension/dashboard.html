@@ -49,12 +49,20 @@
     <section class="step">
       <h2><span class="step-no">①</span> 注文履歴の取得</h2>
       <p class="hint">
-        購入履歴の一覧ページを巡回して、注文番号・注文日時・ステータスを取得します。
-        金額はここでは取りに行かないため、比較的短時間で終わります。
+        購入履歴の一覧ページを新しい順に巡回して、注文番号・注文日時・ステータスを
+        取得します。取得済みの注文に到達した時点で停止するため、2回目以降は
+        増えた分だけで済みます。
       </p>
       <div class="step-controls">
         <button id="fetchIndexBtn" class="primary">注文履歴を取得</button>
-        <span class="status" id="indexStatus">まだ取得していません</span>
+        <label class="checkbox">
+          <input type="checkbox" id="forceRefreshIndex">
+          キャッシュを無視して全件再取得
+        </label>
+      </div>
+      <div class="index-status">
+        <div class="status" id="indexStatus">まだ取得していません</div>
+        <div class="status" id="indexCoverage" hidden></div>
       </div>
     </section>
 
@@ -92,11 +100,14 @@
 
         <table class="data-table month-table">
           <thead>
-            <tr><th>年月</th><th class="num">注文数</th><th class="num">収集済み</th><th class="num">未収集</th></tr>
+            <tr><th>期間</th><th class="num">注文数</th><th class="num">収集済み</th><th class="num">未収集</th></tr>
           </thead>
           <tbody id="monthTableBody"></tbody>
         </table>
-        <p class="hint">行をクリックすると、その月を範囲に設定します。</p>
+        <p class="hint">
+          年の行の ▸ をクリックすると月別を開閉できます。
+          年の行をクリックするとその年全体が、月の行をクリックするとその月が範囲に設定されます。
+        </p>
 
         <p id="unknownArea" class="unknown-area" hidden><span id="unknownCount"></span></p>
       </div>
@@ -116,12 +127,14 @@
 
       <details class="panel accordion">
         <summary><h2>注文ごとの内訳<span class="accordion-count" id="orderRowCount"></span></h2></summary>
-        <table class="data-table">
-          <thead>
-            <tr><th>注文日時</th><th>ステータス</th><th class="num">金額</th><th>注文番号</th></tr>
-          </thead>
-          <tbody id="orderTableBody"></tbody>
-        </table>
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead>
+              <tr><th>注文日時</th><th>ステータス</th><th class="num">金額</th><th>注文番号</th></tr>
+            </thead>
+            <tbody id="orderTableBody"></tbody>
+          </table>
+        </div>
       </details>
     </section>
   </main>

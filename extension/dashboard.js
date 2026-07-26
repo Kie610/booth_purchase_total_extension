@@ -8,7 +8,9 @@ const RUN_STATE_INTERVAL_MS = 400; // ポップアップへ進捗を渡す書き
 const EXCLUDED_STATUSES = new Set(["cancelled"]);
 
 const fetchIndexBtn = document.getElementById("fetchIndexBtn");
+const forceRefreshIndex = document.getElementById("forceRefreshIndex");
 const indexStatus = document.getElementById("indexStatus");
+const indexCoverage = document.getElementById("indexCoverage");
 const monthEmpty = document.getElementById("monthEmpty");
 const monthArea = document.getElementById("monthArea");
 const monthTableBody = document.getElementById("monthTableBody");
@@ -54,9 +56,11 @@ let running = false;
 let abortController = null;
 let lastRunStateWrite = 0;
 const state = { index: null, cache: {} };
+// 月別テーブルで開いている年(再描画をまたいで保つ)
+const expandedMonthYears = new Set();
 
 fetchIndexBtn.addEventListener("click", () =>
-  runTask(fetchIndexTask, "注文履歴を取得しました。")
+  runTask((signal) => fetchIndexTask(signal, forceRefreshIndex.checked))
 );
 
 collectRangeBtn.addEventListener("click", () =>
@@ -86,12 +90,36 @@ selectPendingBtn.addEventListener("click", () => {
 });
 
 monthTableBody.addEventListener("click", (event) => {
-  const row = event.target.closest("tr[data-month-key]");
-  if (!row || running) return;
-  const key = row.dataset.monthKey;
-  if (key === "null") return; // 日付不明は範囲で表せないため専用ボタンで扱う
-  setRange(key, key);
+  if (running) return;
+  const yearRow = event.target.closest("tr.year-row");
+  if (yearRow) {
+    // ▸ は開閉、それ以外の場所はその年をまとめて範囲に設定
+    if (event.target.closest(".toggle")) {
+      toggleMonthYear(yearRow);
+    } else {
+      setRange(yearRow.dataset.rangeFrom, yearRow.dataset.rangeTo);
+    }
+    return;
+  }
+  const monthRow = event.target.closest("tr.month-row");
+  if (monthRow) setRange(monthRow.dataset.monthKey, monthRow.dataset.monthKey);
 });
+
+function toggleMonthYear(yearRow) {
+  const key = yearRow.dataset.yearKey;
+  const expanded = expandedMonthYears.has(key);
+  if (expanded) {
+    expandedMonthYears.delete(key);
+  } else {
+    expandedMonthYears.add(key);
+  }
+  yearRow.querySelector(".toggle").textContent = expanded ? "▸" : "▾";
+  monthTableBody
+    .querySelectorAll(`tr.month-row[data-year-key="${key}"]`)
+    .forEach((el) => {
+      el.hidden = expanded;
+    });
+}
 
 periodTableBody.addEventListener("click", (event) => {
   const row = event.target.closest(".year-row");
@@ -197,6 +225,7 @@ function setRunning(isRunning) {
   ACTION_BUTTONS.forEach((btn) => {
     btn.disabled = isRunning;
   });
+  forceRefreshIndex.disabled = isRunning;
   forceRefreshRange.disabled = isRunning;
   forceRefreshAll.disabled = isRunning;
   rangeFrom.disabled = isRunning;
@@ -276,42 +305,101 @@ async function fetchDoc(url, signal) {
   return new DOMParser().parseFromString(html, "text/html");
 }
 
-// ① 一覧ページを全ページ巡回し、注文の索引を作る
-async function fetchIndexTask(signal) {
-  setProgress("購入履歴の1ページ目を取得中...", 0);
-  await publishRunState({ phase: "注文履歴の取得", current: 0, total: 0 }, true);
+// v1.2以前は全ページの巡回に成功したときだけ索引を保存していたため、
+// フラグを持たない索引は「最古まで取得済み」として扱ってよい
+function indexIsComplete(index) {
+  return Boolean(index) && index.complete !== false;
+}
 
-  const firstDoc = await fetchDoc(ORDERS_INDEX_URL, signal);
-  const { orders: firstOrders, maxPage } = parseListPage(firstDoc);
-  const allRows = [...firstOrders];
-
-  for (let page = 2; page <= maxPage; page++) {
-    setProgress(
-      `購入履歴一覧を取得中... (${page}/${maxPage}ページ)`,
-      page / maxPage
-    );
-    await publishRunState({
-      phase: "注文履歴の取得",
-      current: page,
-      total: maxPage,
-    });
-    await sleep(REQUEST_INTERVAL_MS, signal);
-    const doc = await fetchDoc(`${ORDERS_INDEX_URL}?page=${page}`, signal);
-    allRows.push(...parseListPage(doc).orders);
+// 一覧は新しい順に並んでいるので、既知の注文に当たったらそこから先は取得済み
+function appendUntilKnown(target, rows, known) {
+  for (const row of rows) {
+    if (known.has(row.id)) return true;
+    target.push(row);
   }
+  return false;
+}
 
+// 取得できたところまでを索引へ反映する。中断や失敗のあとでも呼ばれるため、
+// 「どこまで確実に取得できたか」をここで確定させる
+async function commitIndex(fetched, context) {
+  const { force, reachedKnown, finishedAllPages, previousComplete } = context;
+  const previousOrders = state.index ? state.index.orders : [];
+  const before = new Set(previousOrders.map((o) => o.id));
+
+  const merged = new Map();
+  // 全件再取得を最後までやり切った場合だけ、古い内容を捨てて置き換える。
+  // 途中で終わった場合は既存分を残さないと、以前取得した範囲まで失われる
+  if (!(force && finishedAllPages)) {
+    for (const order of previousOrders) merged.set(order.id, order);
+  }
   // 同一注文が商品数だけ複数行として現れるため、注文IDで重複除去する
   // （これが既存拡張の「同一ショップの複数商品購入で重複カウントされる」不具合の原因）
-  const unique = new Map();
-  for (const row of allRows) {
-    if (!unique.has(row.id)) unique.set(row.id, row);
-  }
+  for (const order of fetched) merged.set(order.id, order);
 
+  const orders = Array.from(merged.values());
   state.index = {
     updatedAt: new Date().toISOString(),
-    orders: Array.from(unique.values()),
+    orders,
+    // 最古まで到達したか、既知の注文に接続できて以前が完全なら、全体として完全
+    complete: finishedAllPages || (reachedKnown && previousComplete),
   };
   await saveIndex(state.index);
+  return orders.filter((o) => !before.has(o.id)).length;
+}
+
+// ① 一覧ページを新しい順に巡回して注文の索引を作る
+async function fetchIndexTask(signal, force) {
+  const known = new Set(
+    force || !state.index ? [] : state.index.orders.map((o) => o.id)
+  );
+  const previousComplete = !force && indexIsComplete(state.index);
+
+  const fetched = [];
+  let reachedKnown = false;
+  let finishedAllPages = false;
+  let added = 0;
+
+  try {
+    setProgress("購入履歴の1ページ目を取得中...", 0);
+    await publishRunState({ phase: "注文履歴の取得", current: 0, total: 0 }, true);
+
+    const firstDoc = await fetchDoc(ORDERS_INDEX_URL, signal);
+    const { orders: firstOrders, maxPage } = parseListPage(firstDoc);
+    reachedKnown = appendUntilKnown(fetched, firstOrders, known);
+
+    for (let page = 2; page <= maxPage && !reachedKnown; page++) {
+      setProgress(
+        `購入履歴一覧を取得中... (${page}/${maxPage}ページ)`,
+        page / maxPage
+      );
+      await publishRunState({
+        phase: "注文履歴の取得",
+        current: page,
+        total: maxPage,
+      });
+      await sleep(REQUEST_INTERVAL_MS, signal);
+      const doc = await fetchDoc(`${ORDERS_INDEX_URL}?page=${page}`, signal);
+      reachedKnown = appendUntilKnown(fetched, parseListPage(doc).orders, known);
+    }
+    // 例外で抜けた場合はここを通らないため、巡回しきったときだけ true になる
+    finishedAllPages = !reachedKnown;
+  } finally {
+    added = await commitIndex(fetched, {
+      force,
+      reachedKnown,
+      finishedAllPages,
+      previousComplete,
+    });
+  }
+
+  if (reachedKnown) {
+    showNotice(
+      `取得済みの注文に到達したため、そこで停止しました(以降は読み込み済み)。新しく追加された注文: ${added}件。`
+    );
+  } else {
+    showNotice(`注文履歴を取得しました(新しく追加された注文: ${added}件)。`);
+  }
 }
 
 // 収集対象の絞り込み。forceが立っている場合は収集済みでも取り直す
@@ -376,9 +464,10 @@ async function collectRangeTask(signal) {
 }
 
 async function runAllTask(signal) {
-  if (forceRefreshAll.checked) state.cache = {};
-  await fetchIndexTask(signal);
-  await collectAmounts(targetOrders(), forceRefreshAll.checked, signal);
+  const force = forceRefreshAll.checked;
+  if (force) state.cache = {};
+  await fetchIndexTask(signal, force);
+  await collectAmounts(targetOrders(), force, signal);
 }
 
 // ---- 解析 --------------------------------------------------------------
@@ -498,6 +587,7 @@ function render() {
 function renderIndexStatus() {
   if (!state.index) {
     indexStatus.textContent = "まだ取得していません";
+    indexCoverage.hidden = true;
     return;
   }
   const skipped = skippedCount();
@@ -505,6 +595,34 @@ function renderIndexStatus() {
     `最終取得: ${formatTimestamp(state.index.updatedAt)} / ` +
     `注文数: ${targetOrders().length}件` +
     (skipped > 0 ? ` (キャンセル ${skipped}件を除く)` : "");
+
+  // 一覧は新しい順に辿るため、取得できた範囲は必ず「最新〜どこか」になる。
+  // 途中で終わっているとそれより古い注文が丸ごと欠けるので、明示する
+  const oldest = oldestCoveredOrder();
+  const complete = indexIsComplete(state.index);
+  indexCoverage.hidden = false;
+  indexCoverage.classList.toggle("warn", !complete);
+  if (complete) {
+    indexCoverage.textContent = oldest
+      ? `取得済みの範囲: 全期間 (最古の注文 ${oldest.date})`
+      : "取得済みの範囲: 全期間";
+  } else {
+    indexCoverage.textContent = oldest
+      ? `取得済みの範囲: 最新 〜 ${oldest.date} (途中で終了したため、これより古い注文は取得できていません。「キャッシュを無視して全件再取得」で取り直せます)`
+      : "取得途中で終了したため、範囲が確定していません。「キャッシュを無視して全件再取得」で取り直してください";
+  }
+}
+
+// 索引に入っている最も古い注文(日時が読めるもののうち)
+function oldestCoveredOrder() {
+  if (!state.index) return null;
+  let oldest = null;
+  for (const order of state.index.orders) {
+    const d = parseOrderDate(order.date);
+    if (!d) continue;
+    if (!oldest || d.sortKey < parseOrderDate(oldest.date).sortKey) oldest = order;
+  }
+  return oldest;
 }
 
 function renderMonthArea() {
@@ -515,18 +633,30 @@ function renderMonthArea() {
   if (!hasIndex) return;
 
   monthTableBody.innerHTML = "";
-  for (const stat of stats) {
-    const tr = document.createElement("tr");
-    tr.dataset.monthKey = String(stat.key);
-    if (stat.pending > 0) tr.classList.add("has-pending");
-    if (stat.key === null) tr.classList.add("unknown-row");
-    tr.innerHTML = `
-      <td>${escapeHtml(stat.label)}</td>
-      <td class="num">${stat.count}</td>
-      <td class="num">${stat.collected}</td>
-      <td class="num">${stat.pending > 0 ? stat.pending : "—"}</td>
-    `;
-    monthTableBody.appendChild(tr);
+  for (const year of buildYearStats(targetOrders(), state.cache)) {
+    if (year.key === null) {
+      // 日付不明はまとめられないので、そのまま1行だけ出す
+      monthTableBody.appendChild(
+        statRow(year, { className: "unknown-row", indent: false })
+      );
+      continue;
+    }
+
+    const expanded = expandedMonthYears.has(year.key);
+    const yearRow = statRow(year, { className: "year-row", toggle: true, expanded });
+    yearRow.dataset.yearKey = year.key;
+    // 年をクリックしたときに設定する範囲(その年に存在する月の最古〜最新)
+    yearRow.dataset.rangeFrom = year.months[year.months.length - 1].key;
+    yearRow.dataset.rangeTo = year.months[0].key;
+    monthTableBody.appendChild(yearRow);
+
+    for (const month of year.months) {
+      const monthRow = statRow(month, { className: "month-row", indent: true });
+      monthRow.dataset.monthKey = month.key;
+      monthRow.dataset.yearKey = year.key;
+      monthRow.hidden = !expanded;
+      monthTableBody.appendChild(monthRow);
+    }
   }
 
   renderRangeOptions(stats.filter((s) => s.key !== null));
@@ -539,6 +669,23 @@ function renderMonthArea() {
       `(未収集 ${unknown.pending}件)。月の範囲では指定できないため、` +
       `「まとめて一括集計」で収集してください。`;
   }
+}
+
+// 月別テーブルの1行(年・月・日付不明で共通)
+function statRow(stat, { className, toggle, expanded, indent }) {
+  const tr = document.createElement("tr");
+  tr.className = className;
+  if (stat.pending > 0) tr.classList.add("has-pending");
+  const label = toggle
+    ? `<span class="toggle">${expanded ? "▾" : "▸"}</span> ${escapeHtml(stat.label)}`
+    : escapeHtml(stat.label);
+  tr.innerHTML = `
+    <td${indent ? ' class="indent"' : ""}>${label}</td>
+    <td class="num">${stat.count}</td>
+    <td class="num">${stat.collected}</td>
+    <td class="num">${stat.pending > 0 ? stat.pending : "—"}</td>
+  `;
+  return tr;
 }
 
 function renderRangeOptions(monthStats) {
@@ -593,9 +740,14 @@ function highlightSelectedRange() {
   if (!from || !to) return;
   const lo = from <= to ? from : to;
   const hi = from <= to ? to : from;
-  monthTableBody.querySelectorAll("tr[data-month-key]").forEach((tr) => {
+  monthTableBody.querySelectorAll("tr.month-row").forEach((tr) => {
     const key = tr.dataset.monthKey;
-    tr.classList.toggle("in-range", key !== "null" && key >= lo && key <= hi);
+    tr.classList.toggle("in-range", key >= lo && key <= hi);
+  });
+  // 年は、その年の月がすべて範囲に入っているときだけ強調する
+  monthTableBody.querySelectorAll("tr.year-row").forEach((tr) => {
+    const covered = tr.dataset.rangeFrom >= lo && tr.dataset.rangeTo <= hi;
+    tr.classList.toggle("in-range", covered);
   });
 }
 

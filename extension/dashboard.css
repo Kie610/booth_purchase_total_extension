@@ -426,9 +426,56 @@ button.secondary:hover:not(:disabled) {
   background: #ffe6e6;
 }
 
+.month-table .year-row .toggle {
+  display: inline-block;
+  width: 1.2em;
+  color: var(--fg-muted);
+  font-weight: 400;
+}
+
+.month-table .month-row td {
+  color: var(--fg-muted);
+}
+
+.month-table .month-row td.indent {
+  padding-left: 34px;
+}
+
 .month-table .unknown-row {
   cursor: default;
   color: var(--fg-muted);
+}
+
+.index-status {
+  margin-top: 10px;
+}
+
+.status.warn {
+  color: #a3272a;
+}
+
+/* ---- スクロールする表 ---- */
+
+.table-scroll {
+  max-height: 440px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-top: 12px;
+}
+
+.table-scroll .data-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #fff;
+  box-shadow: inset 0 -1px 0 var(--border);
+}
+
+.table-scroll .data-table th,
+.table-scroll .data-table td {
+  padding-left: 12px;
+  padding-right: 12px;
 }
 
 /* ---- 年別・月別の集計 ---- */

@@ -90,6 +90,35 @@ function buildMonthStats(orders, cache) {
     });
 }
 
+// 月別の集計を年でまとめ直す(新しい年が先、日付不明は末尾)
+function buildYearStats(orders, cache) {
+  const years = new Map();
+  for (const month of buildMonthStats(orders, cache)) {
+    const key = month.key ? month.key.slice(0, 4) : null;
+    if (!years.has(key)) {
+      years.set(key, {
+        key,
+        label: key ? `${Number(key)}年` : "日付不明",
+        count: 0,
+        collected: 0,
+        pending: 0,
+        months: [],
+      });
+    }
+    const year = years.get(key);
+    year.count += month.count;
+    year.collected += month.collected;
+    year.pending += month.pending;
+    year.months.push(month); // buildMonthStats が新しい順に並べてあるのでそのまま
+  }
+  return Array.from(years.values()).sort((a, b) => {
+    if (a.key === b.key) return 0;
+    if (a.key === null) return 1;
+    if (b.key === null) return -1;
+    return a.key < b.key ? 1 : -1;
+  });
+}
+
 // 年 → 月 の二段階で支払額を集計する
 function aggregateByPeriod(results) {
   const years = new Map();
