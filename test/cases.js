@@ -184,6 +184,14 @@ check("フッター 今年の収集済み件数", footYearCount.textContent, now
 // アコーディオンの件数表示
 check("内訳の件数表示", orderRowCount.textContent, "(6件)");
 
+// 進捗はフッターに出す。表示中はフッターが高くなるので本文の下余白も追従させる
+check("待機中は進捗を出さない", [document.getElementById("progress").hidden, document.body.classList.contains("has-progress")], [true, false]);
+setProgress("金額を収集中... (18/40件)", 0.45);
+check("進捗表示中はフッター拡張のクラスが付く", [document.getElementById("progress").hidden, document.body.classList.contains("has-progress")], [false, true]);
+check("進捗バーの幅", document.getElementById("progressFill").style.width, "45%");
+setRunning(false);
+check("終了で進捗表示とクラスが戻る", [document.getElementById("progress").hidden, document.body.classList.contains("has-progress")], [true, false]);
+
 // --- 索引が無い場合(旧バージョンからの移行)はキャッシュだけで表示する ---
 state.index = null;
 state.cache = { z1: { amount: 500, status: "completed", date: "2024年1月1日 00:00" } };

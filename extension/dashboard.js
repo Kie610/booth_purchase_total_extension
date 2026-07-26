@@ -202,7 +202,10 @@ function setRunning(isRunning) {
   rangeFrom.disabled = isRunning;
   rangeTo.disabled = isRunning;
   abortBtn.disabled = false;
-  if (!isRunning) progressBox.hidden = true;
+  if (!isRunning) {
+    progressBox.hidden = true;
+    document.body.classList.remove("has-progress");
+  }
 }
 
 function showError(message) {
@@ -227,6 +230,8 @@ function clearNotice() {
 
 function setProgress(text, ratio) {
   progressBox.hidden = false;
+  // フッターに進捗を出す分だけ高さが増えるので、本文の下余白も広げる
+  document.body.classList.add("has-progress");
   progressText.textContent = text;
   if (typeof ratio === "number") {
     progressFill.style.width = `${Math.min(100, Math.max(0, ratio * 100))}%`;

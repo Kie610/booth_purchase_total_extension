@@ -9,13 +9,6 @@
   <header class="app-header">
     <div class="app-header-inner">
       <h1>Booth購入金額集計</h1>
-      <div id="progress" class="progress" hidden>
-        <div class="progress-head">
-          <span class="progress-text" id="progressText">準備中...</span>
-          <button id="abortBtn" class="secondary small">中断</button>
-        </div>
-        <div class="progress-bar"><div class="progress-bar-fill" id="progressFill"></div></div>
-      </div>
     </div>
   </header>
 
@@ -134,15 +127,24 @@
   </main>
 
   <footer class="app-footer">
-    <div class="foot-item">
-      <span class="foot-label">合計</span>
-      <span class="foot-value" id="footTotal">¥0</span>
-      <span class="foot-sub" id="footTotalCount">収集済み 0件</span>
+    <div id="progress" class="progress" hidden>
+      <div class="progress-head">
+        <span class="progress-text" id="progressText">準備中...</span>
+        <button id="abortBtn" class="secondary small">中断</button>
+      </div>
+      <div class="progress-bar"><div class="progress-bar-fill" id="progressFill"></div></div>
     </div>
-    <div class="foot-item">
-      <span class="foot-label" id="footYearLabel">今年</span>
-      <span class="foot-value" id="footYearTotal">¥0</span>
-      <span class="foot-sub" id="footYearCount">収集済み 0件</span>
+    <div class="foot-totals">
+      <div class="foot-item">
+        <span class="foot-label">合計</span>
+        <span class="foot-value" id="footTotal">¥0</span>
+        <span class="foot-sub" id="footTotalCount">収集済み 0件</span>
+      </div>
+      <div class="foot-item">
+        <span class="foot-label" id="footYearLabel">今年</span>
+        <span class="foot-value" id="footYearTotal">¥0</span>
+        <span class="foot-sub" id="footYearCount">収集済み 0件</span>
+      </div>
     </div>
   </footer>
 

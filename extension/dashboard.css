@@ -66,12 +66,24 @@ a {
   z-index: 10;
   height: var(--footer-height);
   display: flex;
-  align-items: center;
-  gap: 40px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
   padding: 0 24px;
   background: #fff;
   border-top: 1px solid var(--border);
   box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.04);
+}
+
+/* 実行中は進捗の分だけフッターを高くする(本文の下余白も追従する) */
+body.has-progress {
+  --footer-height: 112px;
+}
+
+.foot-totals {
+  display: flex;
+  align-items: baseline;
+  gap: 40px;
 }
 
 .foot-item {
@@ -232,10 +244,6 @@ button.secondary:hover:not(:disabled) {
 }
 
 /* ---- 進捗 ---- */
-
-.progress {
-  margin-top: 8px;
-}
 
 .progress-head {
   display: flex;
