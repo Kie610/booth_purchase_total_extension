@@ -412,6 +412,25 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   render();
   check("HTMLエスケープ", orderTableBody.querySelector("tr").cells[3].querySelector("img"), null);
 
+  // --- アイコン(パッケージ化に必要。宣言と実ファイルがずれていても拡張は読み込めてしまう) ---
+  const ICON_SIZES = [16, 32, 48, 128];
+  const manifest = await (await fetch("../extension/manifest.json")).json();
+  const expectedIcons = Object.fromEntries(ICON_SIZES.map((s) => [String(s), `icons/icon${s}.png`]));
+  check("manifestのiconsに4サイズを宣言", manifest.icons, expectedIcons);
+  check("ツールバー用のdefault_iconも同じ4サイズ", manifest.action.default_icon, expectedIcons);
+
+  const iconSizes = [];
+  for (const size of ICON_SIZES) {
+    const res = await fetch(`../extension/${expectedIcons[String(size)]}`);
+    if (!res.ok) {
+      iconSizes.push(`${size}: HTTP ${res.status}`);
+      continue;
+    }
+    const bitmap = await createImageBitmap(await res.blob());
+    iconSizes.push(`${size}: ${bitmap.width}x${bitmap.height}`);
+  }
+  check("アイコンの実ファイルが宣言どおりの寸法", iconSizes, ICON_SIZES.map((s) => `${s}: ${s}x${s}`));
+
   document.getElementById("out").textContent =
     lines.join("\n") + `\n\n---- ${failures === 0 ? "ALL PASS" : failures + " FAILED"} (${lines.length} checks) ----`;
 })();

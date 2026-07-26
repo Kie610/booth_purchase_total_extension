@@ -1,11 +1,23 @@
 {
   "manifest_version": 3,
   "name": "BOOTHお買いものレポート",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "description": "BOOTHの購入履歴から、実際に支払った合計金額を注文単位で正確に集計します（1注文に複数商品があっても二重カウントしません）。",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "BOOTHお買いものレポート"
+    "default_title": "BOOTHお買いものレポート",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
   },
   "permissions": [
     "storage"

@@ -31,10 +31,12 @@ BOOTH (accounts.booth.pm/orders) の購入履歴から、実際に支払った�
 ```
 extension/
   manifest.json          MV3。権限は storage と https://accounts.booth.pm/* のみ
+  icons/                 16/32/48/128。tools/make_icons.py が原本(手描きしない)
   common.js              定数・日付解析・月/年集計・ギフト表記・ストレージ操作
   purchase-examples.js   X共有用の金額比較マスター(2026-07時点の目安)
   popup.html/css/js      収集済み合計の概要表示と集計ページを開く導線のみ
   dashboard.html/css/js  実処理。集計はすべてこの専用タブ上で動く
+tools/make_icons.py      アイコン生成(Pillow使用)
 test/                    ブラウザ上で動く簡易テスト
 ```
 
@@ -127,6 +129,10 @@ script / link(preload, modulepreload, prefetch, stylesheet) / img / iframe の
   複数個換算や「高性能な」などの抽象的な修飾は入れない。`category` と `brand` は共有文面には出さず、
   マスターの偏りを検知するために使う。2026-07時点では82項目・18ジャンル・20ブランドで、探索価格帯の
   網羅、12ジャンル以上、15ブランド以上、単一ジャンル25%未満をテストする。価格と更新年月も記録する
+- アイコンは `tools/make_icons.py` が原本(#a596c7 の角丸背景に白のB)。PNGは生成物なので
+  直接編集しない(差分が追えなくなる)。Bはフォントではなく図形で描いている。フォントを使うと
+  環境ごとに字形が変わり、再生成しただけでPNGの中身が変わるため。128pxと同じ線の太さで
+  16pxを作るとBの内側の穴が埋まって四角い塊に見えるので、小さいサイズほど線を細くしている
 
 ## 進め方
 
@@ -156,6 +162,7 @@ script / link(preload, modulepreload, prefetch, stylesheet) / img / iframe の
 
 - 注文ごとの内訳のソート・絞り込み
 - CSV出力
-- パッケージ化(アイコン16/32/48/128の用意、Chromeウェブストア提出。
+- パッケージ化(アイコン16/32/48/128は用意済み。残るはChromeウェブストア提出。
+  ストア掲載用のスクリーンショット1280x800と小タイル440x280が別途必要。
   FirefoxはMV3で host_permissions がユーザー許可制になるため、
   現状のままでは fetch がCORSで弾かれる可能性がある)
