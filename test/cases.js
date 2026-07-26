@@ -45,22 +45,54 @@ const detailHtml = `<html><body>
 check("parseDetailPage 支払金額とステータス", parseDetailPage(parse(detailHtml)), { amount: 1234, gift: null, status: "paid" });
 check("parseDetailPage 金額が無い場合", parseDetailPage(parse("<html><body></body></html>")), { amount: null, gift: null, status: "unknown" });
 
-// 支払額に含まれるギフト分
-const giftHtml = `<html><body>
-<div class="badge order-state completed">発送完了</div>
-<div class="summary"><div>ギフト</div><div>¥800</div></div>
-<div class="summary"><div>お支払金額</div><div>¥1,234</div></div>
-</body></html>`;
-check("parseDetailPage ギフト分を取得", parseDetailPage(parse(giftHtml)), { amount: 1234, gift: 800, status: "completed" });
-const giftVariantHtml = giftHtml.replace(">ギフト<", ">ギフト券<");
-check("parseDetailPage ギフトの表記ゆれ", parseDetailPage(parse(giftVariantHtml)).gift, 800);
-// 長い文章を含む外側のコンテナを誤って掴まない
-const giftNoiseHtml = `<html><body>
-<div>この商品はギフトとして贈ることができます。ギフト設定は購入時に選べます。</div>
-<div>¥99999</div>
-<div class="summary"><div>お支払金額</div><div>¥1,234</div></div>
-</body></html>`;
-check("parseDetailPage ギフトの誤検出を避ける", parseDetailPage(parse(giftNoiseHtml)).gift, null);
+// --- 支払額に含まれるギフト分 ---
+// 注文詳細はショップ・商品種別ごとに .sheet-group で区切られ、先頭に見出しが入る
+function itemSheet(price, boost) {
+  return `<div class="sheet sheet--p400">
+    <div class="u-tpg-caption1 text-[#505c6b]">¥ ${price}</div>
+    <div class="u-tpg-caption1 text-[#505c6b]"><span class="particulars-heading">BOOST<i class="icon-boost"></i></span>¥ ${boost}</div>
+  </div>`;
+}
+function sheetGroup(title, items) {
+  return `<div class="sheet-group sheet-group--outline0">
+    <div class="sheet sheet--p400"><div class="l-row flex-[1]">
+      <div class="l-col-pc flex items-center"><b class="u-tpg-title3">${title}</b></div>
+      <div class="l-col-pc-auto"><a class="btn small calm">ショップにメッセージを送る</a></div>
+    </div></div>
+    ${items.map(([p, b]) => itemSheet(p, b)).join("")}
+  </div>`;
+}
+function orderHtml(total, groups) {
+  return `<html><body>
+    <span class="mx-0 badge order-state completed">発送完了</span>
+    <div class="l-row text-14">
+      <div class="l-col-pc-3 text-[#505c6b]">お支払金額</div><div class="l-col-pc-9">¥ ${total}</div>
+    </div>
+    ${groups}
+  </body></html>`;
+}
+
+check("parseYenAmount ラベルと同じ要素にある金額", parseYenAmount("BOOST¥ 0"), 0);
+check("parseYenAmount 桁区切り", parseYenAmount("¥ 5,100"), 5100);
+check("parseYenAmount 金額が無い", parseYenAmount("ショップにメッセージを送る"), null);
+
+const withGift = orderHtml("5,100",
+  sheetGroup("ダウンロード商品", [[425, 0], [425, 0]]) +
+  sheetGroup("ギフト", [[425, 0], [425, 100]]));
+check("ギフトのグループだけを合計する", parseDetailPage(parse(withGift)), { amount: 5100, gift: 950, status: "completed" });
+
+const noGift = orderHtml("850", sheetGroup("ダウンロード商品", [[425, 0], [425, 0]]));
+check("ギフトが無い注文は0", parseDetailPage(parse(noGift)).gift, 0);
+
+const multiGift = orderHtml("2,000",
+  sheetGroup("ギフト", [[500, 0]]) +
+  sheetGroup("ダウンロード商品", [[500, 0]]) +
+  sheetGroup("ギフト", [[1000, 0]]));
+check("ギフトのグループが複数あれば合算する", parseDetailPage(parse(multiGift)).gift, 1500);
+
+// 構造が変わってグループが見つからない場合は、0と断定せず不明にする
+check("グループが無ければ不明", parseDetailPage(parse(`<html><body>
+  <div>お支払金額</div><div>¥ 100</div></body></html>`)).gift, null);
 
 // 表示用のギフト表記(0のときは何も出さない)
 check("giftText あり", giftText(1500), "ギフト ¥1,500");
