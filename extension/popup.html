@@ -8,42 +8,30 @@
 <body>
   <h1>Booth購入金額集計</h1>
 
-  <div class="notice">
-    <a href="https://accounts.booth.pm/orders" target="_blank" rel="noopener">accounts.booth.pm</a>
-    にログインした状態で実行してください。
-  </div>
-
-  <div class="controls">
-    <button id="runBtn">集計を実行</button>
-    <label class="force-refresh">
-      <input type="checkbox" id="forceRefresh">
-      キャッシュを無視して全件再取得
-    </label>
-  </div>
-
-  <div id="progress" class="progress" hidden>
-    <div class="progress-text" id="progressText">準備中...</div>
+  <div id="runningBox" class="running" hidden>
+    <div class="running-text" id="runningText">集計中...</div>
     <div class="progress-bar"><div class="progress-bar-fill" id="progressFill"></div></div>
   </div>
 
-  <div id="result" class="result" hidden>
-    <div class="total-amount" id="totalAmount"></div>
-    <div class="total-count" id="totalCount"></div>
-    <div class="skipped-count" id="skippedCount"></div>
-
-    <details>
-      <summary>注文ごとの内訳を表示</summary>
-      <table id="orderTable">
-        <thead>
-          <tr><th>注文日時</th><th>ステータス</th><th>金額</th><th>注文番号</th></tr>
-        </thead>
-        <tbody id="orderTableBody"></tbody>
-      </table>
-    </details>
+  <div id="summaryBox" class="summary" hidden>
+    <div class="summary-label" id="summaryLabel">前回の集計結果</div>
+    <div class="summary-value" id="totalAmount"></div>
+    <div class="summary-sub" id="totalCount"></div>
+    <div class="summary-sub" id="updatedAt"></div>
   </div>
 
-  <div id="errorBox" class="error" hidden></div>
+  <div id="emptyBox" class="empty" hidden>
+    まだ集計していません。集計ページを開いて「集計を実行」を押してください。
+  </div>
 
+  <button id="openBtn">集計ページを開く</button>
+
+  <p class="hint">
+    集計は専用ページ上で実行されるため、このポップアップを閉じても処理は続きます
+    (集計ページのタブは開いたままにしてください)。
+  </p>
+
+  <script src="common.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

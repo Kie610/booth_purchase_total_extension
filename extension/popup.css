@@ -1,134 +1,91 @@
 body {
-  width: 360px;
+  width: 300px;
   font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
-  padding: 12px 16px 16px;
+  padding: 14px 16px 16px;
   color: #2a2f36;
   background: #ffffff;
-}
-
-h1 {
-  font-size: 15px;
-  margin: 0 0 8px;
-}
-
-.notice {
-  font-size: 11px;
-  color: #6b7684;
-  background: #f1f5f8;
-  border-radius: 6px;
-  padding: 8px 10px;
-  margin-bottom: 12px;
   line-height: 1.5;
 }
 
-.notice a {
-  color: #1b7f8c;
-}
-
-.controls {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-#runBtn {
-  background: #ff5050;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  padding: 10px 14px;
+h1 {
   font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
+  margin: 0 0 12px;
 }
 
-#runBtn:disabled {
-  background: #c9ccd1;
-  cursor: default;
+.running {
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: #f7f8fa;
 }
 
-.force-refresh {
+.running-text {
   font-size: 12px;
-  color: #505c6b;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.progress-text {
-  font-size: 12px;
-  color: #505c6b;
+  color: #6b7280;
   margin-bottom: 6px;
-  min-height: 32px;
-  white-space: pre-line;
 }
 
 .progress-bar {
   height: 6px;
-  background: #eceff2;
   border-radius: 3px;
+  background: #e4e6ea;
   overflow: hidden;
 }
 
 .progress-bar-fill {
   height: 100%;
-  width: 0%;
-  background: #1b7f8c;
-  transition: width 0.15s ease-out;
+  width: 0;
+  background: #fc4d50;
+  transition: width 0.2s ease;
 }
 
-.result {
-  margin-top: 14px;
-  border-top: 1px solid #eceff2;
-  padding-top: 12px;
+.summary {
+  margin-bottom: 14px;
+  padding: 12px;
+  border: 1px solid #e2e5ea;
+  border-radius: 6px;
 }
 
-.total-amount {
+.summary-label {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.summary-value {
   font-size: 22px;
   font-weight: 700;
-  color: #2a2f36;
+  margin: 2px 0 4px;
 }
 
-.total-count, .skipped-count {
-  font-size: 12px;
-  color: #6b7684;
-  margin-top: 2px;
-}
-
-details {
-  margin-top: 10px;
-  font-size: 12px;
-}
-
-summary {
-  cursor: pointer;
-  color: #1b7f8c;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 8px;
+.summary-sub {
   font-size: 11px;
+  color: #6b7280;
 }
 
-th, td {
-  text-align: left;
-  padding: 4px 4px;
-  border-bottom: 1px solid #eceff2;
-}
-
-td.amount {
-  text-align: right;
-}
-
-.error {
-  margin-top: 12px;
+.empty {
+  margin-bottom: 14px;
   font-size: 12px;
-  color: #c0392b;
-  background: #fdecea;
+  color: #6b7280;
+}
+
+button {
+  width: 100%;
+  font: inherit;
+  font-size: 13px;
+  padding: 9px 0;
+  border: none;
   border-radius: 6px;
-  padding: 8px 10px;
-  white-space: pre-line;
+  background: #fc4d50;
+  color: #fff;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #e03f42;
+}
+
+.hint {
+  margin: 10px 0 0;
+  font-size: 11px;
+  color: #9aa1ab;
 }

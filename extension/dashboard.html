@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Booth購入金額集計</title>
+<link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+  <main class="page">
+    <header class="page-header">
+      <h1>Booth購入金額集計</h1>
+      <p class="lead">
+        <a href="https://accounts.booth.pm/orders" target="_blank" rel="noopener">accounts.booth.pm</a>
+        にログインした状態で「集計を実行」を押してください。
+        取得中もこのタブを開いたまま、他のタブやウィンドウは自由に操作できます。
+      </p>
+    </header>
+
+    <section class="controls">
+      <button id="runBtn" class="primary">集計を実行</button>
+      <button id="abortBtn" class="secondary" hidden>中断</button>
+      <label class="checkbox">
+        <input type="checkbox" id="forceRefresh">
+        キャッシュを無視して全件再取得
+      </label>
+    </section>
+
+    <div id="progress" class="progress" hidden>
+      <div class="progress-text" id="progressText">準備中...</div>
+      <div class="progress-bar"><div class="progress-bar-fill" id="progressFill"></div></div>
+    </div>
+
+    <div id="noticeBox" class="notice" hidden></div>
+    <div id="errorBox" class="error" hidden></div>
+
+    <section id="result" class="result" hidden>
+      <div class="summary">
+        <div class="summary-main">
+          <span class="summary-label">合計支払額</span>
+          <span class="summary-value" id="totalAmount"></span>
+        </div>
+        <div class="summary-sub">
+          <span id="totalCount"></span>
+          <span id="skippedCount"></span>
+        </div>
+      </div>
+
+      <section class="panel">
+        <h2>年別・月別の集計</h2>
+        <p class="hint">年の行をクリックすると月別の内訳を開閉できます。</p>
+        <table class="data-table period-table">
+          <thead>
+            <tr><th>期間</th><th class="num">注文数</th><th class="num">支払額</th></tr>
+          </thead>
+          <tbody id="periodTableBody"></tbody>
+        </table>
+      </section>
+
+      <section class="panel">
+        <h2>注文ごとの内訳</h2>
+        <table class="data-table">
+          <thead>
+            <tr><th>注文日時</th><th>ステータス</th><th class="num">金額</th><th>注文番号</th></tr>
+          </thead>
+          <tbody id="orderTableBody"></tbody>
+        </table>
+      </section>
+    </section>
+  </main>
+
+  <script src="common.js"></script>
+  <script src="dashboard.js"></script>
+</body>
+</html>

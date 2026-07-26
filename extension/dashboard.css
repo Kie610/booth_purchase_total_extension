@@ -1,0 +1,230 @@
+:root {
+  --fg: #2a2f36;
+  --fg-muted: #6b7280;
+  --border: #e2e5ea;
+  --accent: #fc4d50;
+  --bg-soft: #f7f8fa;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+  color: var(--fg);
+  background: #fff;
+  line-height: 1.6;
+}
+
+.page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 32px 24px 64px;
+}
+
+.page-header h1 {
+  font-size: 22px;
+  margin: 0 0 8px;
+}
+
+.lead {
+  margin: 0;
+  font-size: 13px;
+  color: var(--fg-muted);
+}
+
+a {
+  color: var(--accent);
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 24px 0;
+  padding: 16px;
+  background: var(--bg-soft);
+  border-radius: 8px;
+}
+
+button {
+  font: inherit;
+  font-size: 14px;
+  padding: 8px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+button.primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+button.primary:hover:not(:disabled) {
+  background: #e03f42;
+}
+
+button.secondary {
+  background: #fff;
+  color: var(--fg);
+  border-color: #c9ced6;
+}
+
+button.secondary:hover:not(:disabled) {
+  background: #f0f1f4;
+}
+
+.checkbox {
+  font-size: 13px;
+  color: var(--fg-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.progress {
+  margin: 16px 0;
+}
+
+.progress-text {
+  font-size: 13px;
+  color: var(--fg-muted);
+  margin-bottom: 6px;
+}
+
+.progress-bar {
+  height: 8px;
+  border-radius: 4px;
+  background: #eceef1;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  transition: width 0.2s ease;
+}
+
+.notice,
+.error {
+  margin: 16px 0;
+  padding: 12px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.notice {
+  background: #fff8e6;
+  border: 1px solid #f2dfa8;
+  color: #7a5d10;
+}
+
+.error {
+  background: #fdecec;
+  border: 1px solid #f3c4c4;
+  color: #a3272a;
+}
+
+.summary {
+  margin: 24px 0;
+  padding: 20px 24px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.summary-label {
+  font-size: 13px;
+  color: var(--fg-muted);
+  margin-right: 12px;
+}
+
+.summary-value {
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.summary-sub {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--fg-muted);
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.panel {
+  margin-top: 32px;
+}
+
+.panel h2 {
+  font-size: 15px;
+  margin: 0 0 4px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--fg-muted);
+  margin: 8px 0 12px;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.data-table th,
+.data-table td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+
+.data-table th {
+  color: var(--fg-muted);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.data-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.period-table .year-row {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.period-table .year-row:hover {
+  background: var(--bg-soft);
+}
+
+.period-table .year-row .toggle {
+  display: inline-block;
+  width: 1em;
+  color: var(--fg-muted);
+  font-weight: 400;
+}
+
+.period-table .month-row td:first-child {
+  padding-left: 32px;
+  color: var(--fg-muted);
+}
+
+.amount-failed {
+  color: #a3272a;
+}
