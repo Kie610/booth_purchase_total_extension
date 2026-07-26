@@ -1,0 +1,2 @@
+# booth_purchase_total_extension
+boothで使った総額を計算するWeb拡張機能
