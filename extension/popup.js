@@ -34,9 +34,7 @@ async function render() {
   if (runState) {
     const { phase, current, total } = runState;
     runningText.textContent =
-      total > 0
-        ? `${phase}中... (${current}/${total})`
-        : `${phase}中...`;
+      total > 0 ? `${phase} (${current}/${total})` : `${phase}...`;
     progressFill.style.width =
       total > 0 ? `${Math.min(100, (current / total) * 100)}%` : "0%";
     runningBox.hidden = false;
@@ -48,11 +46,12 @@ async function render() {
 
   if (summary) {
     summaryLabel.textContent = summary.partial
-      ? "前回の集計結果(中断時点)"
-      : "前回の集計結果";
+      ? "収集済みの合計(中断時点)"
+      : "収集済みの合計";
     totalAmountEl.textContent = formatYen(summary.total);
     totalCountEl.textContent =
-      `対象注文数: ${summary.count}件` +
+      `収集済み: ${summary.count}件` +
+      (summary.pendingCount ? ` / 未収集: ${summary.pendingCount}件` : "") +
       (summary.skippedCancelled
         ? ` / 除外(キャンセル): ${summary.skippedCancelled}件`
         : "");

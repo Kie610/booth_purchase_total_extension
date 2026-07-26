@@ -4,6 +4,7 @@
 const ext = typeof browser !== "undefined" ? browser : chrome;
 
 const CACHE_KEY = "boothOrderCache"; // { [orderId]: { amount, status, date } }
+const INDEX_KEY = "boothOrderIndex"; // { updatedAt, orders: [{ id, status, date }] }
 const SUMMARY_KEY = "boothSummary"; // 最後に完了した集計の要約(ポップアップ表示用)
 const RUN_STATE_KEY = "boothRunState"; // 実行中の進捗(ポップアップから覗くため)
 const DASHBOARD_TAB_KEY = "boothDashboardTab"; // 集計ページのタブID
@@ -52,6 +53,41 @@ function parseOrderDate(text) {
 function orderSortKey(order) {
   const d = parseOrderDate(order.date);
   return d ? d.sortKey : -1;
+}
+
+// 月の識別子。範囲指定の比較に使うため "YYYY-MM" 形式(文字列比較で大小がそのまま日付順になる)
+// 日付が読めなかった注文は null を返す
+function monthKeyOf(dateText) {
+  const d = parseOrderDate(dateText);
+  return d ? `${d.year}-${String(d.month).padStart(2, "0")}` : null;
+}
+
+function monthLabel(key) {
+  if (!key) return "日付不明";
+  const [year, month] = key.split("-");
+  return `${Number(year)}年${Number(month)}月`;
+}
+
+// 月ごとの「注文数 / 収集済み / 未収集」を求める(新しい月が先、日付不明は末尾)
+function buildMonthStats(orders, cache) {
+  const stats = new Map();
+  for (const order of orders) {
+    const key = monthKeyOf(order.date);
+    if (!stats.has(key)) {
+      stats.set(key, { key, label: monthLabel(key), count: 0, collected: 0 });
+    }
+    const stat = stats.get(key);
+    stat.count++;
+    if (cache[order.id]) stat.collected++;
+  }
+  return Array.from(stats.values())
+    .map((s) => ({ ...s, pending: s.count - s.collected }))
+    .sort((a, b) => {
+      if (a.key === b.key) return 0;
+      if (a.key === null) return 1;
+      if (b.key === null) return -1;
+      return a.key < b.key ? 1 : -1;
+    });
 }
 
 // 年 → 月 の二段階で支払額を集計する
@@ -109,6 +145,14 @@ async function writeStored(key, value) {
 
 function loadCache() {
   return readStored(CACHE_KEY, {});
+}
+
+function loadIndex() {
+  return readStored(INDEX_KEY, null);
+}
+
+function saveIndex(index) {
+  return writeStored(INDEX_KEY, index);
 }
 
 function saveCache(cache) {

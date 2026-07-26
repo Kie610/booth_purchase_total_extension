@@ -39,15 +39,46 @@ a {
   color: var(--accent);
 }
 
-.controls {
+/* ---- 手順のカード ---- */
+
+.step {
+  margin: 20px 0;
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.step-alt {
+  background: var(--bg-soft);
+}
+
+.step h2 {
+  font-size: 15px;
+  margin: 0 0 6px;
+}
+
+.step-no {
+  color: var(--accent);
+  margin-right: 4px;
+}
+
+.step-controls {
   display: flex;
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
-  margin: 24px 0;
-  padding: 16px;
-  background: var(--bg-soft);
-  border-radius: 8px;
+  margin-top: 12px;
+}
+
+.status {
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.empty-note {
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--fg-muted);
 }
 
 button {
@@ -62,6 +93,11 @@ button {
 button:disabled {
   opacity: 0.55;
   cursor: default;
+}
+
+button.small {
+  font-size: 12px;
+  padding: 5px 12px;
 }
 
 button.primary {
@@ -92,14 +128,67 @@ button.secondary:hover:not(:disabled) {
   cursor: pointer;
 }
 
+/* ---- 範囲指定 ---- */
+
+.range-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.range-field {
+  font-size: 12px;
+  color: var(--fg-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.range-field select {
+  font: inherit;
+  font-size: 13px;
+  color: var(--fg);
+  padding: 6px 8px;
+  border: 1px solid #c9ced6;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.range-sep {
+  color: var(--fg-muted);
+}
+
+.unknown-area {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+/* ---- 進捗 ---- */
+
 .progress {
-  margin: 16px 0;
+  margin: 20px 0;
+}
+
+.progress-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
 }
 
 .progress-text {
   font-size: 13px;
   color: var(--fg-muted);
-  margin-bottom: 6px;
 }
 
 .progress-bar {
@@ -135,6 +224,8 @@ button.secondary:hover:not(:disabled) {
   border: 1px solid #f3c4c4;
   color: #a3272a;
 }
+
+/* ---- 結果 ---- */
 
 .summary {
   margin: 24px 0;
@@ -204,6 +295,39 @@ button.secondary:hover:not(:disabled) {
   font-variant-numeric: tabular-nums;
 }
 
+/* ---- 月別の収集状況 ---- */
+
+.month-table {
+  margin-top: 12px;
+}
+
+.month-table tbody tr {
+  cursor: pointer;
+}
+
+.month-table tbody tr:hover {
+  background: var(--bg-soft);
+}
+
+.month-table .has-pending td {
+  font-weight: 600;
+}
+
+.month-table .in-range {
+  background: #fff1f1;
+}
+
+.month-table .in-range:hover {
+  background: #ffe6e6;
+}
+
+.month-table .unknown-row {
+  cursor: default;
+  color: var(--fg-muted);
+}
+
+/* ---- 年別・月別の集計 ---- */
+
 .period-table .year-row {
   cursor: pointer;
   font-weight: 600;
@@ -227,4 +351,8 @@ button.secondary:hover:not(:disabled) {
 
 .amount-failed {
   color: #a3272a;
+}
+
+.amount-pending {
+  color: var(--fg-muted);
 }
