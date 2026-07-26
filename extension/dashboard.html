@@ -164,19 +164,30 @@
       </div>
       <div class="progress-bar"><div class="progress-bar-fill" id="progressFill"></div></div>
     </div>
-    <div class="foot-totals">
-      <div class="foot-item">
-        <span class="foot-label">合計</span>
-        <span class="gift" id="footTotalGift"></span>
-        <span class="foot-value" id="footTotal">¥0</span>
-        <span class="foot-sub" id="footTotalCount">収集済み 0件</span>
+    <div class="foot-body">
+      <div class="foot-totals">
+        <div class="foot-item">
+          <span class="foot-label">合計</span>
+          <div class="foot-figures">
+            <div class="foot-figures-main">
+              <span class="foot-value" id="footTotal">¥0</span>
+              <span class="foot-sub" id="footTotalCount">収集済み 0件</span>
+            </div>
+            <span class="gift" id="footTotalGift"></span>
+          </div>
+        </div>
+        <div class="foot-item">
+          <span class="foot-label" id="footYearLabel">今年</span>
+          <div class="foot-figures">
+            <div class="foot-figures-main">
+              <span class="foot-value" id="footYearTotal">¥0</span>
+              <span class="foot-sub" id="footYearCount">収集済み 0件</span>
+            </div>
+            <span class="gift" id="footYearGift"></span>
+          </div>
+        </div>
       </div>
-      <div class="foot-item">
-        <span class="foot-label" id="footYearLabel">今年</span>
-        <span class="gift" id="footYearGift"></span>
-        <span class="foot-value" id="footYearTotal">¥0</span>
-        <span class="foot-sub" id="footYearCount">収集済み 0件</span>
-      </div>
+      <button id="shareBtn" class="secondary" disabled>Xで共有</button>
     </div>
   </footer>
 

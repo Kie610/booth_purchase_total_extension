@@ -272,6 +272,11 @@ check("フッター 今年の収集済み件数", footYearCount.textContent, now
 // アコーディオンの件数表示
 check("内訳の件数表示", orderRowCount.textContent, "(6件)");
 
+// 共有ボタン(投稿画面を開くだけ。文面は集計値から組み立てる)
+check("収集済みがあれば共有できる", shareBtn.disabled, false);
+check("共有文面", buildShareText({ year: 2026, total: 4000, count: 2, yearTotal: 1000, yearCount: 1 }),
+  "BOOTHでの購入額を集計しました。\n累計 ¥4,000(2件)\n2026年 ¥1,000(1件)\n\n#BOOTH購入額集計");
+
 // 進捗はフッターに出す。表示中はフッターが高くなるので本文の下余白も追従させる
 check("待機中は進捗を出さない", [document.getElementById("progress").hidden, document.body.classList.contains("has-progress")], [true, false]);
 setProgress("金額を収集中... (18/40件)", 0.45);

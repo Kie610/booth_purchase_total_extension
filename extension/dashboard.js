@@ -44,6 +44,7 @@ const totalAmountEl = document.getElementById("totalAmount");
 const totalGiftEl = document.getElementById("totalGift");
 const footTotalGift = document.getElementById("footTotalGift");
 const footYearGift = document.getElementById("footYearGift");
+const shareBtn = document.getElementById("shareBtn");
 const totalCountEl = document.getElementById("totalCount");
 const pendingCountEl = document.getElementById("pendingCount");
 const skippedCountEl = document.getElementById("skippedCount");
@@ -67,6 +68,8 @@ let lastRunStateWrite = 0;
 const state = { index: null, cache: {} };
 // 月別テーブルで開いている年(再描画をまたいで保つ)
 const expandedMonthYears = new Set();
+// 共有文面に使う集計値(描画のたびに更新する)
+let shareStats = null;
 
 fetchIndexBtn.addEventListener("click", () =>
   runTask((signal) => fetchIndexTask(signal, forceRefreshIndex.checked))
@@ -79,6 +82,26 @@ collectRangeBtn.addEventListener("click", () =>
 runAllBtn.addEventListener("click", () => runTask(runAllTask));
 
 forceRefreshRange.addEventListener("change", updatePlannedCount);
+
+// 投稿画面を開くだけで、投稿そのものはユーザーがXの画面で行う
+shareBtn.addEventListener("click", () => {
+  if (!shareStats) return;
+  const url = new URL("https://x.com/intent/post");
+  url.searchParams.set("text", buildShareText(shareStats));
+  window.open(url.toString(), "_blank", "noopener");
+});
+
+const SHARE_HASHTAG = "#BOOTH購入額集計";
+
+function buildShareText(stats) {
+  return [
+    "BOOTHでの購入額を集計しました。",
+    `累計 ${formatYen(stats.total)}(${stats.count}件)`,
+    `${stats.year}年 ${formatYen(stats.yearTotal)}(${stats.yearCount}件)`,
+    "",
+    SHARE_HASHTAG,
+  ].join("\n");
+}
 
 // 取り直しに時間がかかるので、消す前に必ず確認する
 clearIndexBtn.addEventListener("click", async () => {
@@ -917,6 +940,17 @@ function renderFooter(results) {
   footYearTotal.textContent = formatYen(sum(ofThisYear));
   footYearGift.textContent = giftText(sumGift(ofThisYear));
   footYearCount.textContent = `収集済み ${ofThisYear.length}件`;
+
+  shareStats = {
+    year: thisYear,
+    total: sum(valid),
+    count: valid.length,
+    yearTotal: sum(ofThisYear),
+    yearCount: ofThisYear.length,
+    gift: sumGift(valid),
+    yearGift: sumGift(ofThisYear),
+  };
+  shareBtn.disabled = valid.length === 0;
 }
 
 function renderPeriodTable(results) {
