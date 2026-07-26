@@ -1,4 +1,4 @@
-# booth_purchase_total_extension
+# BOOTHお買いものレポート
 
 BOOTH ([accounts.booth.pm/orders](https://accounts.booth.pm/orders)) の購入履歴から、
 実際に支払った合計金額を **注文単位** で正確に集計するブラウザ拡張機能です。
@@ -19,6 +19,8 @@ BOOTH ([accounts.booth.pm/orders](https://accounts.booth.pm/orders)) の購入�
 extension/          読み込み対象の拡張機能本体
   manifest.json     Manifest V3 定義
   common.js         定数・日付解析・月別集計・期間集計・ストレージ操作の共通処理
+  purchase-examples.js
+                    X共有用の金額比較マスター(ジャンル・ブランド管理情報を含む)
   popup.html/css/js ポップアップ(収集済み合計の概要表示と集計ページへの導線)
   dashboard.html/css/js
                     集計ページ(注文履歴の取得・範囲を指定した金額収集・一括集計・
@@ -117,11 +119,14 @@ UIに表示します。
 自分で確定します)。金額を公開したくない場合は、投稿前に編集するか閉じてください。
 
 ```
-BOOTHでの購入額を集計しました。
-累計 ¥196,400(128件)
-2026年 ¥40,130(12件)
+BOOTHお買いもの振り返り🛍️
 
-#BOOTH購入額集計
+合計：¥196,400（128件）
+今年：¥40,130（12件）
+
+積み重ねてみると、Apple iPhone 17 Proが買えるくらいの金額になりました。
+
+#BOOTHお買いものレポート
 ```
 
 集計結果は収集済みの合計金額に加えて、**年別・月別の内訳**

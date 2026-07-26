@@ -7,7 +7,7 @@
 新しいチャットは次の一文で始められます。
 
 > `D:\GitHub_ClaudeCode\booth_purchase_total_extension` の HANDOFF.md を読んで、
-> Booth購入金額集計 拡張機能の開発を引き継いでください。
+> BOOTHお買いものレポート 拡張機能の開発を引き継いでください。
 
 ---
 
@@ -32,6 +32,7 @@ BOOTH (accounts.booth.pm/orders) の購入履歴から、実際に支払った�
 extension/
   manifest.json          MV3。権限は storage と https://accounts.booth.pm/* のみ
   common.js              定数・日付解析・月/年集計・ギフト表記・ストレージ操作
+  purchase-examples.js   X共有用の金額比較マスター(2026-07時点の目安)
   popup.html/css/js      収集済み合計の概要表示と集計ページを開く導線のみ
   dashboard.html/css/js  実処理。集計はすべてこの専用タブ上で動く
 test/                    ブラウザ上で動く簡易テスト
@@ -121,6 +122,11 @@ script / link(preload, modulepreload, prefetch, stylesheet) / img / iframe の
 - 金額は5件ごとに逐次保存。中断やタブを閉じても続きから再開できる
 - リクエスト間隔は250ms(サーバー負荷軽減)
 - 内訳では「未収集」(未取得)と「取得失敗」(取得したが金額を読めなかった)を区別する
+- X共有の比較例は `purchase-examples.js` の金額昇順マスターから、合計以下で最も高い項目を選ぶ。
+  `target` は探索時の価格帯、`amount` は判定に使う実価格の目安。単品の具体的な商品名だけを使い、
+  複数個換算や「高性能な」などの抽象的な修飾は入れない。`category` と `brand` は共有文面には出さず、
+  マスターの偏りを検知するために使う。2026-07時点では82項目・18ジャンル・20ブランドで、探索価格帯の
+  網羅、12ジャンル以上、15ブランド以上、単一ジャンル25%未満をテストする。価格と更新年月も記録する
 
 ## 進め方
 

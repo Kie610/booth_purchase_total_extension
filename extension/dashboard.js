@@ -13,6 +13,7 @@ const indexStatus = document.getElementById("indexStatus");
 const indexCoverage = document.getElementById("indexCoverage");
 const monthEmpty = document.getElementById("monthEmpty");
 const monthArea = document.getElementById("monthArea");
+const rangeArea = document.getElementById("rangeArea");
 const monthTableBody = document.getElementById("monthTableBody");
 const rangeFrom = document.getElementById("rangeFrom");
 const rangeTo = document.getElementById("rangeTo");
@@ -91,13 +92,26 @@ shareBtn.addEventListener("click", () => {
   window.open(url.toString(), "_blank", "noopener");
 });
 
-const SHARE_HASHTAG = "#BOOTH購入額集計";
+const SHARE_HASHTAG = "#BOOTHお買いものレポート";
+
+// 合計以下の項目から最も高いものを選ぶ。マスターは金額の昇順で管理する
+function purchaseComparison(amount) {
+  let selected = PURCHASE_EXAMPLE_MASTER[0];
+  for (const example of PURCHASE_EXAMPLE_MASTER) {
+    if (example.amount > amount) break;
+    selected = example;
+  }
+  return selected.label;
+}
 
 function buildShareText(stats) {
   return [
-    "BOOTHでの購入額を集計しました。",
-    `累計 ${formatYen(stats.total)}(${stats.count}件)`,
-    `${stats.year}年 ${formatYen(stats.yearTotal)}(${stats.yearCount}件)`,
+    "BOOTHお買いもの振り返り🛍️",
+    "",
+    `合計：${formatYen(stats.total)}（${stats.count}件）`,
+    `今年：${formatYen(stats.yearTotal)}（${stats.yearCount}件）`,
+    "",
+    `積み重ねてみると、${purchaseComparison(stats.total)}が買えるくらいの金額になりました。`,
     "",
     SHARE_HASHTAG,
   ].join("\n");
@@ -775,7 +789,14 @@ function renderMonthArea() {
     }
   }
 
-  renderRangeOptions(stats.filter((s) => s.key !== null));
+  const datedStats = stats.filter((s) => s.key !== null);
+  rangeArea.hidden = datedStats.length === 0;
+  if (datedStats.length > 0) {
+    renderRangeOptions(datedStats);
+  } else {
+    rangeFrom.innerHTML = "";
+    rangeTo.innerHTML = "";
+  }
 
   const unknown = stats.find((s) => s.key === null);
   unknownArea.hidden = !unknown;

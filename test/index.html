@@ -38,12 +38,14 @@
 
 <div id="monthEmpty"></div>
 <div id="monthArea" hidden>
-  <select id="rangeFrom"></select>
-  <select id="rangeTo"></select>
-  <button id="selectPendingBtn"></button>
-  <button id="collectRangeBtn"></button>
-  <span id="plannedCount"></span>
-  <input type="checkbox" id="forceRefreshRange">
+  <div id="rangeArea">
+    <select id="rangeFrom"></select>
+    <select id="rangeTo"></select>
+    <button id="selectPendingBtn"></button>
+    <button id="collectRangeBtn"></button>
+    <span id="plannedCount"></span>
+    <input type="checkbox" id="forceRefreshRange">
+  </div>
   <table><tbody id="monthTableBody"></tbody></table>
   <p id="unknownArea" hidden><span id="unknownCount"></span></p>
 </div>
@@ -64,6 +66,7 @@
 
 <script src="stub.js"></script>
 <script src="../extension/common.js"></script>
+<script src="../extension/purchase-examples.js"></script>
 <script src="../extension/dashboard.js"></script>
 <script src="cases.js"></script>
 </body>

@@ -274,8 +274,31 @@ check("内訳の件数表示", orderRowCount.textContent, "(6件)");
 
 // 共有ボタン(投稿画面を開くだけ。文面は集計値から組み立てる)
 check("収集済みがあれば共有できる", shareBtn.disabled, false);
+check("共有用の金額例マスターは昇順", PURCHASE_EXAMPLE_MASTER.every((item, i) => i === 0 || PURCHASE_EXAMPLE_MASTER[i - 1].amount < item.amount), true);
+check("共有用の金額例は商品名が重複しない", new Set(PURCHASE_EXAMPLE_MASTER.map((item) => item.label)).size, PURCHASE_EXAMPLE_MASTER.length);
+check("共有用の金額例は抽象表現や複数個表現を含まない", PURCHASE_EXAMPLE_MASTER.every((item) => !/(ちょっとした|高性能な|本格的な|高級|プロ向け|\d+杯|\d+冊|\d+台分)/.test(item.label)), true);
+const requiredPurchaseExampleTargets = [
+  0,
+  ...Array.from({ length: 10 }, (_, i) => (i + 1) * 1000),
+  ...Array.from({ length: 9 }, (_, i) => (i + 2) * 10000),
+  ...Array.from({ length: 9 }, (_, i) => (i + 2) * 100000),
+  ...Array.from({ length: 9 }, (_, i) => (i + 2) * 1000000),
+];
+const purchaseExampleCategories = new Map();
+for (const item of PURCHASE_EXAMPLE_MASTER) {
+  purchaseExampleCategories.set(item.category, (purchaseExampleCategories.get(item.category) || 0) + 1);
+}
+check("共有用の金額例マスターは指定の探索価格帯を網羅", requiredPurchaseExampleTargets.every((target) => PURCHASE_EXAMPLE_MASTER.some((item) => item.target === target)), true);
+check("共有用の金額例は12ジャンル以上", purchaseExampleCategories.size >= 12, true);
+check("共有用の金額例は15ブランド以上", new Set(PURCHASE_EXAMPLE_MASTER.map((item) => item.brand)).size >= 15, true);
+check("共有用の金額例は単一ジャンルが25%未満", Math.max(...purchaseExampleCategories.values()) / PURCHASE_EXAMPLE_MASTER.length < 0.25, true);
+check("共有用の金額例は管理情報を完備", PURCHASE_EXAMPLE_MASTER.every((item) => item.category && item.brand), true);
+check("共有用の金額例は合計以下で最高額", purchaseComparison(59979), "BALMUDA The Range");
+check("共有用の金額例は実価格で切り替わる", purchaseComparison(59980), "Nintendo Switch 2");
+check("共有用の金額例 ¥123,456", purchaseComparison(123456), "ルイ・ヴィトン ポルトフォイユ・ヴィクトリーヌ");
+check("共有用の金額例は上限超過でも最後を使う", purchaseComparison(12000000), "レクサス RZ550e");
 check("共有文面", buildShareText({ year: 2026, total: 4000, count: 2, yearTotal: 1000, yearCount: 1 }),
-  "BOOTHでの購入額を集計しました。\n累計 ¥4,000(2件)\n2026年 ¥1,000(1件)\n\n#BOOTH購入額集計");
+  "BOOTHお買いもの振り返り🛍️\n\n合計：¥4,000（2件）\n今年：¥1,000（1件）\n\n積み重ねてみると、Minecraft（Nintendo Switch版）が買えるくらいの金額になりました。\n\n#BOOTHお買いものレポート");
 
 // 進捗はフッターに出す。表示中はフッターが高くなるので本文の下余白も追従させる
 check("待機中は進捗を出さない", [document.getElementById("progress").hidden, document.body.classList.contains("has-progress")], [true, false]);
@@ -373,6 +396,15 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   check("索引が無くてもキャッシュから表示", document.getElementById("totalAmount").textContent, "¥500");
   check("索引が無い場合は取得を促す", monthEmpty.hidden, false);
   check("索引が無ければ範囲表示も出さない", indexCoverage.hidden, true);
+
+  // --- 日付を読み取れない注文しかない場合 ---
+  state.index = { updatedAt: "2026-07-26T00:00:00.000Z", complete: true, orders: [{ id: "unknown-date", status: "completed", date: "日付なし" }] };
+  state.cache = {};
+  render();
+  check("日付不明だけでも月別集計を表示", monthArea.hidden, false);
+  check("日付不明だけなら範囲指定を隠す", rangeArea.hidden, true);
+  check("日付不明の行は残す", monthTableBody.querySelectorAll("tr.unknown-row").length, 1);
+  check("日付不明だけなら範囲選択肢は空", [rangeFrom.options.length, rangeTo.options.length], [0, 0]);
 
   // --- HTMLエスケープ ---
   state.index = { updatedAt: "2026-07-26T00:00:00.000Z", complete: true, orders: [{ id: "<img src=x onerror=alert(1)>", status: "completed", date: "2024年1月1日 00:00" }] };

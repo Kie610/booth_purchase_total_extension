@@ -2,13 +2,13 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>Booth購入金額集計</title>
+<title>BOOTHお買いものレポート</title>
 <link rel="stylesheet" href="dashboard.css">
 </head>
 <body>
   <header class="app-header">
     <div class="app-header-inner">
-      <h1>Booth購入金額集計</h1>
+      <h1>BOOTHお買いものレポート</h1>
     </div>
   </header>
 
@@ -79,24 +79,27 @@
       </div>
 
       <div id="monthArea" hidden>
-        <div class="range-controls">
-          <label class="range-field">開始
-            <select id="rangeFrom"></select>
-          </label>
-          <span class="range-sep">〜</span>
-          <label class="range-field">終了
-            <select id="rangeTo"></select>
-          </label>
-          <button id="selectPendingBtn" class="secondary small">未収集のある範囲を選択</button>
-        </div>
+        <!-- 日付を読み取れた月が1つも無いと範囲を指定しようがないので、まとめて隠す -->
+        <div id="rangeArea">
+          <div class="range-controls">
+            <label class="range-field">開始
+              <select id="rangeFrom"></select>
+            </label>
+            <span class="range-sep">〜</span>
+            <label class="range-field">終了
+              <select id="rangeTo"></select>
+            </label>
+            <button id="selectPendingBtn" class="secondary small">未収集のある範囲を選択</button>
+          </div>
 
-        <div class="step-controls">
-          <button id="collectRangeBtn" class="primary">選択範囲の金額を収集</button>
-          <span class="planned" id="plannedCount"></span>
-          <label class="checkbox">
-            <input type="checkbox" id="forceRefreshRange">
-            キャッシュを無視して指定範囲を再取得
-          </label>
+          <div class="step-controls">
+            <button id="collectRangeBtn" class="primary">選択範囲の金額を収集</button>
+            <span class="planned" id="plannedCount"></span>
+            <label class="checkbox">
+              <input type="checkbox" id="forceRefreshRange">
+              キャッシュを無視して指定範囲を再取得
+            </label>
+          </div>
         </div>
 
         <table class="data-table month-table">
@@ -191,7 +194,8 @@
     </div>
   </footer>
 
-  <script src="common.js"></script>
-  <script src="dashboard.js"></script>
+<script src="common.js"></script>
+<script src="purchase-examples.js"></script>
+<script src="dashboard.js"></script>
 </body>
 </html>
