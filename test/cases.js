@@ -136,10 +136,25 @@ check("選択範囲の行が強調される", [monthRows[0], monthRows[1], month
 monthRows[3].click();
 check("日付不明の行は範囲に入らない", [rangeFrom.value, rangeTo.value], ["2026-03", "2026-03"]);
 check("日付不明の案内が出る", unknownArea.hidden, false);
+check("日付不明は一括集計へ誘導する", unknownCount.textContent.includes("まとめて一括集計"), true);
+
+// 取得予定件数(ボタン横の表示)
+check("取得予定件数 未収集のみ", plannedCount.textContent, "取得予定: 1件");
+check("取得予定が0でなければボタンは押せる", collectRangeBtn.disabled, false);
+setRange("2026-05", "2026-05");
+check("取得予定件数 収集済みを含む月", plannedCount.textContent, "取得予定: 1件");
+forceRefreshRange.checked = true;
+forceRefreshRange.dispatchEvent(new Event("change"));
+check("強制再取得では収集済みも予定に入る", plannedCount.textContent, "取得予定: 2件");
+forceRefreshRange.checked = false;
+setRange("2025-12", "2025-12");
+check("すべて収集済みなら予定なし", plannedCount.textContent, "取得予定: なし(収集済み)");
+check("予定が0ならボタンを押せない", collectRangeBtn.disabled, true);
 
 // 未収集のある範囲をまとめて選択
 selectPendingBtn.click();
 check("未収集のある範囲を選択", [rangeFrom.value, rangeTo.value], ["2026-03", "2026-05"]);
+check("範囲選択で予定件数も更新される", plannedCount.textContent, "取得予定: 2件");
 
 // 年別・月別の集計(収集済みのみ)
 const yearRows = [...periodTableBody.querySelectorAll(".year-row")];
@@ -156,6 +171,18 @@ check("内訳は日付の降順(日付不明は末尾)", orderRows.map(tr => tr.
 check("未収集の表示", orderRows.find(tr => tr.cells[3].textContent === "a2").cells[2].textContent, "未収集");
 check("取得失敗の表示", orderRows.find(tr => tr.cells[3].textContent === "c2").cells[2].textContent, "取得失敗");
 check("ステータス日本語化", orderRows.find(tr => tr.cells[3].textContent === "a2").cells[1].textContent, "支払済み");
+
+// 画面下部の固定フッター(収集済みのみを対象にする)
+const nowYear = new Date().getFullYear();
+check("フッター 合計", footTotal.textContent, "¥4,000");
+check("フッター 合計の収集済み件数", footTotalCount.textContent, "収集済み 2件");
+check("フッター 今年の見出し", footYearLabel.textContent, `${nowYear}年`);
+// テストデータは2026年のみ当年に該当する(年が変わったら0件になるのが正しい)
+check("フッター 今年の合計", footYearTotal.textContent, nowYear === 2026 ? "¥1,000" : "¥0");
+check("フッター 今年の収集済み件数", footYearCount.textContent, nowYear === 2026 ? "収集済み 1件" : "収集済み 0件");
+
+// アコーディオンの件数表示
+check("内訳の件数表示", orderRowCount.textContent, "(6件)");
 
 // --- 索引が無い場合(旧バージョンからの移行)はキャッシュだけで表示する ---
 state.index = null;

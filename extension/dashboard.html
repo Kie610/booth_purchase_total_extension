@@ -6,15 +6,52 @@
 <link rel="stylesheet" href="dashboard.css">
 </head>
 <body>
-  <main class="page">
-    <header class="page-header">
+  <header class="app-header">
+    <div class="app-header-inner">
       <h1>Booth購入金額集計</h1>
-      <p class="lead">
-        <a href="https://accounts.booth.pm/orders" target="_blank" rel="noopener">accounts.booth.pm</a>
-        にログインした状態で実行してください。
-        取得中もこのタブを開いたまま、他のタブやウィンドウは自由に操作できます。
-      </p>
-    </header>
+      <div id="progress" class="progress" hidden>
+        <div class="progress-head">
+          <span class="progress-text" id="progressText">準備中...</span>
+          <button id="abortBtn" class="secondary small">中断</button>
+        </div>
+        <div class="progress-bar"><div class="progress-bar-fill" id="progressFill"></div></div>
+      </div>
+    </div>
+  </header>
+
+  <main class="page">
+    <p class="lead">
+      <a href="https://accounts.booth.pm/orders" target="_blank" rel="noopener">accounts.booth.pm</a>
+      にログインした状態で実行してください。
+      取得中もこのタブを開いたまま、他のタブやウィンドウは自由に操作できます。
+    </p>
+
+    <div id="noticeBox" class="notice" hidden></div>
+    <div id="errorBox" class="error" hidden></div>
+
+    <section id="summarySection" class="summary" hidden>
+      <div class="summary-main">
+        <span class="summary-label">収集済みの合計支払額</span>
+        <span class="summary-value" id="totalAmount"></span>
+      </div>
+      <div class="summary-sub">
+        <span id="totalCount"></span>
+        <span id="pendingCount"></span>
+        <span id="skippedCount"></span>
+      </div>
+    </section>
+
+    <section class="step step-alt">
+      <h2>まとめて一括集計</h2>
+      <p class="hint">①と②をまとめて実行します。注文数が多い場合は時間がかかります。</p>
+      <div class="step-controls">
+        <button id="runAllBtn" class="secondary">一括で集計を実行</button>
+        <label class="checkbox">
+          <input type="checkbox" id="forceRefreshAll">
+          キャッシュを無視して全件再取得
+        </label>
+      </div>
+    </section>
 
     <section class="step">
       <h2><span class="step-no">①</span> 注文履歴の取得</h2>
@@ -40,14 +77,6 @@
       </div>
 
       <div id="monthArea" hidden>
-        <table class="data-table month-table">
-          <thead>
-            <tr><th>年月</th><th class="num">注文数</th><th class="num">収集済み</th><th class="num">未収集</th></tr>
-          </thead>
-          <tbody id="monthTableBody"></tbody>
-        </table>
-        <p class="hint">行をクリックすると、その月を範囲に設定します。</p>
-
         <div class="range-controls">
           <label class="range-field">開始
             <select id="rangeFrom"></select>
@@ -61,55 +90,26 @@
 
         <div class="step-controls">
           <button id="collectRangeBtn" class="primary">選択範囲の金額を収集</button>
+          <span class="planned" id="plannedCount"></span>
           <label class="checkbox">
             <input type="checkbox" id="forceRefreshRange">
             キャッシュを無視して指定範囲を再取得
           </label>
         </div>
 
-        <div id="unknownArea" class="unknown-area" hidden>
-          <span id="unknownCount"></span>
-          <button id="collectUnknownBtn" class="secondary small">この分を収集</button>
-        </div>
+        <table class="data-table month-table">
+          <thead>
+            <tr><th>年月</th><th class="num">注文数</th><th class="num">収集済み</th><th class="num">未収集</th></tr>
+          </thead>
+          <tbody id="monthTableBody"></tbody>
+        </table>
+        <p class="hint">行をクリックすると、その月を範囲に設定します。</p>
+
+        <p id="unknownArea" class="unknown-area" hidden><span id="unknownCount"></span></p>
       </div>
     </section>
 
-    <section class="step step-alt">
-      <h2>まとめて一括集計</h2>
-      <p class="hint">①と②をまとめて実行します。注文数が多い場合は時間がかかります。</p>
-      <div class="step-controls">
-        <button id="runAllBtn" class="secondary">一括で集計を実行</button>
-        <label class="checkbox">
-          <input type="checkbox" id="forceRefreshAll">
-          キャッシュを無視して全件再取得
-        </label>
-      </div>
-    </section>
-
-    <div id="progress" class="progress" hidden>
-      <div class="progress-head">
-        <span class="progress-text" id="progressText">準備中...</span>
-        <button id="abortBtn" class="secondary small">中断</button>
-      </div>
-      <div class="progress-bar"><div class="progress-bar-fill" id="progressFill"></div></div>
-    </div>
-
-    <div id="noticeBox" class="notice" hidden></div>
-    <div id="errorBox" class="error" hidden></div>
-
-    <section id="result" class="result" hidden>
-      <div class="summary">
-        <div class="summary-main">
-          <span class="summary-label">収集済みの合計支払額</span>
-          <span class="summary-value" id="totalAmount"></span>
-        </div>
-        <div class="summary-sub">
-          <span id="totalCount"></span>
-          <span id="pendingCount"></span>
-          <span id="skippedCount"></span>
-        </div>
-      </div>
-
+    <section id="breakdownSection" hidden>
       <section class="panel">
         <h2>年別・月別の集計</h2>
         <p class="hint">年の行をクリックすると月別の内訳を開閉できます。収集済みの注文のみが対象です。</p>
@@ -121,17 +121,30 @@
         </table>
       </section>
 
-      <section class="panel">
-        <h2>注文ごとの内訳</h2>
+      <details class="panel accordion">
+        <summary><h2>注文ごとの内訳<span class="accordion-count" id="orderRowCount"></span></h2></summary>
         <table class="data-table">
           <thead>
             <tr><th>注文日時</th><th>ステータス</th><th class="num">金額</th><th>注文番号</th></tr>
           </thead>
           <tbody id="orderTableBody"></tbody>
         </table>
-      </section>
+      </details>
     </section>
   </main>
+
+  <footer class="app-footer">
+    <div class="foot-item">
+      <span class="foot-label">合計</span>
+      <span class="foot-value" id="footTotal">¥0</span>
+      <span class="foot-sub" id="footTotalCount">収集済み 0件</span>
+    </div>
+    <div class="foot-item">
+      <span class="foot-label" id="footYearLabel">今年</span>
+      <span class="foot-value" id="footYearTotal">¥0</span>
+      <span class="foot-sub" id="footYearCount">収集済み 0件</span>
+    </div>
+  </footer>
 
   <script src="common.js"></script>
   <script src="dashboard.js"></script>

@@ -16,17 +16,24 @@ const rangeFrom = document.getElementById("rangeFrom");
 const rangeTo = document.getElementById("rangeTo");
 const selectPendingBtn = document.getElementById("selectPendingBtn");
 const collectRangeBtn = document.getElementById("collectRangeBtn");
+const plannedCountEl = document.getElementById("plannedCount");
 const forceRefreshRange = document.getElementById("forceRefreshRange");
 const unknownArea = document.getElementById("unknownArea");
 const unknownCount = document.getElementById("unknownCount");
-const collectUnknownBtn = document.getElementById("collectUnknownBtn");
 const runAllBtn = document.getElementById("runAllBtn");
 const forceRefreshAll = document.getElementById("forceRefreshAll");
 const abortBtn = document.getElementById("abortBtn");
 const progressBox = document.getElementById("progress");
 const progressText = document.getElementById("progressText");
 const progressFill = document.getElementById("progressFill");
-const resultBox = document.getElementById("result");
+const summarySection = document.getElementById("summarySection");
+const breakdownSection = document.getElementById("breakdownSection");
+const orderRowCountEl = document.getElementById("orderRowCount");
+const footTotal = document.getElementById("footTotal");
+const footTotalCount = document.getElementById("footTotalCount");
+const footYearLabel = document.getElementById("footYearLabel");
+const footYearTotal = document.getElementById("footYearTotal");
+const footYearCount = document.getElementById("footYearCount");
 const totalAmountEl = document.getElementById("totalAmount");
 const totalCountEl = document.getElementById("totalCount");
 const pendingCountEl = document.getElementById("pendingCount");
@@ -39,7 +46,6 @@ const errorBox = document.getElementById("errorBox");
 const ACTION_BUTTONS = [
   fetchIndexBtn,
   collectRangeBtn,
-  collectUnknownBtn,
   runAllBtn,
   selectPendingBtn,
 ];
@@ -57,14 +63,9 @@ collectRangeBtn.addEventListener("click", () =>
   runTask((signal) => collectRangeTask(signal))
 );
 
-collectUnknownBtn.addEventListener("click", () =>
-  runTask(async (signal) => {
-    const targets = targetOrders().filter((o) => monthKeyOf(o.date) === null);
-    await collectAmounts(targets, forceRefreshRange.checked, signal);
-  })
-);
-
 runAllBtn.addEventListener("click", () => runTask(runAllTask));
+
+forceRefreshRange.addEventListener("change", updatePlannedCount);
 
 abortBtn.addEventListener("click", () => {
   if (abortController) {
@@ -486,6 +487,7 @@ function render() {
   renderIndexStatus();
   renderMonthArea();
   renderResult();
+  updatePlannedCount();
 }
 
 function renderIndexStatus() {
@@ -528,9 +530,9 @@ function renderMonthArea() {
   unknownArea.hidden = !unknown;
   if (unknown) {
     unknownCount.textContent =
-      `日付不明の注文が${unknown.count}件あります` +
-      `(未収集 ${unknown.pending}件)。範囲では指定できません。`;
-    collectUnknownBtn.disabled = running;
+      `注文日時を読み取れなかった注文が${unknown.count}件あります` +
+      `(未収集 ${unknown.pending}件)。月の範囲では指定できないため、` +
+      `「まとめて一括集計」で収集してください。`;
   }
 }
 
@@ -560,6 +562,24 @@ function setRange(from, to) {
   rangeFrom.value = from;
   rangeTo.value = to;
   highlightSelectedRange();
+  updatePlannedCount();
+}
+
+// 選択範囲で実際に取得しにいく件数(キャッシュ無視の指定を反映する)
+function updatePlannedCount() {
+  const from = rangeFrom.value;
+  const to = rangeTo.value;
+  if (!from || !to) {
+    plannedCountEl.textContent = "";
+    return;
+  }
+  const planned = pendingTargets(
+    ordersInRange(from, to),
+    forceRefreshRange.checked
+  ).length;
+  plannedCountEl.textContent =
+    planned > 0 ? `取得予定: ${planned}件` : "取得予定: なし(収集済み)";
+  if (!running) collectRangeBtn.disabled = planned === 0;
 }
 
 function highlightSelectedRange() {
@@ -574,8 +594,13 @@ function highlightSelectedRange() {
   });
 }
 
-rangeFrom.addEventListener("change", highlightSelectedRange);
-rangeTo.addEventListener("change", highlightSelectedRange);
+rangeFrom.addEventListener("change", onRangeChanged);
+rangeTo.addEventListener("change", onRangeChanged);
+
+function onRangeChanged() {
+  highlightSelectedRange();
+  updatePlannedCount();
+}
 
 function buildSummary(partial) {
   const results = buildResults();
@@ -593,8 +618,11 @@ function buildSummary(partial) {
 
 function renderResult() {
   const results = buildResults();
+  renderFooter(results);
+
   if (results.length === 0) {
-    resultBox.hidden = true;
+    summarySection.hidden = true;
+    breakdownSection.hidden = true;
     return;
   }
 
@@ -612,9 +640,28 @@ function renderResult() {
 
   renderPeriodTable(results);
   renderOrderTable(results);
+  orderRowCountEl.textContent = `(${results.length}件)`;
   highlightSelectedRange();
 
-  resultBox.hidden = false;
+  summarySection.hidden = false;
+  breakdownSection.hidden = false;
+}
+
+// 画面下部に固定表示する合計。収集済みの注文のみを対象にする
+function renderFooter(results) {
+  const thisYear = new Date().getFullYear();
+  const valid = results.filter((r) => typeof r.amount === "number");
+  const ofThisYear = valid.filter((r) => {
+    const d = parseOrderDate(r.date);
+    return d !== null && d.year === thisYear;
+  });
+  const sum = (rows) => rows.reduce((total, r) => total + r.amount, 0);
+
+  footTotal.textContent = formatYen(sum(valid));
+  footTotalCount.textContent = `収集済み ${valid.length}件`;
+  footYearLabel.textContent = `${thisYear}年`;
+  footYearTotal.textContent = formatYen(sum(ofThisYear));
+  footYearCount.textContent = `収集済み ${ofThisYear.length}件`;
 }
 
 function renderPeriodTable(results) {

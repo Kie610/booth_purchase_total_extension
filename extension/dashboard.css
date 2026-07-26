@@ -4,6 +4,7 @@
   --border: #e2e5ea;
   --accent: #fc4d50;
   --bg-soft: #f7f8fa;
+  --footer-height: 62px;
 }
 
 * {
@@ -18,25 +19,81 @@ body {
   line-height: 1.6;
 }
 
+/* ---- 固定ヘッダー ---- */
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #fff;
+  border-bottom: 1px solid var(--border);
+}
+
+.app-header-inner {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 12px 24px;
+}
+
+.app-header h1 {
+  font-size: 18px;
+  margin: 0;
+}
+
 .page {
   max-width: 900px;
   margin: 0 auto;
-  padding: 32px 24px 64px;
-}
-
-.page-header h1 {
-  font-size: 22px;
-  margin: 0 0 8px;
+  padding: 20px 24px calc(var(--footer-height) + 40px);
 }
 
 .lead {
-  margin: 0;
+  margin: 0 0 20px;
   font-size: 13px;
   color: var(--fg-muted);
 }
 
 a {
   color: var(--accent);
+}
+
+/* ---- 固定フッター ---- */
+
+.app-footer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  height: var(--footer-height);
+  display: flex;
+  align-items: center;
+  gap: 40px;
+  padding: 0 24px;
+  background: #fff;
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.foot-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.foot-label {
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.foot-value {
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.foot-sub {
+  font-size: 12px;
+  color: var(--fg-muted);
 }
 
 /* ---- 手順のカード ---- */
@@ -73,6 +130,12 @@ a {
 .status {
   font-size: 12px;
   color: var(--fg-muted);
+}
+
+.planned {
+  font-size: 13px;
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .empty-note {
@@ -161,13 +224,9 @@ button.secondary:hover:not(:disabled) {
 }
 
 .unknown-area {
-  margin-top: 14px;
+  margin: 14px 0 0;
   padding-top: 12px;
   border-top: 1px dashed var(--border);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
   font-size: 12px;
   color: var(--fg-muted);
 }
@@ -175,7 +234,7 @@ button.secondary:hover:not(:disabled) {
 /* ---- 進捗 ---- */
 
 .progress {
-  margin: 20px 0;
+  margin-top: 8px;
 }
 
 .progress-head {
@@ -207,7 +266,7 @@ button.secondary:hover:not(:disabled) {
 
 .notice,
 .error {
-  margin: 16px 0;
+  margin: 0 0 16px;
   padding: 12px 14px;
   border-radius: 6px;
   font-size: 13px;
@@ -228,7 +287,7 @@ button.secondary:hover:not(:disabled) {
 /* ---- 結果 ---- */
 
 .summary {
-  margin: 24px 0;
+  margin: 0 0 20px;
   padding: 20px 24px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -265,6 +324,44 @@ button.secondary:hover:not(:disabled) {
   border-bottom: 1px solid var(--border);
 }
 
+/* ---- アコーディオン ---- */
+
+.accordion > summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.accordion > summary::-webkit-details-marker {
+  display: none;
+}
+
+.accordion > summary h2 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+
+.accordion > summary h2::before {
+  content: "▸";
+  color: var(--fg-muted);
+  font-weight: 400;
+}
+
+.accordion[open] > summary h2::before {
+  content: "▾";
+}
+
+.accordion > summary:hover h2 {
+  color: var(--accent);
+}
+
+.accordion-count {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--fg-muted);
+}
+
 .hint {
   font-size: 12px;
   color: var(--fg-muted);
@@ -298,7 +395,7 @@ button.secondary:hover:not(:disabled) {
 /* ---- 月別の収集状況 ---- */
 
 .month-table {
-  margin-top: 12px;
+  margin-top: 16px;
 }
 
 .month-table tbody tr {

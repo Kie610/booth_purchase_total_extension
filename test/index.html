@@ -9,20 +9,6 @@
 <pre id="out">running...</pre>
 
 <!-- dashboard.html と同じ要素構成 -->
-<button id="fetchIndexBtn"></button>
-<span id="indexStatus"></span>
-<div id="monthEmpty"></div>
-<div id="monthArea" hidden>
-  <table><tbody id="monthTableBody"></tbody></table>
-  <select id="rangeFrom"></select>
-  <select id="rangeTo"></select>
-  <button id="selectPendingBtn"></button>
-  <button id="collectRangeBtn"></button>
-  <input type="checkbox" id="forceRefreshRange">
-  <div id="unknownArea" hidden><span id="unknownCount"></span><button id="collectUnknownBtn"></button></div>
-</div>
-<button id="runAllBtn"></button>
-<input type="checkbox" id="forceRefreshAll">
 <div id="progress" hidden>
   <span id="progressText"></span>
   <button id="abortBtn"></button>
@@ -30,11 +16,41 @@
 </div>
 <div id="noticeBox" hidden></div>
 <div id="errorBox" hidden></div>
-<div id="result" hidden>
+
+<div id="summarySection" hidden>
   <span id="totalAmount"></span><span id="totalCount"></span>
   <span id="pendingCount"></span><span id="skippedCount"></span>
+</div>
+
+<button id="runAllBtn"></button>
+<input type="checkbox" id="forceRefreshAll">
+
+<button id="fetchIndexBtn"></button>
+<span id="indexStatus"></span>
+
+<div id="monthEmpty"></div>
+<div id="monthArea" hidden>
+  <select id="rangeFrom"></select>
+  <select id="rangeTo"></select>
+  <button id="selectPendingBtn"></button>
+  <button id="collectRangeBtn"></button>
+  <span id="plannedCount"></span>
+  <input type="checkbox" id="forceRefreshRange">
+  <table><tbody id="monthTableBody"></tbody></table>
+  <p id="unknownArea" hidden><span id="unknownCount"></span></p>
+</div>
+
+<div id="breakdownSection" hidden>
   <table><tbody id="periodTableBody"></tbody></table>
-  <table><tbody id="orderTableBody"></tbody></table>
+  <details class="accordion">
+    <summary><h2>注文ごとの内訳<span id="orderRowCount"></span></h2></summary>
+    <table><tbody id="orderTableBody"></tbody></table>
+  </details>
+</div>
+
+<div>
+  <span id="footTotal"></span><span id="footTotalCount"></span>
+  <span id="footYearLabel"></span><span id="footYearTotal"></span><span id="footYearCount"></span>
 </div>
 
 <script src="stub.js"></script>
