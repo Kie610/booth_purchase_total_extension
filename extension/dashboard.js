@@ -192,14 +192,22 @@ async function fetchDoc(url, signal) {
   return parseHtml(html);
 }
 
-// BOOTHのページにはreCAPTCHAなどの外部スクリプトタグが含まれる。
 // DOMParserが生成する文書は不活性でスクリプトは実行されないが、
-// タグが残っているとブラウザによっては読み込みが試行され、
-// 拡張ページのCSP(script-src 'self')違反としてコンソールにエラーが出る。
-// 集計に不要な要素なので、解析前に取り除いておく。
+// Chromeのプリロードスキャナは別に動くため、マークアップ中の外部リソースの
+// 読み込みだけが試行される。BOOTHのページにはreCAPTCHAのscriptタグが
+// 含まれており、これが拡張ページのCSP(script-src 'self')に弾かれて
+// コンソールエラーになる。scriptはCSPが止めてくれるが、画像やCSSは
+// 既定のCSPの対象外で黙って取得されてしまい、無駄な通信になる。
+// いずれも集計には不要なので、解析前にまとめて取り除く。
+// (将来サムネイル等を扱う場合は img の除去を見直すこと)
+const EXTERNAL_RESOURCE_TAGS =
+  /<script\b[\s\S]*?<\/script\s*>|<(?:img|link|iframe|object|embed|source|track|video|audio)\b[^>]*>/gi;
+
 function parseHtml(html) {
-  const withoutScripts = html.replace(/<script\b[\s\S]*?<\/script\s*>/gi, "");
-  return new DOMParser().parseFromString(withoutScripts, "text/html");
+  return new DOMParser().parseFromString(
+    html.replace(EXTERNAL_RESOURCE_TAGS, ""),
+    "text/html"
+  );
 }
 
 // 購入履歴一覧ページ1ページ分を解析し、注文の行情報と総ページ数を返す

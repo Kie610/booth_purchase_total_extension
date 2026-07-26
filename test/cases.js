@@ -15,13 +15,21 @@ check("parseOrderDate 解析不能", parseOrderDate("不明"), null);
 check("parseOrderDate 空", parseOrderDate(""), null);
 check("formatYen", formatYen(1234567), "¥1,234,567");
 
-// --- parseHtml: 外部スクリプトタグの除去 ---
+// --- parseHtml: 外部リソースを読みに行くタグの除去 ---
 const scriptedHtml = `<html><head>
 <script src="https://www.google.com/recaptcha/enterprise.js?render=DUMMY"></` + `script>
 <` + `script>window.__should_not_run = true;</` + `script>
-</head><body><div id="keep">残る</div></body></html>`;
+<link rel="stylesheet" href="https://booth.pximg.net/app.css">
+</head><body>
+<img src="https://booth.pximg.net/thumb.jpg" alt="商品">
+<iframe src="https://example.com/frame"></iframe>
+<div id="keep">残る</div>
+</body></html>`;
 const parsed = parseHtml(scriptedHtml);
 check("parseHtml script要素を除去", parsed.querySelectorAll("script").length, 0);
+check("parseHtml img/link/iframeを除去",
+  [parsed.querySelectorAll("img").length, parsed.querySelectorAll("link").length, parsed.querySelectorAll("iframe").length],
+  [0, 0, 0]);
 check("parseHtml 本文は保持", parsed.getElementById("keep").textContent, "残る");
 check("parseHtml インラインscriptは実行されない", window.__should_not_run === undefined, true);
 
@@ -37,12 +45,15 @@ check("parseDetailPage 支払金額とステータス", parseDetailPage(parseHtm
 check("parseDetailPage 金額が無い場合", parseDetailPage(parseHtml("<html><body></body></html>")), { amount: null, status: "unknown" });
 
 // --- parseListPage: 一覧の行と最大ページ数 ---
+// 実際の一覧行にはサムネイル画像が含まれる。除去しても行の抽出に影響しないこと
 const listHtml = `<html><body>
 <a class="nav-reverse" href="/orders/1001">
+  <img src="https://booth.pximg.net/thumb-1.jpg">
   <div class="badge mx-0 align-top order-state completed">発送完了</div>
   <div class="u-tpg-caption2">注文日時: 2026年5月3日 12:34</div>
 </a>
 <a class="nav-reverse" href="/orders/1001">
+  <img src="https://booth.pximg.net/thumb-2.jpg">
   <div class="badge mx-0 align-top order-state completed">発送完了</div>
   <div class="u-tpg-caption2">注文日時: 2026年5月3日 12:34</div>
 </a>
