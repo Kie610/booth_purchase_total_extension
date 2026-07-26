@@ -199,6 +199,10 @@ function loadIndex() {
   return readStored(INDEX_KEY, null);
 }
 
+function removeStored(key) {
+  return ext.storage.local.remove(key);
+}
+
 function saveIndex(index) {
   return writeStored(INDEX_KEY, index);
 }

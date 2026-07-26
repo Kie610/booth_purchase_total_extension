@@ -22,6 +22,10 @@ const plannedCountEl = document.getElementById("plannedCount");
 const forceRefreshRange = document.getElementById("forceRefreshRange");
 const unknownArea = document.getElementById("unknownArea");
 const unknownCount = document.getElementById("unknownCount");
+const clearIndexBtn = document.getElementById("clearIndexBtn");
+const clearIndexStatus = document.getElementById("clearIndexStatus");
+const clearAmountsBtn = document.getElementById("clearAmountsBtn");
+const clearAmountsStatus = document.getElementById("clearAmountsStatus");
 const runAllBtn = document.getElementById("runAllBtn");
 const forceRefreshAll = document.getElementById("forceRefreshAll");
 const abortBtn = document.getElementById("abortBtn");
@@ -53,6 +57,8 @@ const ACTION_BUTTONS = [
   collectRangeBtn,
   runAllBtn,
   selectPendingBtn,
+  clearIndexBtn,
+  clearAmountsBtn,
 ];
 
 let running = false;
@@ -73,6 +79,40 @@ collectRangeBtn.addEventListener("click", () =>
 runAllBtn.addEventListener("click", () => runTask(runAllTask));
 
 forceRefreshRange.addEventListener("change", updatePlannedCount);
+
+// 取り直しに時間がかかるので、消す前に必ず確認する
+clearIndexBtn.addEventListener("click", async () => {
+  if (running) return;
+  const count = state.index ? state.index.orders.length : 0;
+  if (count === 0) return;
+  if (!confirm(`注文履歴のキャッシュ(${count}件)を削除します。\n収集した金額は残ります。よろしいですか?`)) return;
+  await clearIndexData();
+  showNotice(`注文履歴のキャッシュを削除しました(${count}件)。`);
+});
+
+clearAmountsBtn.addEventListener("click", async () => {
+  if (running) return;
+  const count = Object.keys(state.cache).length;
+  if (count === 0) return;
+  if (!confirm(`収集した金額のキャッシュ(${count}件)を削除します。\n注文履歴は残ります。よろしいですか?`)) return;
+  await clearAmountsData();
+  showNotice(`収集した金額のキャッシュを削除しました(${count}件)。`);
+});
+
+async function clearIndexData() {
+  state.index = null;
+  expandedMonthYears.clear();
+  await removeStored(INDEX_KEY);
+  render();
+  await saveSummary(buildSummary(false));
+}
+
+async function clearAmountsData() {
+  state.cache = {};
+  await saveCache(state.cache);
+  render();
+  await saveSummary(buildSummary(false));
+}
 
 abortBtn.addEventListener("click", () => {
   if (abortController) {
@@ -597,6 +637,20 @@ function render() {
   renderMonthArea();
   renderResult();
   updatePlannedCount();
+  renderClearArea();
+}
+
+function renderClearArea() {
+  const indexCount = state.index ? state.index.orders.length : 0;
+  const amountCount = Object.keys(state.cache).length;
+  clearIndexStatus.textContent =
+    indexCount > 0 ? `保存中: ${indexCount}件` : "保存されていません";
+  clearAmountsStatus.textContent =
+    amountCount > 0 ? `保存中: ${amountCount}件` : "保存されていません";
+  if (!running) {
+    clearIndexBtn.disabled = indexCount === 0;
+    clearAmountsBtn.disabled = amountCount === 0;
+  }
 }
 
 function renderIndexStatus() {

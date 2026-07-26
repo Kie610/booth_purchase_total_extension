@@ -311,6 +311,24 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   check("未完了は再取得を案内する", indexCoverage.textContent.includes("全件再取得"), true);
   check("未完了は警告色", indexCoverage.classList.contains("warn"), true);
 
+  // --- キャッシュ削除 ---
+  state.index = { updatedAt: "x", orders: [...OLD, ...NEW], complete: true };
+  state.cache = { o1: { amount: 100, status: "completed", date: "2025年1月1日 00:00" } };
+  render();
+  check("削除欄に保存件数が出る", [clearIndexStatus.textContent, clearAmountsStatus.textContent], ["保存中: 2件", "保存中: 1件"]);
+
+  await clearIndexData();
+  check("注文履歴だけ消える", [state.index, Object.keys(state.cache).length], [null, 1]);
+  check("削除後は保存件数の表示も変わる", clearIndexStatus.textContent, "保存されていません");
+  check("消したものは削除ボタンを押せない", clearIndexBtn.disabled, true);
+  check("残っている方は押せる", clearAmountsBtn.disabled, false);
+
+  state.index = { updatedAt: "x", orders: [...OLD], complete: true };
+  await clearAmountsData();
+  check("金額だけ消える", [Object.keys(state.cache).length, state.index.orders.length], [0, 1]);
+  check("金額を消すと未収集になる", document.getElementById("pendingCount").textContent, "未収集: 1件");
+  check("金額を消すと合計は0", footTotal.textContent, "¥0");
+
   // --- 索引が無い場合(旧バージョンからの移行)はキャッシュだけで表示する ---
   state.index = null;
   state.cache = { z1: { amount: 500, status: "completed", date: "2024年1月1日 00:00" } };
