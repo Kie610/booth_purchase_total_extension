@@ -15,23 +15,22 @@ check("parseOrderDate 解析不能", parseOrderDate("不明"), null);
 check("parseOrderDate 空", parseOrderDate(""), null);
 check("formatYen", formatYen(1234567), "¥1,234,567");
 
-// --- parseHtml: 外部リソースを読みに行くタグの除去 ---
+// --- DOMParserで生成した文書は不活性であること ---
+// 取得したHTMLにはreCAPTCHAのscriptタグや画像が含まれるが、
+// 解析しても実行・取得は行われない
+function parse(html) {
+  return new DOMParser().parseFromString(html, "text/html");
+}
 const scriptedHtml = `<html><head>
 <script src="https://www.google.com/recaptcha/enterprise.js?render=DUMMY"></` + `script>
 <` + `script>window.__should_not_run = true;</` + `script>
-<link rel="stylesheet" href="https://booth.pximg.net/app.css">
 </head><body>
 <img src="https://booth.pximg.net/thumb.jpg" alt="商品">
-<iframe src="https://example.com/frame"></iframe>
 <div id="keep">残る</div>
 </body></html>`;
-const parsed = parseHtml(scriptedHtml);
-check("parseHtml script要素を除去", parsed.querySelectorAll("script").length, 0);
-check("parseHtml img/link/iframeを除去",
-  [parsed.querySelectorAll("img").length, parsed.querySelectorAll("link").length, parsed.querySelectorAll("iframe").length],
-  [0, 0, 0]);
-check("parseHtml 本文は保持", parsed.getElementById("keep").textContent, "残る");
-check("parseHtml インラインscriptは実行されない", window.__should_not_run === undefined, true);
+const parsed = parse(scriptedHtml);
+check("インラインscriptは実行されない", window.__should_not_run === undefined, true);
+check("scriptや画像が含まれていても本文は読める", parsed.getElementById("keep").textContent, "残る");
 
 // --- parseDetailPage: 注文詳細から支払金額とステータスを取得 ---
 const detailHtml = `<html><head>
@@ -41,11 +40,11 @@ const detailHtml = `<html><head>
 <div class="summary"><div>商品代金</div><div>¥1,000</div></div>
 <div class="summary"><div>お支払金額</div><div>¥1,234</div></div>
 </body></html>`;
-check("parseDetailPage 支払金額とステータス", parseDetailPage(parseHtml(detailHtml)), { amount: 1234, status: "paid" });
-check("parseDetailPage 金額が無い場合", parseDetailPage(parseHtml("<html><body></body></html>")), { amount: null, status: "unknown" });
+check("parseDetailPage 支払金額とステータス", parseDetailPage(parse(detailHtml)), { amount: 1234, status: "paid" });
+check("parseDetailPage 金額が無い場合", parseDetailPage(parse("<html><body></body></html>")), { amount: null, status: "unknown" });
 
 // --- parseListPage: 一覧の行と最大ページ数 ---
-// 実際の一覧行にはサムネイル画像が含まれる。除去しても行の抽出に影響しないこと
+// 実際の一覧行にはサムネイル画像が含まれるが、行の抽出に影響しないこと
 const listHtml = `<html><body>
 <a class="nav-reverse" href="/orders/1001">
   <img src="https://booth.pximg.net/thumb-1.jpg">
@@ -63,7 +62,7 @@ const listHtml = `<html><body>
 </a>
 <div class="pager"><a href="/orders?page=2">2</a><a href="/orders?page=7">7</a></div>
 </body></html>`;
-const list = parseListPage(parseHtml(listHtml));
+const list = parseListPage(parse(listHtml));
 check("parseListPage 行の抽出(重複行はそのまま返る)", list.orders,
   [{ id: "1001", status: "completed", date: "2026年5月3日 12:34" },
    { id: "1001", status: "completed", date: "2026年5月3日 12:34" },

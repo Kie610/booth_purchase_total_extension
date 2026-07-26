@@ -80,6 +80,18 @@ Firefox向けにMozillaの署名を通す必要があります。
 - 集計ページのタブを閉じると処理は中断されます(Service Workerでの完全なバックグラウンド
   実行には未対応)。ただし取得済みの金額は保存されているため、再実行すれば続きから取得します。
 - BOOTHのページ構造(HTML)が変更された場合、セレクタの調整が必要になる可能性があります。
+- 集計中、取得1件につき以下のCSP違反がブラウザのコンソールに記録されます。
+
+  ```
+  Loading the script 'https://www.google.com/recaptcha/enterprise.js?...'
+  violates the following Content Security Policy directive: "script-src 'self'"
+  ```
+
+  BOOTHのレスポンスに `Link: <...enterprise.js>; rel=preload; as=script` ヘッダが
+  含まれており、ブラウザがヘッダの時点で先読みを試みるためです。拡張機能ページの
+  CSPが要求の発行前にブロックしているため**通信は発生せず、集計結果にも影響しません**。
+  fetch側から先読みを抑止する手段は無く、CSPに `google.com` を追加すれば消せますが、
+  それは読み込みを許可する意味になりMV3のリモートコード禁止に抵触するため行いません。
 
 ## プライバシー
 

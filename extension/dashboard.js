@@ -178,6 +178,18 @@ function extractStatusFromBadge(badgeEl) {
   return token || "unknown";
 }
 
+// 注意: 集計中、取得1件につき以下のCSP違反がコンソールに記録される。
+//   Loading the script 'https://www.google.com/recaptcha/enterprise.js?...'
+//   violates ... "script-src 'self'"
+// これはBOOTHのレスポンスに
+//   Link: <https://www.google.com/recaptcha/enterprise.js?...>; rel=preload; as=script
+// ヘッダが含まれており、ブラウザがHTMLを見るまでもなくヘッダの時点で
+// 先読みを試みるため。拡張ページのCSPが要求の発行前にブロックしており、
+// 通信は発生せず集計結果にも影響しない。
+// fetch側から先読みを抑止する手段は無く、HTML本文のタグを除去しても
+// ヘッダ起点なので消えない(検証済み)。CSPに google.com を追加すれば
+// 消せるが、それは読み込みを許可する意味になりMV3のリモートコード禁止に
+// 抵触するため行わない。
 async function fetchDoc(url, signal) {
   const res = await fetch(url, { credentials: "include", signal });
   if (res.url.includes("/users/sign_in")) {
@@ -189,25 +201,9 @@ async function fetchDoc(url, signal) {
     throw new Error(`ページの取得に失敗しました (HTTP ${res.status}): ${url}`);
   }
   const html = await res.text();
-  return parseHtml(html);
-}
-
-// DOMParserが生成する文書は不活性でスクリプトは実行されないが、
-// Chromeのプリロードスキャナは別に動くため、マークアップ中の外部リソースの
-// 読み込みだけが試行される。BOOTHのページにはreCAPTCHAのscriptタグが
-// 含まれており、これが拡張ページのCSP(script-src 'self')に弾かれて
-// コンソールエラーになる。scriptはCSPが止めてくれるが、画像やCSSは
-// 既定のCSPの対象外で黙って取得されてしまい、無駄な通信になる。
-// いずれも集計には不要なので、解析前にまとめて取り除く。
-// (将来サムネイル等を扱う場合は img の除去を見直すこと)
-const EXTERNAL_RESOURCE_TAGS =
-  /<script\b[\s\S]*?<\/script\s*>|<(?:img|link|iframe|object|embed|source|track|video|audio)\b[^>]*>/gi;
-
-function parseHtml(html) {
-  return new DOMParser().parseFromString(
-    html.replace(EXTERNAL_RESOURCE_TAGS, ""),
-    "text/html"
-  );
+  // DOMParserが生成する文書は不活性で、スクリプトは実行されず
+  // 画像などのサブリソースも取得されない(検証済み)
+  return new DOMParser().parseFromString(html, "text/html");
 }
 
 // 購入履歴一覧ページ1ページ分を解析し、注文の行情報と総ページ数を返す
