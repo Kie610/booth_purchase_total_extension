@@ -1,0 +1,25 @@
+# OS
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# エディタ
+.vscode/
+.idea/
+*.swp
+
+# パッケージング成果物
+*.zip
+*.crx
+*.xpi
+*.pem
+dist/
+web-ext-artifacts/
+
+# 依存関係(将来ツールを入れた場合)
+node_modules/
+
+# 購入履歴などの個人データを誤ってコミットしないための保険
+*.csv
+booth*.json
+!extension/manifest.json

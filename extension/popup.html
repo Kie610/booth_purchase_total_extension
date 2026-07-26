@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Booth購入金額集計</title>
+<link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <h1>Booth購入金額集計</h1>
+
+  <div class="notice">
+    <a href="https://accounts.booth.pm/orders" target="_blank" rel="noopener">accounts.booth.pm</a>
+    にログインした状態で実行してください。
+  </div>
+
+  <div class="controls">
+    <button id="runBtn">集計を実行</button>
+    <label class="force-refresh">
+      <input type="checkbox" id="forceRefresh">
+      キャッシュを無視して全件再取得
+    </label>
+  </div>
+
+  <div id="progress" class="progress" hidden>
+    <div class="progress-text" id="progressText">準備中...</div>
+    <div class="progress-bar"><div class="progress-bar-fill" id="progressFill"></div></div>
+  </div>
+
+  <div id="result" class="result" hidden>
+    <div class="total-amount" id="totalAmount"></div>
+    <div class="total-count" id="totalCount"></div>
+    <div class="skipped-count" id="skippedCount"></div>
+
+    <details>
+      <summary>注文ごとの内訳を表示</summary>
+      <table id="orderTable">
+        <thead>
+          <tr><th>注文日時</th><th>ステータス</th><th>金額</th><th>注文番号</th></tr>
+        </thead>
+        <tbody id="orderTableBody"></tbody>
+      </table>
+    </details>
+  </div>
+
+  <div id="errorBox" class="error" hidden></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
