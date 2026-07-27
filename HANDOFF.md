@@ -35,10 +35,18 @@ extension/
   common.js              定数・日付解析・月/年集計・ギフト表記・ストレージ操作
   purchase-examples.js   X共有用の金額比較マスター(2026-07時点の目安)
   popup.html/css/js      収集済み合計の概要表示と集計ページを開く導線のみ
-  dashboard.html/css/js  実処理。集計はすべてこの専用タブ上で動く
+  dashboard.html/css     集計ページ。実処理はすべてこの専用タブ上で動く
+  dashboard-parse.js     BOOTHのHTMLを読む。構造変更で直すのは基本ここ
+  dashboard-view.js      画面に出す側。DOM参照と描画。イベントは扱わない
+  dashboard.js           状態・イベント配線・BOOTHからの取得(中枢)
 tools/make_icons.py      アイコン生成(Pillow使用)
 test/                    ブラウザ上で動く簡易テスト
 ```
+
+集計ページの3ファイルは classic script として同じグローバルを共有します
+(モジュールではないので import/export は無く、読み込み順は dashboard.html の
+script タグの並びがそのまま依存順です)。境界は「parse=入力 / view=出力 /
+dashboard=制御」で、view から state や targetOrders() を読むのは想定内です。
 
 ポップアップは閉じるとJSコンテキストごと破棄されるため、処理は専用タブへ
 移してあります。Service Workerでの常駐はChromeでDOMParserが使えず

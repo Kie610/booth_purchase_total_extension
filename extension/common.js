@@ -31,17 +31,6 @@ function giftText(total) {
   return total > 0 ? `ギフト ${formatYen(total)}` : "";
 }
 
-function giftMarkup(total) {
-  const text = giftText(total);
-  return text ? `<span class="gift">${text}</span>` : "";
-}
-
-function escapeHtml(str) {
-  const div = document.createElement("div");
-  div.textContent = str == null ? "" : String(str);
-  return div.innerHTML;
-}
-
 function formatTimestamp(iso) {
   if (!iso) return "";
   const d = new Date(iso);
@@ -70,11 +59,23 @@ function orderSortKey(order) {
   return d ? d.sortKey : -1;
 }
 
-// 月の識別子。範囲指定の比較に使うため "YYYY-MM" 形式(文字列比較で大小がそのまま日付順になる)
-// 日付が読めなかった注文は null を返す
+// ---- 期間(年・月)のまとめ ----------------------------------------------
+//
+// 期間キーは "YYYY-MM"(月) / "YYYY"(年) の文字列で統一する。0埋めしてあるので
+// 文字列比較がそのまま日付の前後関係になり、範囲指定の比較にもそのまま使える。
+// 日付を読み取れなかった注文のキーは null。
+
 function monthKeyOf(dateText) {
   const d = parseOrderDate(dateText);
   return d ? `${d.year}-${String(d.month).padStart(2, "0")}` : null;
+}
+
+function yearKeyOf(monthKey) {
+  return monthKey ? monthKey.slice(0, 4) : null;
+}
+
+function yearLabel(key) {
+  return key ? `${Number(key)}年` : "日付不明";
 }
 
 function monthLabel(key) {
@@ -83,103 +84,89 @@ function monthLabel(key) {
   return `${Number(year)}年${Number(month)}月`;
 }
 
-// 月ごとの「注文数 / 収集済み / 未収集」を求める(新しい月が先、日付不明は末尾)
-function buildMonthStats(orders, cache) {
-  const stats = new Map();
-  for (const order of orders) {
-    const key = monthKeyOf(order.date);
-    if (!stats.has(key)) {
-      stats.set(key, { key, label: monthLabel(key), count: 0, collected: 0 });
-    }
-    const stat = stats.get(key);
-    stat.count++;
-    if (cache[order.id]) stat.collected++;
-  }
-  return Array.from(stats.values())
-    .map((s) => ({ ...s, pending: s.count - s.collected }))
-    .sort((a, b) => {
-      if (a.key === b.key) return 0;
-      if (a.key === null) return 1;
-      if (b.key === null) return -1;
-      return a.key < b.key ? 1 : -1;
-    });
+// 年の行にぶら下げるときの月表記(年は親の行に出ているので省く)
+function monthShortLabel(key) {
+  return key ? `${Number(key.slice(5))}月` : "月不明";
 }
 
-// 月別の集計を年でまとめ直す(新しい年が先、日付不明は末尾)
-function buildYearStats(orders, cache) {
+// 新しい順。日付不明(null)は並びの末尾へ送る
+function comparePeriodDesc(a, b) {
+  if (a === b) return 0;
+  if (a === null) return 1;
+  if (b === null) return -1;
+  return a < b ? 1 : -1;
+}
+
+// 注文を「年 → 月」の二段階にまとめる共通処理。
+// 行に何を積むかは呼び出し側が seed(行の初期値)と add(1件分の反映)で決める。
+// 「収集状況を数える」用途と「支払額を合計する」用途の両方がこれを使う。
+function groupByPeriod(items, dateOf, seed, add) {
   const years = new Map();
-  for (const month of buildMonthStats(orders, cache)) {
-    const key = month.key ? month.key.slice(0, 4) : null;
-    if (!years.has(key)) {
-      years.set(key, {
-        key,
-        label: key ? `${Number(key)}年` : "日付不明",
-        count: 0,
-        collected: 0,
-        pending: 0,
-        months: [],
+  for (const item of items) {
+    const monthKey = monthKeyOf(dateOf(item));
+    const yearKey = yearKeyOf(monthKey);
+    if (!years.has(yearKey)) {
+      years.set(yearKey, {
+        key: yearKey,
+        label: yearLabel(yearKey),
+        months: new Map(),
+        ...seed(),
       });
     }
-    const year = years.get(key);
-    year.count += month.count;
-    year.collected += month.collected;
-    year.pending += month.pending;
-    year.months.push(month); // buildMonthStats が新しい順に並べてあるのでそのまま
+    const year = years.get(yearKey);
+    add(year, item);
+
+    if (!year.months.has(monthKey)) {
+      year.months.set(monthKey, {
+        key: monthKey,
+        label: monthLabel(monthKey),
+        shortLabel: monthShortLabel(monthKey),
+        ...seed(),
+      });
+    }
+    add(year.months.get(monthKey), item);
   }
-  return Array.from(years.values()).sort((a, b) => {
-    if (a.key === b.key) return 0;
-    if (a.key === null) return 1;
-    if (b.key === null) return -1;
-    return a.key < b.key ? 1 : -1;
-  });
+  return Array.from(years.values())
+    .sort((a, b) => comparePeriodDesc(a.key, b.key))
+    .map((year) => ({
+      ...year,
+      months: Array.from(year.months.values()).sort((a, b) =>
+        comparePeriodDesc(a.key, b.key)
+      ),
+    }));
 }
 
-// 年 → 月 の二段階で支払額を集計する
+// 年ごと・月ごとの「注文数 / 収集済み / 未収集」(新しい年が先、日付不明は末尾)
+function buildYearStats(orders, cache) {
+  const withPending = (row) => ({ ...row, pending: row.count - row.collected });
+  return groupByPeriod(
+    orders,
+    (order) => order.date,
+    () => ({ count: 0, collected: 0 }),
+    (row, order) => {
+      row.count++;
+      if (cache[order.id]) row.collected++;
+    }
+  ).map((year) => ({ ...withPending(year), months: year.months.map(withPending) }));
+}
+
+// 月だけの平坦な一覧(範囲の選択肢や未収集の検出に使う)。年のまとまりを開くだけ
+function buildMonthStats(orders, cache) {
+  return buildYearStats(orders, cache).flatMap((year) => year.months);
+}
+
+// 年 → 月 の二段階で支払額を集計する(収集済みの注文のみ)
 function aggregateByPeriod(results) {
-  const years = new Map();
-  for (const r of results) {
-    if (typeof r.amount !== "number") continue;
-    const d = parseOrderDate(r.date);
-    const yearKey = d ? d.year : null;
-    if (!years.has(yearKey)) {
-      years.set(yearKey, { year: yearKey, count: 0, total: 0, gift: 0, months: new Map() });
+  return groupByPeriod(
+    results.filter((r) => typeof r.amount === "number"),
+    (r) => r.date,
+    () => ({ count: 0, total: 0, gift: 0 }),
+    (row, r) => {
+      row.count++;
+      row.total += r.amount;
+      row.gift += giftAmount(r);
     }
-    const year = years.get(yearKey);
-    year.count++;
-    year.total += r.amount;
-    year.gift += giftAmount(r);
-
-    const monthKey = d ? d.month : null;
-    if (!year.months.has(monthKey)) {
-      year.months.set(monthKey, { month: monthKey, count: 0, total: 0, gift: 0 });
-    }
-    const month = year.months.get(monthKey);
-    month.count++;
-    month.total += r.amount;
-    month.gift += giftAmount(r);
-  }
-
-  const sortDesc = (a, b) => (b.key ?? -1) - (a.key ?? -1);
-  return Array.from(years.values())
-    .map((y) => ({
-      year: y.year,
-      label: y.year === null ? "日付不明" : `${y.year}年`,
-      key: y.year,
-      count: y.count,
-      total: y.total,
-      gift: y.gift,
-      months: Array.from(y.months.values())
-        .map((m) => ({
-          month: m.month,
-          label: m.month === null ? "月不明" : `${m.month}月`,
-          key: m.month,
-          count: m.count,
-          total: m.total,
-          gift: m.gift,
-        }))
-        .sort(sortDesc),
-    }))
-    .sort(sortDesc);
+  );
 }
 
 async function readStored(key, fallback) {

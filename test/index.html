@@ -6,6 +6,13 @@
 <title>dashboard test harness</title>
 </head>
 <body>
+<!-- 途中で例外が出ると結果が「running...」のまま止まって原因が分からないので、
+     ここで拾って画面に出す(構文エラーも拾えるよう capture 段階で待ち受ける) -->
+<script>
+const showFailure = (m) => { document.getElementById("out").textContent = m; };
+window.addEventListener("error", (e) => showFailure(`ERROR ${e.message} @${e.filename}:${e.lineno}`), true);
+window.addEventListener("unhandledrejection", (e) => showFailure("ERROR " + ((e.reason && e.reason.stack) || e.reason)));
+</script>
 <pre id="out">running...</pre>
 
 <!-- dashboard.html と同じ要素構成 -->
@@ -67,6 +74,8 @@
 <script src="stub.js"></script>
 <script src="../extension/common.js"></script>
 <script src="../extension/purchase-examples.js"></script>
+<script src="../extension/dashboard-parse.js"></script>
+<script src="../extension/dashboard-view.js"></script>
 <script src="../extension/dashboard.js"></script>
 <script src="cases.js"></script>
 </body>

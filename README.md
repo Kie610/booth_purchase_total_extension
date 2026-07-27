@@ -23,9 +23,11 @@ extension/          読み込み対象の拡張機能本体
   purchase-examples.js
                     X共有用の金額比較マスター(ジャンル・ブランド管理情報を含む)
   popup.html/css/js ポップアップ(収集済み合計の概要表示と集計ページへの導線)
-  dashboard.html/css/js
-                    集計ページ(注文履歴の取得・範囲を指定した金額収集・一括集計・
+  dashboard.html/css 集計ページ(注文履歴の取得・範囲を指定した金額収集・一括集計・
                     中断・進捗表示・年別月別集計・注文内訳)
+  dashboard-parse.js  BOOTHのページ(HTML)の読み取り
+  dashboard-view.js   集計ページの描画(DOMの参照と組み立て)
+  dashboard.js        集計ページの状態・イベント・BOOTHからの取得
 tools/              開発用スクリプト
   make_icons.py     アイコンの生成(形や色を変えるときはここを直して再生成する)
 test/               ブラウザ上で動く簡易テスト(test/README.md 参照)

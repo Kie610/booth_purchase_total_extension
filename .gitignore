@@ -3,9 +3,10 @@ Thumbs.db
 desktop.ini
 .DS_Store
 
-# エディタ
+# エディタ・開発ツールのローカル設定
 .vscode/
 .idea/
+.claude/
 *.swp
 
 # アイコンの下書き(ペイントソフトの作業ファイルと試し書き出し)。

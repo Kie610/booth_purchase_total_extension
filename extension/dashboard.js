@@ -1,5 +1,9 @@
 "use strict";
 
+// 集計ページの中枢。状態を持ち、イベントを受け取り、BOOTHから取得する。
+// ページの読み取りは dashboard-parse.js、画面への反映は dashboard-view.js。
+// この3つは classic script として同じグローバルを共有する(モジュールではない)。
+
 const ORDERS_INDEX_URL = "https://accounts.booth.pm/orders";
 const ORDER_DETAIL_URL = "https://accounts.booth.pm/orders/";
 const REQUEST_INTERVAL_MS = 250; // サーバーへの負荷を抑えるための待機時間
@@ -7,70 +11,12 @@ const CACHE_FLUSH_EVERY = 5; // 取得途中で中断されても失わないよ
 const RUN_STATE_INTERVAL_MS = 400; // ポップアップへ進捗を渡す書き込みの間引き
 const EXCLUDED_STATUSES = new Set(["cancelled"]);
 
-const fetchIndexBtn = document.getElementById("fetchIndexBtn");
-const forceRefreshIndex = document.getElementById("forceRefreshIndex");
-const indexStatus = document.getElementById("indexStatus");
-const indexCoverage = document.getElementById("indexCoverage");
-const monthEmpty = document.getElementById("monthEmpty");
-const monthArea = document.getElementById("monthArea");
-const rangeArea = document.getElementById("rangeArea");
-const monthTableBody = document.getElementById("monthTableBody");
-const rangeFrom = document.getElementById("rangeFrom");
-const rangeTo = document.getElementById("rangeTo");
-const selectPendingBtn = document.getElementById("selectPendingBtn");
-const collectRangeBtn = document.getElementById("collectRangeBtn");
-const plannedCountEl = document.getElementById("plannedCount");
-const forceRefreshRange = document.getElementById("forceRefreshRange");
-const unknownArea = document.getElementById("unknownArea");
-const unknownCount = document.getElementById("unknownCount");
-const clearIndexBtn = document.getElementById("clearIndexBtn");
-const clearIndexStatus = document.getElementById("clearIndexStatus");
-const clearAmountsBtn = document.getElementById("clearAmountsBtn");
-const clearAmountsStatus = document.getElementById("clearAmountsStatus");
-const runAllBtn = document.getElementById("runAllBtn");
-const forceRefreshAll = document.getElementById("forceRefreshAll");
-const abortBtn = document.getElementById("abortBtn");
-const progressBox = document.getElementById("progress");
-const progressText = document.getElementById("progressText");
-const progressFill = document.getElementById("progressFill");
-const summarySection = document.getElementById("summarySection");
-const breakdownSection = document.getElementById("breakdownSection");
-const orderRowCountEl = document.getElementById("orderRowCount");
-const footTotal = document.getElementById("footTotal");
-const footTotalCount = document.getElementById("footTotalCount");
-const footYearLabel = document.getElementById("footYearLabel");
-const footYearTotal = document.getElementById("footYearTotal");
-const footYearCount = document.getElementById("footYearCount");
-const totalAmountEl = document.getElementById("totalAmount");
-const totalGiftEl = document.getElementById("totalGift");
-const footTotalGift = document.getElementById("footTotalGift");
-const footYearGift = document.getElementById("footYearGift");
-const shareBtn = document.getElementById("shareBtn");
-const totalCountEl = document.getElementById("totalCount");
-const pendingCountEl = document.getElementById("pendingCount");
-const skippedCountEl = document.getElementById("skippedCount");
-const periodTableBody = document.getElementById("periodTableBody");
-const orderTableBody = document.getElementById("orderTableBody");
-const noticeBox = document.getElementById("noticeBox");
-const errorBox = document.getElementById("errorBox");
-
-const ACTION_BUTTONS = [
-  fetchIndexBtn,
-  collectRangeBtn,
-  runAllBtn,
-  selectPendingBtn,
-  clearIndexBtn,
-  clearAmountsBtn,
-];
-
 let running = false;
 let abortController = null;
 let lastRunStateWrite = 0;
 const state = { index: null, cache: {} };
-// 月別テーブルで開いている年(再描画をまたいで保つ)
-const expandedMonthYears = new Set();
-// 共有文面に使う集計値(描画のたびに更新する)
-let shareStats = null;
+
+// ---- イベント配線 ------------------------------------------------------
 
 fetchIndexBtn.addEventListener("click", () =>
   runTask((signal) => fetchIndexTask(signal, forceRefreshIndex.checked))
@@ -83,6 +29,13 @@ collectRangeBtn.addEventListener("click", () =>
 runAllBtn.addEventListener("click", () => runTask(runAllTask));
 
 forceRefreshRange.addEventListener("change", updatePlannedCount);
+rangeFrom.addEventListener("change", onRangeChanged);
+rangeTo.addEventListener("change", onRangeChanged);
+
+function onRangeChanged() {
+  highlightSelectedRange();
+  updatePlannedCount();
+}
 
 // 投稿画面を開くだけで、投稿そのものはユーザーがXの画面で行う
 shareBtn.addEventListener("click", () => {
@@ -91,31 +44,6 @@ shareBtn.addEventListener("click", () => {
   url.searchParams.set("text", buildShareText(shareStats));
   window.open(url.toString(), "_blank", "noopener");
 });
-
-const SHARE_HASHTAG = "#BOOTHお買いものレポート";
-
-// 合計以下の項目から最も高いものを選ぶ。マスターは金額の昇順で管理する
-function purchaseComparison(amount) {
-  let selected = PURCHASE_EXAMPLE_MASTER[0];
-  for (const example of PURCHASE_EXAMPLE_MASTER) {
-    if (example.amount > amount) break;
-    selected = example;
-  }
-  return selected.label;
-}
-
-function buildShareText(stats) {
-  return [
-    "BOOTHお買いもの振り返り🛍️",
-    "",
-    `合計：${formatYen(stats.total)}（${stats.count}件）`,
-    `今年：${formatYen(stats.yearTotal)}（${stats.yearCount}件）`,
-    "",
-    `積み重ねてみると、${purchaseComparison(stats.total)}が買えるくらいの金額になりました。`,
-    "",
-    SHARE_HASHTAG,
-  ].join("\n");
-}
 
 // 取り直しに時間がかかるので、消す前に必ず確認する
 clearIndexBtn.addEventListener("click", async () => {
@@ -135,21 +63,6 @@ clearAmountsBtn.addEventListener("click", async () => {
   await clearAmountsData();
   showNotice(`収集した金額のキャッシュを削除しました(${count}件)。`);
 });
-
-async function clearIndexData() {
-  state.index = null;
-  expandedMonthYears.clear();
-  await removeStored(INDEX_KEY);
-  render();
-  await saveSummary(buildSummary(false));
-}
-
-async function clearAmountsData() {
-  state.cache = {};
-  await saveCache(state.cache);
-  render();
-  await saveSummary(buildSummary(false));
-}
 
 abortBtn.addEventListener("click", () => {
   if (abortController) {
@@ -175,7 +88,7 @@ monthTableBody.addEventListener("click", (event) => {
   if (yearRow) {
     // ▸ は開閉、それ以外の場所はその年をまとめて範囲に設定
     if (event.target.closest(".toggle")) {
-      toggleMonthYear(yearRow);
+      toggleYearRow(monthTableBody, expandedMonthYears, yearRow);
     } else {
       setRange(yearRow.dataset.rangeFrom, yearRow.dataset.rangeTo);
     }
@@ -185,34 +98,11 @@ monthTableBody.addEventListener("click", (event) => {
   if (monthRow) setRange(monthRow.dataset.monthKey, monthRow.dataset.monthKey);
 });
 
-function toggleMonthYear(yearRow) {
-  const key = yearRow.dataset.yearKey;
-  const expanded = expandedMonthYears.has(key);
-  if (expanded) {
-    expandedMonthYears.delete(key);
-  } else {
-    expandedMonthYears.add(key);
-  }
-  yearRow.querySelector(".toggle").textContent = expanded ? "▸" : "▾";
-  monthTableBody
-    .querySelectorAll(`tr.month-row[data-year-key="${key}"]`)
-    .forEach((el) => {
-      el.hidden = expanded;
-    });
-}
-
+// こちらは範囲指定に関わらないので、年の行のどこを押しても開閉するだけ
 periodTableBody.addEventListener("click", (event) => {
-  const row = event.target.closest(".year-row");
-  if (!row) return;
-  const key = row.dataset.yearKey;
-  const expanded = row.dataset.expanded === "true";
-  row.dataset.expanded = expanded ? "false" : "true";
-  row.querySelector(".toggle").textContent = expanded ? "▸" : "▾";
-  periodTableBody
-    .querySelectorAll(`.month-row[data-year-key="${key}"]`)
-    .forEach((el) => {
-      el.hidden = expanded;
-    });
+  if (running) return;
+  const yearRow = event.target.closest("tr.year-row");
+  if (yearRow) toggleYearRow(periodTableBody, expandedPeriodYears, yearRow);
 });
 
 init();
@@ -237,16 +127,99 @@ async function init() {
   render();
 }
 
+// ---- 保存データの操作 --------------------------------------------------
+
+async function clearIndexData() {
+  state.index = null;
+  expandedMonthYears.clear();
+  expandedPeriodYears.clear();
+  await removeStored(INDEX_KEY);
+  render();
+  await saveSummary(buildSummary(false));
+}
+
+async function clearAmountsData() {
+  state.cache = {};
+  await saveCache(state.cache);
+  render();
+  await saveSummary(buildSummary(false));
+}
+
+// ---- 状態からの導出 ----------------------------------------------------
+
+// キャンセル以外の注文(集計対象)
+function targetOrders() {
+  if (!state.index) return [];
+  return state.index.orders.filter((o) => !EXCLUDED_STATUSES.has(o.status));
+}
+
+function skippedCount() {
+  if (!state.index) return 0;
+  return state.index.orders.length - targetOrders().length;
+}
+
+function currentMonthStats() {
+  return buildMonthStats(targetOrders(), state.cache);
+}
+
+// 索引に入っている最も古い注文(日時が読めるもののうち)
+function oldestCoveredOrder() {
+  if (!state.index) return null;
+  let oldest = null;
+  for (const order of state.index.orders) {
+    const d = parseOrderDate(order.date);
+    if (!d) continue;
+    if (!oldest || d.sortKey < parseOrderDate(oldest.date).sortKey) oldest = order;
+  }
+  return oldest;
+}
+
+// 索引と収集済みの金額を突き合わせて表示用の一覧にする
+// amount: 数値=収集済み / null=取得失敗 / undefined=未収集
+function buildResults() {
+  if (state.index) {
+    return targetOrders().map((o) => ({
+      id: o.id,
+      date: o.date,
+      status: o.status,
+      amount: state.cache[o.id] ? state.cache[o.id].amount : undefined,
+      gift: giftAmount(state.cache[o.id]),
+    }));
+  }
+  // 索引が無い場合(旧バージョンからの移行時)はキャッシュだけで表示する
+  return Object.entries(state.cache).map(([id, entry]) => ({
+    id,
+    date: entry.date,
+    status: entry.status,
+    amount: entry.amount,
+    gift: giftAmount(entry),
+  }));
+}
+
+// ポップアップに見せる要約
+function buildSummary(partial) {
+  const results = buildResults();
+  const valid = results.filter((r) => typeof r.amount === "number");
+  return {
+    total: valid.reduce((sum, r) => sum + r.amount, 0),
+    count: valid.length,
+    pendingCount: results.filter((r) => r.amount === undefined).length,
+    failedCount: results.filter((r) => r.amount === null).length,
+    skippedCancelled: skippedCount(),
+    partial: Boolean(partial),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 // ---- 実行の共通処理 ----------------------------------------------------
 
-async function runTask(task, successNotice) {
+async function runTask(task) {
   if (running) return;
   setRunning(true);
   clearError();
   clearNotice();
   abortController = new AbortController();
   let aborted = false;
-  let failed = false;
 
   try {
     await task(abortController.signal);
@@ -254,7 +227,6 @@ async function runTask(task, successNotice) {
     if (err.name === "AbortError") {
       aborted = true;
     } else {
-      failed = true;
       showError(err.message || String(err));
     }
   } finally {
@@ -271,9 +243,12 @@ async function runTask(task, successNotice) {
     showNotice(
       "中断しました。ここまでに取得した金額は保存されているため、再実行すると続きから取得します。"
     );
-  } else if (!failed && successNotice) {
-    showNotice(successNotice);
   }
+}
+
+function setRunning(isRunning) {
+  running = isRunning;
+  renderRunningState(isRunning);
 }
 
 function abortError() {
@@ -298,53 +273,6 @@ function sleep(ms, signal) {
     }
     if (signal) signal.addEventListener("abort", onAbort, { once: true });
   });
-}
-
-function setRunning(isRunning) {
-  running = isRunning;
-  ACTION_BUTTONS.forEach((btn) => {
-    btn.disabled = isRunning;
-  });
-  forceRefreshIndex.disabled = isRunning;
-  forceRefreshRange.disabled = isRunning;
-  forceRefreshAll.disabled = isRunning;
-  rangeFrom.disabled = isRunning;
-  rangeTo.disabled = isRunning;
-  abortBtn.disabled = false;
-  if (!isRunning) {
-    progressBox.hidden = true;
-    document.body.classList.remove("has-progress");
-  }
-}
-
-function showError(message) {
-  errorBox.textContent = message;
-  errorBox.hidden = false;
-}
-
-function clearError() {
-  errorBox.hidden = true;
-  errorBox.textContent = "";
-}
-
-function showNotice(message) {
-  noticeBox.textContent = message;
-  noticeBox.hidden = false;
-}
-
-function clearNotice() {
-  noticeBox.hidden = true;
-  noticeBox.textContent = "";
-}
-
-function setProgress(text, ratio) {
-  progressBox.hidden = false;
-  // フッターに進捗を出す分だけ高さが増えるので、本文の下余白も広げる
-  document.body.classList.add("has-progress");
-  progressText.textContent = text;
-  if (typeof ratio === "number") {
-    progressFill.style.width = `${Math.min(100, Math.max(0, ratio * 100))}%`;
-  }
 }
 
 // ポップアップ側で進捗を表示できるようにストレージへ書き出す(書き込み過多を避けて間引く)
@@ -487,7 +415,8 @@ function pendingTargets(orders, force) {
   return force ? orders : orders.filter((o) => !state.cache[o.id]);
 }
 
-// 指定された月の範囲(両端を含む)に入る注文。日付が読めない注文は範囲に入れない
+// 指定された月の範囲(両端を含む)に入る注文。日付が読めない注文は範囲に入れない。
+// 開始と終了が入れ替えて指定されても良いようにここでそろえる
 function ordersInRange(from, to) {
   const lo = from <= to ? from : to;
   const hi = from <= to ? to : from;
@@ -540,7 +469,6 @@ async function collectRangeTask(signal) {
     showNotice("収集する範囲を選択してください。");
     return;
   }
-  // 開始と終了は入れ替えて指定されても良いようにそろえる
   await collectAmounts(ordersInRange(from, to), forceRefreshRange.checked, signal);
 }
 
@@ -549,486 +477,4 @@ async function runAllTask(signal) {
   if (force) state.cache = {};
   await fetchIndexTask(signal, force);
   await collectAmounts(targetOrders(), force, signal);
-}
-
-// ---- 解析 --------------------------------------------------------------
-
-function parseYen(text) {
-  if (!text) return null;
-  const cleaned = text.replace(/[¥\s,]/g, "");
-  const n = parseInt(cleaned, 10);
-  return Number.isNaN(n) ? null : n;
-}
-
-function extractOrderId(href) {
-  const m = href.match(/\/orders\/([^/?#]+)/);
-  return m ? m[1] : null;
-}
-
-function extractStatusFromBadge(badgeEl) {
-  if (!badgeEl) return "unknown";
-  const known = new Set(["badge", "mx-0", "align-top", "order-state"]);
-  const token = Array.from(badgeEl.classList).find((c) => !known.has(c));
-  return token || "unknown";
-}
-
-// 購入履歴一覧ページ1ページ分を解析し、注文の行情報と総ページ数を返す
-function parseListPage(doc) {
-  const rows = Array.from(
-    doc.querySelectorAll('a.nav-reverse[href*="/orders/"]')
-  );
-  const orders = rows
-    .map((a) => {
-      const id = extractOrderId(a.getAttribute("href") || "");
-      if (!id) return null;
-      const badge = a.querySelector(".order-state");
-      const status = extractStatusFromBadge(badge);
-      const dateEl = a.querySelector(".u-tpg-caption2");
-      const date = dateEl
-        ? dateEl.textContent.replace(/^注文日時[:：]\s*/, "").trim()
-        : "";
-      return { id, status, date };
-    })
-    .filter(Boolean);
-
-  let maxPage = 1;
-  doc.querySelectorAll('.pager a[href*="page="]').forEach((a) => {
-    const m = (a.getAttribute("href") || "").match(/page=(\d+)/);
-    if (m) maxPage = Math.max(maxPage, parseInt(m[1], 10));
-  });
-
-  return { orders, maxPage };
-}
-
-// 「BOOST¥ 0」のようにラベルと金額が同じ要素に入っている場合があるため、
-// 文字列中の最初の「¥ 金額」を取り出す
-function parseYenAmount(text) {
-  const m = String(text == null ? "" : text).match(/[¥￥]\s*(-?[\d,]+)/);
-  if (!m) return null;
-  const n = parseInt(m[1].replace(/,/g, ""), 10);
-  return Number.isNaN(n) ? null : n;
-}
-
-// 注文詳細ページは、ショップごと・商品種別ごとに .sheet-group で区切られ、
-// 各グループの先頭に「ダウンロード商品」「ギフト」などの見出しが入る。
-// ギフトのグループに並ぶ商品価格(BOOST含む)を合計したものが、
-// お支払金額に含まれるギフト分になる
-const GIFT_GROUP_LABEL = "ギフト";
-
-function parseGiftTotal(doc) {
-  const groups = Array.from(doc.querySelectorAll(".sheet-group"));
-  // グループ自体が見つからない場合はページ構造が変わっているので、
-  // 「ギフト0円」と断定せず不明(null)として扱う
-  if (groups.length === 0) return null;
-
-  let total = 0;
-  for (const group of groups) {
-    const header = group.querySelector("b.u-tpg-title3");
-    if (!header || header.textContent.trim() !== GIFT_GROUP_LABEL) continue;
-    for (const cell of group.querySelectorAll(".u-tpg-caption1")) {
-      const yen = parseYenAmount(cell.textContent);
-      if (yen !== null) total += yen;
-    }
-  }
-  return total;
-}
-
-// 注文詳細ページを解析し、実際の支払金額と、そこに含まれるギフト分を取得する
-function parseDetailPage(doc) {
-  let amount = null;
-  const labels = Array.from(doc.querySelectorAll("div")).filter(
-    (d) => d.textContent.trim() === "お支払金額"
-  );
-  for (const label of labels) {
-    const value = label.nextElementSibling;
-    if (value) {
-      const parsed = parseYen(value.textContent);
-      if (parsed !== null) {
-        amount = parsed;
-        break;
-      }
-    }
-  }
-  const badge = doc.querySelector(".order-state");
-  const status = extractStatusFromBadge(badge);
-  return { amount, gift: parseGiftTotal(doc), status };
-}
-
-// ---- 表示 --------------------------------------------------------------
-
-// キャンセル以外の注文(集計対象)
-function targetOrders() {
-  if (!state.index) return [];
-  return state.index.orders.filter((o) => !EXCLUDED_STATUSES.has(o.status));
-}
-
-function skippedCount() {
-  if (!state.index) return 0;
-  return state.index.orders.length - targetOrders().length;
-}
-
-function currentMonthStats() {
-  return buildMonthStats(targetOrders(), state.cache);
-}
-
-// 索引と収集済みの金額を突き合わせて表示用の一覧にする
-// amount: 数値=収集済み / null=取得失敗 / undefined=未収集
-function buildResults() {
-  if (state.index) {
-    return targetOrders().map((o) => ({
-      id: o.id,
-      date: o.date,
-      status: o.status,
-      amount: state.cache[o.id] ? state.cache[o.id].amount : undefined,
-      gift: giftAmount(state.cache[o.id]),
-    }));
-  }
-  // 索引が無い場合(旧バージョンからの移行時)はキャッシュだけで表示する
-  return Object.entries(state.cache).map(([id, entry]) => ({
-    id,
-    date: entry.date,
-    status: entry.status,
-    amount: entry.amount,
-    gift: giftAmount(entry),
-  }));
-}
-
-function render() {
-  renderIndexStatus();
-  renderMonthArea();
-  renderResult();
-  updatePlannedCount();
-  renderClearArea();
-}
-
-function renderClearArea() {
-  const indexCount = state.index ? state.index.orders.length : 0;
-  const amountCount = Object.keys(state.cache).length;
-  clearIndexStatus.textContent =
-    indexCount > 0 ? `保存中: ${indexCount}件` : "保存されていません";
-  clearAmountsStatus.textContent =
-    amountCount > 0 ? `保存中: ${amountCount}件` : "保存されていません";
-  if (!running) {
-    clearIndexBtn.disabled = indexCount === 0;
-    clearAmountsBtn.disabled = amountCount === 0;
-  }
-}
-
-function renderIndexStatus() {
-  if (!state.index) {
-    indexStatus.textContent = "まだ取得していません";
-    indexCoverage.hidden = true;
-    return;
-  }
-  const skipped = skippedCount();
-  indexStatus.textContent =
-    `最終取得: ${formatTimestamp(state.index.updatedAt)} / ` +
-    `注文数: ${targetOrders().length}件` +
-    (skipped > 0 ? ` (キャンセル ${skipped}件を除く)` : "");
-
-  // 一覧は新しい順に辿るため、取得できた範囲は必ず「最新〜どこか」になる。
-  // 途中で終わっているとそれより古い注文が丸ごと欠けるので、明示する
-  const oldest = oldestCoveredOrder();
-  const complete = indexIsComplete(state.index);
-  indexCoverage.hidden = false;
-  indexCoverage.classList.toggle("warn", !complete);
-  if (complete) {
-    indexCoverage.textContent = oldest
-      ? `取得済みの範囲: 全期間 (最古の注文 ${oldest.date})`
-      : "取得済みの範囲: 全期間";
-  } else {
-    indexCoverage.textContent = oldest
-      ? `取得済みの範囲: 最新 〜 ${oldest.date} (途中で終了したため、これより古い注文は取得できていません。「キャッシュを無視して全件再取得」で取り直せます)`
-      : "取得途中で終了したため、範囲が確定していません。「キャッシュを無視して全件再取得」で取り直してください";
-  }
-}
-
-// 索引に入っている最も古い注文(日時が読めるもののうち)
-function oldestCoveredOrder() {
-  if (!state.index) return null;
-  let oldest = null;
-  for (const order of state.index.orders) {
-    const d = parseOrderDate(order.date);
-    if (!d) continue;
-    if (!oldest || d.sortKey < parseOrderDate(oldest.date).sortKey) oldest = order;
-  }
-  return oldest;
-}
-
-function renderMonthArea() {
-  const stats = currentMonthStats();
-  const hasIndex = Boolean(state.index) && stats.length > 0;
-  monthEmpty.hidden = hasIndex;
-  monthArea.hidden = !hasIndex;
-  if (!hasIndex) return;
-
-  monthTableBody.innerHTML = "";
-  for (const year of buildYearStats(targetOrders(), state.cache)) {
-    if (year.key === null) {
-      // 日付不明はまとめられないので、そのまま1行だけ出す
-      monthTableBody.appendChild(
-        statRow(year, { className: "unknown-row", indent: false })
-      );
-      continue;
-    }
-
-    const expanded = expandedMonthYears.has(year.key);
-    const yearRow = statRow(year, { className: "year-row", toggle: true, expanded });
-    yearRow.dataset.yearKey = year.key;
-    // 年をクリックしたときに設定する範囲(その年に存在する月の最古〜最新)
-    yearRow.dataset.rangeFrom = year.months[year.months.length - 1].key;
-    yearRow.dataset.rangeTo = year.months[0].key;
-    monthTableBody.appendChild(yearRow);
-
-    for (const month of year.months) {
-      const monthRow = statRow(month, { className: "month-row", indent: true });
-      monthRow.dataset.monthKey = month.key;
-      monthRow.dataset.yearKey = year.key;
-      monthRow.hidden = !expanded;
-      monthTableBody.appendChild(monthRow);
-    }
-  }
-
-  const datedStats = stats.filter((s) => s.key !== null);
-  rangeArea.hidden = datedStats.length === 0;
-  if (datedStats.length > 0) {
-    renderRangeOptions(datedStats);
-  } else {
-    rangeFrom.innerHTML = "";
-    rangeTo.innerHTML = "";
-  }
-
-  const unknown = stats.find((s) => s.key === null);
-  unknownArea.hidden = !unknown;
-  if (unknown) {
-    unknownCount.textContent =
-      `注文日時を読み取れなかった注文が${unknown.count}件あります` +
-      `(未収集 ${unknown.pending}件)。月の範囲では指定できないため、` +
-      `「まとめて一括集計」で収集してください。`;
-  }
-}
-
-// 月別テーブルの1行(年・月・日付不明で共通)
-function statRow(stat, { className, toggle, expanded, indent }) {
-  const tr = document.createElement("tr");
-  tr.className = className;
-  if (stat.pending > 0) tr.classList.add("has-pending");
-  const label = toggle
-    ? `<span class="toggle">${expanded ? "▾" : "▸"}</span> ${escapeHtml(stat.label)}`
-    : escapeHtml(stat.label);
-  tr.innerHTML = `
-    <td${indent ? ' class="indent"' : ""}>${label}</td>
-    <td class="num">${stat.count}</td>
-    <td class="num">${stat.collected}</td>
-    <td class="num">${stat.pending > 0 ? stat.pending : "—"}</td>
-  `;
-  return tr;
-}
-
-function renderRangeOptions(monthStats) {
-  const keys = monthStats.map((s) => s.key);
-  const prevFrom = rangeFrom.value;
-  const prevTo = rangeTo.value;
-
-  for (const select of [rangeFrom, rangeTo]) {
-    select.innerHTML = "";
-    for (const stat of monthStats) {
-      const option = document.createElement("option");
-      option.value = stat.key;
-      option.textContent =
-        stat.label + (stat.pending > 0 ? `（未収集 ${stat.pending}）` : "");
-      select.appendChild(option);
-    }
-  }
-
-  // 既存の選択を保てるなら保ち、無理なら未収集のある最新の月に寄せる
-  const fallback = (monthStats.find((s) => s.pending > 0) || monthStats[0]).key;
-  rangeFrom.value = keys.includes(prevFrom) ? prevFrom : fallback;
-  rangeTo.value = keys.includes(prevTo) ? prevTo : fallback;
-}
-
-function setRange(from, to) {
-  rangeFrom.value = from;
-  rangeTo.value = to;
-  highlightSelectedRange();
-  updatePlannedCount();
-}
-
-// 選択範囲で実際に取得しにいく件数(キャッシュ無視の指定を反映する)
-function updatePlannedCount() {
-  const from = rangeFrom.value;
-  const to = rangeTo.value;
-  if (!from || !to) {
-    plannedCountEl.textContent = "";
-    return;
-  }
-  const planned = pendingTargets(
-    ordersInRange(from, to),
-    forceRefreshRange.checked
-  ).length;
-  plannedCountEl.textContent =
-    planned > 0 ? `取得予定: ${planned}件` : "取得予定: なし(収集済み)";
-  if (!running) collectRangeBtn.disabled = planned === 0;
-}
-
-function highlightSelectedRange() {
-  const from = rangeFrom.value;
-  const to = rangeTo.value;
-  if (!from || !to) return;
-  const lo = from <= to ? from : to;
-  const hi = from <= to ? to : from;
-  monthTableBody.querySelectorAll("tr.month-row").forEach((tr) => {
-    const key = tr.dataset.monthKey;
-    tr.classList.toggle("in-range", key >= lo && key <= hi);
-  });
-  // 年は、その年の月がすべて範囲に入っているときだけ強調する
-  monthTableBody.querySelectorAll("tr.year-row").forEach((tr) => {
-    const covered = tr.dataset.rangeFrom >= lo && tr.dataset.rangeTo <= hi;
-    tr.classList.toggle("in-range", covered);
-  });
-}
-
-rangeFrom.addEventListener("change", onRangeChanged);
-rangeTo.addEventListener("change", onRangeChanged);
-
-function onRangeChanged() {
-  highlightSelectedRange();
-  updatePlannedCount();
-}
-
-function buildSummary(partial) {
-  const results = buildResults();
-  const valid = results.filter((r) => typeof r.amount === "number");
-  return {
-    total: valid.reduce((sum, r) => sum + r.amount, 0),
-    count: valid.length,
-    pendingCount: results.filter((r) => r.amount === undefined).length,
-    failedCount: results.filter((r) => r.amount === null).length,
-    skippedCancelled: skippedCount(),
-    partial: Boolean(partial),
-    updatedAt: new Date().toISOString(),
-  };
-}
-
-function renderResult() {
-  const results = buildResults();
-  renderFooter(results);
-
-  if (results.length === 0) {
-    summarySection.hidden = true;
-    breakdownSection.hidden = true;
-    return;
-  }
-
-  const valid = results.filter((r) => typeof r.amount === "number");
-  const pending = results.filter((r) => r.amount === undefined).length;
-  const failed = results.filter((r) => r.amount === null).length;
-  const total = valid.reduce((sum, r) => sum + r.amount, 0);
-  const gift = valid.reduce((sum, r) => sum + giftAmount(r), 0);
-
-  totalAmountEl.textContent = formatYen(total);
-  totalGiftEl.textContent = giftText(gift);
-  totalCountEl.textContent = `収集済み: ${valid.length}件`;
-  pendingCountEl.textContent = pending > 0 ? `未収集: ${pending}件` : "";
-  skippedCountEl.textContent =
-    `除外(キャンセル): ${skippedCount()}件` +
-    (failed > 0 ? ` / 金額取得失敗: ${failed}件` : "");
-
-  renderPeriodTable(results);
-  renderOrderTable(results);
-  orderRowCountEl.textContent = `(${results.length}件)`;
-  highlightSelectedRange();
-
-  summarySection.hidden = false;
-  breakdownSection.hidden = false;
-}
-
-// 画面下部に固定表示する合計。収集済みの注文のみを対象にする
-function renderFooter(results) {
-  const thisYear = new Date().getFullYear();
-  const valid = results.filter((r) => typeof r.amount === "number");
-  const ofThisYear = valid.filter((r) => {
-    const d = parseOrderDate(r.date);
-    return d !== null && d.year === thisYear;
-  });
-  const sum = (rows) => rows.reduce((total, r) => total + r.amount, 0);
-  const sumGift = (rows) => rows.reduce((total, r) => total + giftAmount(r), 0);
-
-  footTotal.textContent = formatYen(sum(valid));
-  footTotalGift.textContent = giftText(sumGift(valid));
-  footTotalCount.textContent = `収集済み ${valid.length}件`;
-  footYearLabel.textContent = `${thisYear}年`;
-  footYearTotal.textContent = formatYen(sum(ofThisYear));
-  footYearGift.textContent = giftText(sumGift(ofThisYear));
-  footYearCount.textContent = `収集済み ${ofThisYear.length}件`;
-
-  shareStats = {
-    year: thisYear,
-    total: sum(valid),
-    count: valid.length,
-    yearTotal: sum(ofThisYear),
-    yearCount: ofThisYear.length,
-    gift: sumGift(valid),
-    yearGift: sumGift(ofThisYear),
-  };
-  shareBtn.disabled = valid.length === 0;
-}
-
-function renderPeriodTable(results) {
-  const expandedYears = new Set(
-    Array.from(periodTableBody.querySelectorAll('.year-row[data-expanded="true"]'))
-      .map((el) => el.dataset.yearKey)
-  );
-  periodTableBody.innerHTML = "";
-
-  for (const year of aggregateByPeriod(results)) {
-    const yearKey = String(year.key);
-    const expanded = expandedYears.has(yearKey);
-    const yearRow = document.createElement("tr");
-    yearRow.className = "year-row";
-    yearRow.dataset.yearKey = yearKey;
-    yearRow.dataset.expanded = expanded ? "true" : "false";
-    yearRow.innerHTML = `
-      <td><span class="toggle">${expanded ? "▾" : "▸"}</span> ${escapeHtml(year.label)}</td>
-      <td class="num">${year.count}件</td>
-      <td class="num">${giftMarkup(year.gift)}${formatYen(year.total)}</td>
-    `;
-    periodTableBody.appendChild(yearRow);
-
-    for (const month of year.months) {
-      const monthRow = document.createElement("tr");
-      monthRow.className = "month-row";
-      monthRow.dataset.yearKey = yearKey;
-      monthRow.hidden = !expanded;
-      monthRow.innerHTML = `
-        <td>${escapeHtml(month.label)}</td>
-        <td class="num">${month.count}件</td>
-        <td class="num">${giftMarkup(month.gift)}${formatYen(month.total)}</td>
-      `;
-      periodTableBody.appendChild(monthRow);
-    }
-  }
-}
-
-function renderOrderTable(results) {
-  orderTableBody.innerHTML = "";
-  const sorted = [...results].sort((a, b) => orderSortKey(b) - orderSortKey(a));
-  for (const r of sorted) {
-    const tr = document.createElement("tr");
-    let amountCell;
-    if (typeof r.amount === "number") {
-      amountCell = `<td class="num">${giftMarkup(giftAmount(r))}${formatYen(r.amount)}</td>`;
-    } else if (r.amount === null) {
-      amountCell = `<td class="num amount-failed">取得失敗</td>`;
-    } else {
-      amountCell = `<td class="num amount-pending">未収集</td>`;
-    }
-    tr.innerHTML = `
-      <td>${escapeHtml(r.date)}</td>
-      <td>${escapeHtml(STATUS_LABELS[r.status] || r.status)}</td>
-      ${amountCell}
-      <td>${escapeHtml(r.id)}</td>
-    `;
-    orderTableBody.appendChild(tr);
-  }
 }
