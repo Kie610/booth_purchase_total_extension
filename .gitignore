@@ -8,6 +8,11 @@ desktop.ini
 .idea/
 *.swp
 
+# アイコンの下書き(ペイントソフトの作業ファイルと試し書き出し)。
+# 配布するPNGは tools/make_icons.py の生成物だけにする
+*.clip
+extension/icons/*_test.*
+
 # パッケージング成果物
 *.zip
 *.crx
