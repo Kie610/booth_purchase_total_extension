@@ -319,6 +319,16 @@ function indexIsComplete(index) {
   return Boolean(index) && index.complete !== false;
 }
 
+// 一覧ページを読めていないと分かる兆候。どちらの場合も、実際は取得できていない
+// 古い注文があるのに「全期間を取得済み」と表示してしまい、少ない合計を
+// 正しい合計だと思わせることになるため、完全とは記録しない
+function listPageLooksUnreadable({ orders, maxPage, pagerFound }) {
+  // 1ページ目から1件も取れない(行のセレクタが効いていない、または購入履歴が空)
+  if (orders.length === 0) return true;
+  // ページ送りはあるのに、ページ番号を1つも読めない(ページャのセレクタが効いていない)
+  return pagerFound && maxPage === 1;
+}
+
 // 一覧は新しい順に並んでいるので、既知の注文に当たったらそこから先は取得済み
 function appendUntilKnown(target, rows, known) {
   for (const row of rows) {
@@ -366,6 +376,7 @@ async function fetchIndexTask(signal, force) {
   const fetched = [];
   let reachedKnown = false;
   let finishedAllPages = false;
+  let unreadable = false;
   let added = 0;
 
   try {
@@ -373,7 +384,9 @@ async function fetchIndexTask(signal, force) {
     await publishRunState({ phase: "注文履歴の取得", current: 0, total: 0 }, true);
 
     const firstDoc = await fetchDoc(ORDERS_INDEX_URL, signal);
-    const { orders: firstOrders, maxPage } = parseListPage(firstDoc);
+    const firstPage = parseListPage(firstDoc);
+    const { orders: firstOrders, maxPage } = firstPage;
+    unreadable = listPageLooksUnreadable(firstPage);
     reachedKnown = appendUntilKnown(fetched, firstOrders, known);
 
     for (let page = 2; page <= maxPage && !reachedKnown; page++) {
@@ -390,8 +403,9 @@ async function fetchIndexTask(signal, force) {
       const doc = await fetchDoc(`${ORDERS_INDEX_URL}?page=${page}`, signal);
       reachedKnown = appendUntilKnown(fetched, parseListPage(doc).orders, known);
     }
-    // 例外で抜けた場合はここを通らないため、巡回しきったときだけ true になる
-    finishedAllPages = !reachedKnown;
+    // 例外で抜けた場合はここを通らないため、巡回しきったときだけ true になる。
+    // 一覧を読めていない疑いがあるときは「最古まで辿った」と見なさない
+    finishedAllPages = !reachedKnown && !unreadable;
   } finally {
     added = await commitIndex(fetched, {
       force,
@@ -401,7 +415,13 @@ async function fetchIndexTask(signal, force) {
     });
   }
 
-  if (reachedKnown) {
+  if (unreadable) {
+    showNotice(
+      "購入履歴の一覧をうまく読み取れませんでした。BOOTHに購入履歴が無いか、" +
+        "ページの構造が変わっている可能性があります。" +
+        "この場合すべての注文を取得できていないため、合計は実際より少なくなります。"
+    );
+  } else if (reachedKnown) {
     showNotice(
       `取得済みの注文に到達したため、そこで停止しました(以降は読み込み済み)。新しく追加された注文: ${added}件。`
     );
@@ -474,7 +494,10 @@ async function collectRangeTask(signal) {
 
 async function runAllTask(signal) {
   const force = forceRefreshAll.checked;
-  if (force) state.cache = {};
+  // force でも収集済みのキャッシュはここで消さない。pendingTargets が全件を
+  // 対象に返すので、取得できたものから順に上書きされて結果は同じになる。
+  // 先に空にすると、時間のかかる①の途中で中断されたときに、
+  // 「ここまでに取得した金額は保存されている」という案内に反して全部失われる
   await fetchIndexTask(signal, force);
   await collectAmounts(targetOrders(), force, signal);
 }

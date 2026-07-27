@@ -118,7 +118,29 @@ const listHtml = `<html><body>
 const list = parseListPage(parse(listHtml));
 check("parseListPage 行の抽出(重複行はそのまま返る)", list.orders.map(o => o.id), ["1001", "1001", "1002"]);
 check("parseListPage 最大ページ数", list.maxPage, 7);
+check("parseListPage ページ送りの有無", list.pagerFound, true);
 check("注文IDでの重複除去", new Map(list.orders.map(o => [o.id, o])).size, 2);
+
+// --- ステータスの判定(取り違えるとキャンセルの除外が効かず合計が狂う) ---
+function badgeOrderHtml(badgeClass) {
+  return `<html><body><a class="nav-reverse" href="/orders/9001">
+    <div class="${badgeClass}">状態</div>
+    <div class="u-tpg-caption2">注文日時: 2026年5月3日 12:34</div>
+  </a></body></html>`;
+}
+const statusOf = (badgeClass) => parseListPage(parse(badgeOrderHtml(badgeClass))).orders[0].status;
+check("見た目のclassが増えても取り違えない", statusOf("badge text-white mx-0 align-top order-state cancelled"), "cancelled");
+check("既知のステータスが後ろにあっても拾う", statusOf("order-state rounded shadow-sm completed"), "completed");
+check("未知のステータスはそのまま拾って画面に出す", statusOf("badge mx-0 order-state refunded"), "refunded");
+check("ステータスらしきclassが無ければ不明", statusOf("badge mx-0 align-top order-state"), "unknown");
+check("バッジ自体が無ければ不明", extractStatusFromBadge(null), "unknown");
+
+// --- 一覧を読めていない兆候(読めていないのに「全期間取得済み」と出すと、
+//     少ない合計を正しい合計だと思わせてしまう) ---
+check("1件も読めなければ読み取り失敗とみなす", listPageLooksUnreadable({ orders: [], maxPage: 1, pagerFound: false }), true);
+check("ページ送りがあるのに番号を読めなければ失敗とみなす", listPageLooksUnreadable({ orders: [{}], maxPage: 1, pagerFound: true }), true);
+check("ページ送りが無い1ページだけの履歴は正常", listPageLooksUnreadable({ orders: [{}], maxPage: 1, pagerFound: false }), false);
+check("複数ページを読めていれば正常", listPageLooksUnreadable({ orders: [{}], maxPage: 7, pagerFound: true }), false);
 
 // --- ここから、索引とキャッシュを差し替えて分割収集の挙動を検証する ---
 const INDEX_ORDERS = [
@@ -411,6 +433,72 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   state.cache = {};
   render();
   check("HTMLエスケープ", orderTableBody.querySelector("tr").cells[3].querySelector("img"), null);
+
+  // --- 進捗の残骸(タブが不意に閉じられると clearRunState が間に合わないことがある) ---
+  await saveRunState({ phase: "金額の収集", current: 1, total: 10 });
+  check("書いた直後の進捗は読める", (await loadRunState()).phase, "金額の収集");
+  await writeStored(RUN_STATE_KEY, { phase: "金額の収集", updatedAt: Date.now() - RUN_STATE_STALE_MS - 1 });
+  check("更新の止まった進捗は無視する", await loadRunState(), null);
+  await writeStored(RUN_STATE_KEY, { phase: "金額の収集" });
+  check("時刻を持たない旧形式の進捗も無視する", await loadRunState(), null);
+  await clearRunState();
+
+  // --- ①注文履歴の取得を、BOOTHへのアクセスを差し替えて実際に動かす ---
+  // BOOTH以外(manifestやアイコン)への fetch は本物のまま通す
+  const realFetch = window.fetch;
+  let routes = {};
+  window.fetch = (url, init) => {
+    const path = String(url);
+    if (!path.startsWith("https://accounts.booth.pm")) return realFetch(url, init);
+    const route = routes[path];
+    if (route === undefined) {
+      return Promise.resolve({ ok: false, status: 404, url: path, text: () => Promise.resolve("") });
+    }
+    if (typeof route === "function") return route();
+    return Promise.resolve({ ok: true, status: 200, url: path, text: () => Promise.resolve(route) });
+  };
+  const ORDERS_URL = "https://accounts.booth.pm/orders";
+  const orderLink = (id, date) => `<a class="nav-reverse" href="/orders/${id}">
+    <div class="badge mx-0 align-top order-state completed">発送完了</div>
+    <div class="u-tpg-caption2">注文日時: ${date}</div></a>`;
+
+  const resetIndex = () => { state.index = null; state.cache = {}; };
+
+  // ページ送りが無く注文も読めた ＝ 最古まで辿れたので全期間
+  resetIndex();
+  routes = { [ORDERS_URL]: `<html><body>${orderLink("p1", "2026年5月3日 12:34")}</body></html>` };
+  await runTask((signal) => fetchIndexTask(signal, false));
+  check("1ページだけの履歴は全期間として記録", state.index.complete, true);
+  check("1ページだけの履歴は注文を取り込む", state.index.orders.map(o => o.id), ["p1"]);
+
+  // ページ送りの枠はあるのにページ番号を読めない ＝ 構造変更の疑い
+  resetIndex();
+  routes = { [ORDERS_URL]: `<html><body>${orderLink("p1", "2026年5月3日 12:34")}<div class="pager"><span>1</span></div></body></html>` };
+  await runTask((signal) => fetchIndexTask(signal, false));
+  check("ページ番号を読めなければ全期間扱いにしない", state.index.complete, false);
+  check("読み取り失敗は警告する", noticeBox.textContent.includes("読み取れませんでした"), true);
+  render();
+  check("読み取り失敗は取得範囲にも警告を出す", indexCoverage.classList.contains("warn"), true);
+
+  // 行を1件も読めない ＝ セレクタが効いていない(または履歴が空)
+  resetIndex();
+  routes = { [ORDERS_URL]: "<html><body></body></html>" };
+  await runTask((signal) => fetchIndexTask(signal, false));
+  check("1件も読めなければ全期間扱いにしない", state.index.complete, false);
+
+  // 全件再取得を中断しても、収集済みの金額は消さない。
+  // 消してしまうと「ここまでに取得した金額は保存されている」という案内が嘘になる
+  resetIndex();
+  state.cache = { keep: { amount: 555, gift: 0, status: "completed", date: "2025年1月1日 00:00" } };
+  forceRefreshAll.checked = true;
+  routes = { [ORDERS_URL]: () => Promise.reject(abortError()) };
+  await runTask(runAllTask);
+  check("全件再取得を中断しても収集済みの金額は残る", state.cache.keep && state.cache.keep.amount, 555);
+  check("中断は中断として扱われる", noticeBox.textContent.includes("中断しました"), true);
+  forceRefreshAll.checked = false;
+
+  window.fetch = realFetch;
+  resetIndex();
 
   // --- アイコン(パッケージ化に必要。宣言と実ファイルがずれていても拡張は読み込めてしまう) ---
   const ICON_SIZES = [16, 32, 48, 128];

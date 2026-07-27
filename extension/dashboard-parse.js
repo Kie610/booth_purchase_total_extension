@@ -9,11 +9,19 @@ function extractOrderId(href) {
   return m ? m[1] : null;
 }
 
+// ステータスはバッジのclassとして表される。見た目のためのclassが増減しても
+// 取り違えないよう、まず既知のステータス名に一致するものを探す。
+// キャンセルの除外がこの判定に乗っているので、取り違えると合計そのものが狂う
+const BADGE_LAYOUT_CLASSES = new Set(["badge", "mx-0", "align-top", "order-state"]);
+
 function extractStatusFromBadge(badgeEl) {
   if (!badgeEl) return "unknown";
-  const known = new Set(["badge", "mx-0", "align-top", "order-state"]);
-  const token = Array.from(badgeEl.classList).find((c) => !known.has(c));
-  return token || "unknown";
+  const classes = Array.from(badgeEl.classList);
+  const known = classes.find((c) => c in STATUS_LABELS);
+  if (known) return known;
+  // 未知のステータスは、レイアウト用のclassを除いた残りをそのまま返す。
+  // 集計対象からは外れない(除外はキャンセルだけ)ので、画面に出して気付けるようにする
+  return classes.find((c) => !BADGE_LAYOUT_CLASSES.has(c)) || "unknown";
 }
 
 // 購入履歴一覧ページ1ページ分を解析し、注文の行情報と総ページ数を返す
@@ -41,7 +49,9 @@ function parseListPage(doc) {
     if (m) maxPage = Math.max(maxPage, parseInt(m[1], 10));
   });
 
-  return { orders, maxPage };
+  // ページ送りの枠自体があったかどうか。枠はあるのにページ番号を1つも読めない
+  // 場合は「1ページしかない」ではなく「読めなかった」なので、呼び出し側で区別する
+  return { orders, maxPage, pagerFound: doc.querySelector(".pager") !== null };
 }
 
 // 「BOOST¥ 0」のようにラベルと金額が同じ要素に入っている場合があるため、

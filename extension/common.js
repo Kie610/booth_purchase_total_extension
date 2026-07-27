@@ -206,12 +206,23 @@ function saveSummary(summary) {
   return writeStored(SUMMARY_KEY, summary);
 }
 
-function loadRunState() {
-  return readStored(RUN_STATE_KEY, null);
+// 集計ページのタブが不意に閉じられたりクラッシュしたりすると、終了時の
+// clearRunState() が間に合わず進捗が残る。残ったままだとポップアップが
+// 永久に「実行中」を出し続けるため、しばらく更新のない進捗は動いていないとみなす。
+// 進捗は取得1件ごとに書き直されるので、1件の取得にかかる時間より十分長くとる
+const RUN_STATE_STALE_MS = 30_000;
+
+async function loadRunState() {
+  const runState = await readStored(RUN_STATE_KEY, null);
+  if (!runState) return null;
+  // 時刻を持たないのは、この仕組みより前のバージョンが残した進捗。
+  // 動いていない可能性が高いので同じく無視する
+  if (typeof runState.updatedAt !== "number") return null;
+  return Date.now() - runState.updatedAt > RUN_STATE_STALE_MS ? null : runState;
 }
 
 function saveRunState(state) {
-  return writeStored(RUN_STATE_KEY, state);
+  return writeStored(RUN_STATE_KEY, { ...state, updatedAt: Date.now() });
 }
 
 function clearRunState() {
