@@ -302,6 +302,16 @@ button.secondary:hover:not(:disabled) {
   background: #f0f1f4;
 }
 
+button.share-btn {
+  background: #000;
+  color: #fff;
+  border-color: #000;
+}
+
+button.share-btn:hover:not(:disabled) {
+  background: #242424;
+}
+
 .checkbox {
   font-size: 13px;
   color: var(--fg-muted);

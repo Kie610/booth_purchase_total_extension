@@ -1043,6 +1043,22 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   window.fetch = realFetch;
   resetIndex();
 
+  // --- 𝕏共有ボタン(実際のHTMLとCSSが表示仕様どおりか) ---
+  const dashboardHtml = await (await fetch("../extension/dashboard.html")).text();
+  const dashboardDoc = new DOMParser().parseFromString(dashboardHtml, "text/html");
+  const dashboardShareBtn = dashboardDoc.getElementById("shareBtn");
+  check("共有ボタンは飾り文字の𝕏を使う", dashboardShareBtn.textContent.trim(), "𝕏で共有");
+  check("共有ボタンに専用クラスを付ける", dashboardShareBtn.classList.contains("share-btn"), true);
+
+  const dashboardCss = await (await fetch("../extension/dashboard.css")).text();
+  const dashboardStyle = document.createElement("style");
+  dashboardStyle.textContent = dashboardCss;
+  document.head.appendChild(dashboardStyle);
+  const shareButtonStyle = getComputedStyle(shareBtn);
+  check("共有ボタンの背景は黒", shareButtonStyle.backgroundColor, "rgb(0, 0, 0)");
+  check("共有ボタンの文字は白", shareButtonStyle.color, "rgb(255, 255, 255)");
+  dashboardStyle.remove();
+
   // --- アイコン(パッケージ化に必要。宣言と実ファイルがずれていても拡張は読み込めてしまう) ---
   const ICON_SIZES = [16, 32, 48, 128];
   const manifest = await (await fetch("../extension/manifest.json")).json();
