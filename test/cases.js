@@ -482,7 +482,7 @@ check("年行クリックで展開", [...periodTableBody.querySelectorAll('.mont
 // 支出推移画面でも同じ年別・月別の集計部品を使う
 renderSpendingTrends(new Date(2026, 11, 1));
 check("支出推移は収集済みデータがあれば表示", [trendsEmpty.hidden, trendsArea.hidden], [true, false]);
-check("支出推移の要約", [...trendSummary.querySelectorAll(".trend-summary-value")].map(e => e.textContent),
+check("支出推移の要約", [...trendSummary.querySelectorAll(".stat-value")].map(e => e.textContent),
   ["¥1,000", "¥3,000", "-¥2,000"]);
 check("月別比較は12か月分", monthlyTrendChart.querySelectorAll(".trend-month").length, 12);
 check("月別比較の棒は今年と前年", monthlyTrendChart.querySelectorAll(".trend-bar").length, 24);
@@ -685,12 +685,12 @@ state.cache = Object.fromEntries(summaryRows.map(r => [r.id, { ...r, v: CACHE_SC
 setSummaryYear(2026);
 render();
 check("年のプルダウンは注文のある年だけ", [...summaryYear.options].map(o => o.value), ["2026", "2024"]);
-check("カードの見出し", [...summaryCards.querySelectorAll(".trend-summary-label")].map(e => e.textContent),
+check("カードの見出し", [...summaryCards.querySelectorAll(".stat-label")].map(e => e.textContent),
   ["2026年の支払い", "買ったもの", "支援した作者", "BOOSTの上乗せ", "いちばん買った月"]);
-check("カードの数字", [...summaryCards.querySelectorAll(".trend-summary-value")].map(e => e.textContent),
+check("カードの数字", [...summaryCards.querySelectorAll(".stat-value")].map(e => e.textContent),
   ["¥3,800", "4点", "2人", "¥300", "2026年2月"]);
 check("合計には未収集の件数を添える",
-  summaryCards.querySelector(".trend-summary-note").textContent, "注文2件 / ギフト ¥500 / 未収集1件");
+  summaryCards.querySelector(".stat-note").textContent, "注文2件 / ギフト ¥500 / 未収集1件");
 check("この年の推し作者を並べる",
   [...summaryTopShopsBody.querySelectorAll("tr")].map(tr => tr.cells[1].textContent), ["SOUR FLAVOR", "べつのショップ"]);
 check("過去に未収集が無ければ断らない", summaryNewShopWarn.hidden, true);
@@ -713,7 +713,7 @@ renderCurrentView();
 // BOOSTを使っていない年に空の数字を並べない
 setSummaryYear(2024);
 check("BOOSTが無ければカードごと出さない",
-  [...summaryCards.querySelectorAll(".trend-summary-label")].map(e => e.textContent).includes("BOOSTの上乗せ"), false);
+  [...summaryCards.querySelectorAll(".stat-label")].map(e => e.textContent).includes("BOOSTの上乗せ"), false);
 setSummaryYear(2026);
 state.index = savedSummaryIndex;
 state.cache = savedSummaryCache;
@@ -782,6 +782,11 @@ check("カードに濃い文字が乗る",
 testCtx.font = `bold 36px ${SHARE_CARD_FONT}`;
 check("収まらない名前は切って…を付ける", fitText(testCtx, "あ".repeat(80), 200).endsWith("…"), true);
 check("収まる名前はそのまま", fitText(testCtx, "短い名前", 400), "短い名前");
+// 金額を切ると額そのものが変わってしまうので、切らずに字を小さくする
+fitFontSize(testCtx, "¥1,234,567", 160, [52, 44, 38, 32], "bold");
+check("収まらない金額は字を小さくする", testCtx.font.includes("32px"), true);
+fitFontSize(testCtx, "¥100", 300, [52, 44, 38, 32], "bold");
+check("収まる金額は大きいまま", testCtx.font.includes("52px"), true);
 
 // パネルの開閉(背景を選び直しても同じ数字で描き直せるよう、押した時点の中身を持つ)
 openSharePanel({ name: "booth-2026", text: "本文", card: summaryShareCard });

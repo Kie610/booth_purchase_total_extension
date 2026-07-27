@@ -240,6 +240,15 @@ function buildSummaryShareCard(stats) {
 
 // ---- 描画 --------------------------------------------------------------
 
+// 金額や点数は切ってはいけない。「¥184,3…」では額そのものが変わってしまうので、
+// 収まらないときは文字を小さくする。指定した大きさで ctx.font を決めて返す
+function fitFontSize(ctx, text, maxWidth, sizes, weight) {
+  for (const size of sizes) {
+    ctx.font = `${weight} ${size}px ${SHARE_CARD_FONT}`;
+    if (ctx.measureText(text).width <= maxWidth) break;
+  }
+}
+
 // 収まらない名前は切って「…」を付ける。はみ出すと隣の数字に重なって読めなくなる
 function fitText(ctx, text, maxWidth) {
   if (ctx.measureText(text).width <= maxWidth) return text;
@@ -298,27 +307,37 @@ function drawShareCard(ctx, card, background) {
 
   // 数字は横に並べる。段組にすると1項目のときに空白が目立つ
   if (card.stats.length > 0) {
-    y += 92;
+    y += 96;
     const columnWidth = (right - left) / card.stats.length;
+    // 隣の数字とくっつかないよう、列の間を空けたぶんだけ使える幅を狭める
+    const textWidth = columnWidth - 24;
     card.stats.forEach((stat, index) => {
       const x = left + columnWidth * index;
       ctx.fillStyle = theme.muted;
       ctx.font = `24px ${SHARE_CARD_FONT}`;
-      ctx.fillText(fitText(ctx, stat.label, columnWidth - 16), x, y);
+      ctx.fillText(fitText(ctx, stat.label, textWidth), x, y);
+
       ctx.fillStyle = theme.fg;
-      ctx.font = `bold 52px ${SHARE_CARD_FONT}`;
-      ctx.fillText(fitText(ctx, stat.value, columnWidth - 16), x, y + 60);
+      fitFontSize(ctx, stat.value, textWidth, [52, 44, 38, 32], "bold");
+      ctx.fillText(stat.value, x, y + 62);
+
       if (stat.note) {
         ctx.fillStyle = theme.muted;
         ctx.font = `22px ${SHARE_CARD_FONT}`;
-        ctx.fillText(fitText(ctx, stat.note, columnWidth - 16), x, y + 96);
+        ctx.fillText(fitText(ctx, stat.note, textWidth), x, y + 98);
       }
     });
-    y += 132;
+    y += 120;
   }
 
   if (card.list.length > 0) {
-    y += card.stats.length > 0 ? 40 : 84;
+    // 数字の下に並べるときは詰める。最後の行が下段の断り書きに重なるため
+    if (card.stats.length > 0) {
+      // 数字と作者名は読む単位が違う。細い線で切って、続きだと分かるようにする
+      ctx.fillStyle = theme.line;
+      ctx.fillRect(left, y + 4, right - left, 1);
+    }
+    y += card.stats.length > 0 ? 44 : 88;
     for (const row of card.list) {
       ctx.fillStyle = theme.accent;
       ctx.font = `bold 34px ${SHARE_CARD_FONT}`;
@@ -338,7 +357,7 @@ function drawShareCard(ctx, card, background) {
         ctx.fillText(row.value, right, y);
         ctx.textAlign = "left";
       }
-      y += 56;
+      y += 60;
     }
   }
 

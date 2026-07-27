@@ -36,7 +36,7 @@ window.addEventListener("unhandledrejection", (e) => showFailure("ERROR " + ((e.
 <div class="view" id="view-trends" hidden>
   <div id="trendsEmpty"></div>
   <div id="trendsArea" hidden>
-    <div id="trendSummary" class="trend-summary"></div>
+    <div id="trendSummary" class="stat-grid"></div>
     <span id="trendCurrentYearLabel"></span>
     <span id="trendPreviousYearLabel"></span>
     <div id="monthlyTrendChart" class="trend-bars"></div>
@@ -48,7 +48,7 @@ window.addEventListener("unhandledrejection", (e) => showFailure("ERROR " + ((e.
   <select id="summaryYear"></select>
   <div id="summaryEmpty"></div>
   <div id="summaryArea" hidden>
-    <div id="summaryCards" class="summary-cards"></div>
+    <div id="summaryCards" class="stat-grid"></div>
     <div id="summaryNewShopWarn" hidden></div>
     <table><tbody id="summaryTopShopsBody"></tbody></table>
   </div>

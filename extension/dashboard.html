@@ -184,7 +184,7 @@
 
    <div class="view" id="view-summary" hidden>
      <section class="step">
-       <div class="summary-head">
+       <div class="section-head">
          <h2>今年のまとめ</h2>
          <label class="summary-year">
            対象の年
@@ -201,16 +201,16 @@
        </div>
 
        <div id="summaryArea" hidden>
-         <div id="summaryCards" class="summary-cards"></div>
+         <div id="summaryCards" class="stat-grid"></div>
 
          <!-- 過去の注文に未収集があると、その作者を「はじめて」と数えてしまう。
               数字だけ見せると新規の作者が多いと誤解させるので必ず断る -->
          <div class="status warn" id="summaryNewShopWarn" hidden></div>
 
-         <section class="trend-section" aria-labelledby="summaryTopShopsTitle">
-           <div class="trend-heading">
+         <section class="block-section" aria-labelledby="summaryTopShopsTitle">
+           <div class="block-head">
              <h3 id="summaryTopShopsTitle">この年の推し作者</h3>
-             <span class="hint trend-caption">商品の合計金額が多い順に3ショップ</span>
+             <span class="hint block-caption">商品の合計金額が多い順に3ショップ</span>
            </div>
            <table class="data-table ranking-table">
              <thead>
@@ -241,10 +241,10 @@
        </div>
 
        <div id="trendsArea" hidden>
-         <div id="trendSummary" class="trend-summary"></div>
+         <div id="trendSummary" class="stat-grid"></div>
 
-         <section class="trend-section" aria-labelledby="monthlyTrendTitle">
-           <div class="trend-heading">
+         <section class="block-section" aria-labelledby="monthlyTrendTitle">
+           <div class="block-head">
              <h3 id="monthlyTrendTitle">月ごとの支出</h3>
              <div class="trend-legend">
                <span><i class="legend-swatch current"></i><span id="trendCurrentYearLabel"></span></span>
@@ -255,10 +255,10 @@
            <p class="hint">今年は今月まで、前年は12月までを表示します。上の前年差は同じ月までの金額で比較します。</p>
          </section>
 
-         <section class="trend-section" aria-labelledby="cumulativeTrendTitle">
-           <div class="trend-heading">
+         <section class="block-section" aria-labelledby="cumulativeTrendTitle">
+           <div class="block-head">
              <h3 id="cumulativeTrendTitle">年間累計</h3>
-             <span class="hint trend-caption">各月までに支払った金額の積み上がり</span>
+             <span class="hint block-caption">各月までに支払った金額の積み上がり</span>
            </div>
            <svg id="cumulativeTrendChart" class="cumulative-chart" viewBox="0 0 720 250" role="img"></svg>
          </section>
@@ -281,7 +281,7 @@
      <section class="step">
        <!-- 金額と点数では1位が入れ替わるため、どちらで並べているかを見出しの
             すぐ横に置いて、表だけを見ても取り違えないようにする -->
-       <div class="ranking-head">
+       <div class="section-head">
          <h2>推し作者ランキング</h2>
          <div class="segmented" id="rankingSortToggle" role="group" aria-label="ランキングの基準">
            <button type="button" class="segmented-btn" data-sort="amount" aria-pressed="true">金額編</button>

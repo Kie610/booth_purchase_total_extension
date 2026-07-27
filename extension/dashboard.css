@@ -2,6 +2,9 @@
   --fg: #2a2f36;
   --fg-muted: #6b7280;
   --border: #e2e5ea;
+  /* 押せるものの枠は、区切り線より一段濃くして触れることを示す */
+  --border-strong: #c9ced6;
+  --bg-hover: #f0f1f4;
   --accent: #fc4d50;
   --bg-soft: #f7f8fa;
   --footer-height: 78px;
@@ -292,14 +295,16 @@ button.primary:hover:not(:disabled) {
   background: #e03f42;
 }
 
-button.secondary {
+button.secondary,
+label.file-btn {
   background: #fff;
   color: var(--fg);
-  border-color: #c9ced6;
+  border-color: var(--border-strong);
 }
 
-button.secondary:hover:not(:disabled) {
-  background: #f0f1f4;
+button.secondary:hover:not(:disabled),
+label.file-btn:hover {
+  background: var(--bg-hover);
 }
 
 button.share-btn {
@@ -339,12 +344,14 @@ button.share-btn:hover:not(:disabled) {
   gap: 6px;
 }
 
-.range-field select {
+/* 画面をまたいでプルダウンの見た目をそろえる */
+.range-field select,
+.summary-year select {
   font: inherit;
   font-size: 13px;
   color: var(--fg);
   padding: 6px 8px;
-  border: 1px solid #c9ced6;
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
   background: #fff;
 }
@@ -462,14 +469,27 @@ button.share-btn:hover:not(:disabled) {
 
 /* ---- 支出推移・前年比較 ---- */
 
-.trend-summary {
+/* カードの数は画面や年によって変わるので、列数を決め打ちしない */
+.stat-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 12px;
   margin: 18px 0 28px;
 }
 
-.trend-summary-card {
+/* 見出しと、その右に置く操作(年の選択・基準の切り替え)を同じ行に並べる */
+.section-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.section-head h2 {
+  margin: 0;
+}
+
+.stat-card {
   min-width: 0;
   padding: 14px 16px;
   border: 1px solid var(--border);
@@ -477,14 +497,14 @@ button.share-btn:hover:not(:disabled) {
   background: var(--bg-soft);
 }
 
-.trend-summary-label,
-.trend-summary-note {
+.stat-label,
+.stat-note {
   display: block;
   color: var(--fg-muted);
   font-size: 11px;
 }
 
-.trend-summary-value {
+.stat-value {
   display: block;
   margin: 2px 0;
   font-size: 21px;
@@ -492,19 +512,19 @@ button.share-btn:hover:not(:disabled) {
   line-height: 1.4;
 }
 
-.trend-summary-card.increase .trend-summary-value {
+.stat-card.increase .stat-value {
   color: #a3272a;
 }
 
-.trend-summary-card.decrease .trend-summary-value {
+.stat-card.decrease .stat-value {
   color: #287246;
 }
 
-.trend-section {
+.block-section {
   margin-top: 28px;
 }
 
-.trend-heading {
+.block-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -512,7 +532,7 @@ button.share-btn:hover:not(:disabled) {
   margin-bottom: 8px;
 }
 
-.trend-heading h3 {
+.block-head h3 {
   margin: 0;
   font-size: 14px;
 }
@@ -587,7 +607,7 @@ button.share-btn:hover:not(:disabled) {
   white-space: nowrap;
 }
 
-.trend-caption {
+.block-caption {
   margin: 0;
 }
 
@@ -632,11 +652,8 @@ button.share-btn:hover:not(:disabled) {
 }
 
 @media (max-width: 620px) {
-  .trend-summary {
-    grid-template-columns: 1fr;
-  }
-
-  .trend-heading {
+  /* .stat-grid は auto-fit なので、ここで列数を指定し直さなくても折り返す */
+  .block-head {
     align-items: flex-start;
     flex-direction: column;
     gap: 4px;
@@ -933,19 +950,15 @@ button.icon-btn:hover:not(:disabled) {
   gap: 8px;
 }
 
-/* input[type=file] の見た目は揃えられないので、labelをボタンに見せて隠す */
+/* input[type=file] の見た目は揃えられないので、labelをボタンに見せて隠す。
+   寸法は button.small に合わせる */
 label.file-btn {
   display: inline-block;
-  padding: 5px 14px;
-  border: 1px solid #c9ced6;
+  padding: 5px 12px;
+  border: 1px solid transparent;
   border-radius: 6px;
-  background: #fff;
-  font-size: 13px;
+  font-size: 12px;
   cursor: pointer;
-}
-
-label.file-btn:hover {
-  background: #f0f1f4;
 }
 
 .share-text {
@@ -974,18 +987,6 @@ label.file-btn:hover {
 
 /* ---- 今年のまとめ ---- */
 
-/* 見出しと年の選択を同じ行に置く。狭いときは折り返す */
-.summary-head {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.summary-head h2 {
-  margin: 0;
-}
-
 .summary-year {
   display: inline-flex;
   align-items: center;
@@ -994,35 +995,11 @@ label.file-btn:hover {
   font-size: 12px;
 }
 
-/* カードの数はBOOSTの有無などで変わるので、列数を決め打ちしない */
-.summary-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 12px;
-  margin: 18px 0 8px;
-}
-
-.summary-cards .summary-card {
-  min-width: 0;
-}
-
 /* ---- 推し作者ランキング ---- */
-
-/* 見出しと基準の切り替えを同じ行に置く。狭いときは折り返す */
-.ranking-head {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.ranking-head h2 {
-  margin: 0;
-}
 
 .segmented {
   display: inline-flex;
-  border: 1px solid #c9ced6;
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
   overflow: hidden;
 }
@@ -1037,11 +1014,11 @@ button.segmented-btn {
 }
 
 button.segmented-btn + button.segmented-btn {
-  border-left: 1px solid #c9ced6;
+  border-left: 1px solid var(--border-strong);
 }
 
 button.segmented-btn:hover:not(.current) {
-  background: #f0f1f4;
+  background: var(--bg-hover);
 }
 
 /* 選ばれている側。表のどの列で並べているかと色をそろえる */

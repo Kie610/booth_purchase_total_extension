@@ -130,9 +130,9 @@ const DEFAULT_VIEW = "report";
 // 見出しの右に添える画面名。既定の画面では何も足さない
 const VIEW_TITLES = {
   report: "",
-  summary: "今年のまとめ",
-  trends: "支出推移・前年比較",
   ranking: "推し作者ランキング",
+  trends: "支出推移・前年比較",
+  summary: "今年のまとめ",
   export: "データ出力",
   backup: "データの引っ越し",
 };
@@ -338,7 +338,6 @@ function setProgress(text, ratio) {
 // ---- 描画 --------------------------------------------------------------
 
 function render() {
-  renderCurrentView();
   renderIndexStatus();
   renderMonthArea();
   renderResult();
@@ -349,8 +348,9 @@ function render() {
   renderYearSummary();
   renderExportArea();
   renderBackupArea();
-  // 共有ボタンの状態は上の描画結果に依るので、最後にまとめて決める
-  updateShareButton();
+  // 出し分けと共有ボタンは上の描画結果に依るので最後に決める。
+  // renderCurrentView が共有ボタンまで更新するので、ここで呼ぶのは1回でよい
+  renderCurrentView();
 }
 
 // ---- 推し作者ランキング ------------------------------------------------
@@ -446,16 +446,20 @@ function renderRankingArea() {
       `金額を読み取れなかった商品が${unknown}点あります。その分は合計金額に入っていません。`;
   }
 
-  rankingTableBody.innerHTML = "";
-  shown.forEach((row, index) => {
-    const rank = index + 1;
-    const tr = el("tr");
-    if (rank <= RANKING_BOLD) tr.classList.add("rank-top");
-    tr.appendChild(rankCell(rank));
+  renderShopRows(rankingTableBody, shown, RANKING_BOLD);
+}
+
+// ランキングとまとめで同じ形の行を出す。片方だけ列や飾りが違うと、
+// 見比べたときに別のものを数えているように見える
+function renderShopRows(tbody, shops, boldUntil) {
+  tbody.innerHTML = "";
+  shops.forEach((row, index) => {
+    const tr = el("tr", index < boldUntil ? "rank-top" : "");
+    tr.appendChild(rankCell(index + 1));
     tr.appendChild(shopNameCell(row));
     tr.appendChild(countCell(row.count, row.giftCount));
     tr.appendChild(amountCell(row.total, row.gift));
-    rankingTableBody.appendChild(tr);
+    tbody.appendChild(tr);
   });
 }
 
@@ -493,10 +497,6 @@ function renderSummaryYearOptions(years, selected) {
   summaryYear.value = String(selected);
 }
 
-function summaryCard(label, value, note) {
-  return trendSummaryCard(label, value, note, "summary-card");
-}
-
 function renderYearSummary() {
   const results = buildResults();
   const years = orderYears(results);
@@ -520,38 +520,29 @@ function renderYearSummary() {
   if (stats.gift > 0) totalNote.push(`ギフト ${formatYen(stats.gift)}`);
   if (stats.pendingCount > 0) totalNote.push(`未収集${stats.pendingCount}件`);
 
-  summaryCards.innerHTML = "";
-  summaryCards.appendChild(
-    summaryCard(`${stats.year}年の支払い`, formatYen(stats.total), totalNote.join(" / "))
-  );
-  summaryCards.appendChild(
-    summaryCard(
-      "買ったもの",
-      `${stats.itemCount}点`,
-      stats.giftItemCount > 0 ? `ギフト ${stats.giftItemCount}点` : ""
-    )
-  );
-  summaryCards.appendChild(
-    summaryCard(
+  const cards = [
+    [`${stats.year}年の支払い`, formatYen(stats.total), totalNote.join(" / ")],
+    ["買ったもの", `${stats.itemCount}点`, giftCountText(stats.giftItemCount)],
+    [
       "支援した作者",
       `${stats.shopCount}人`,
-      stats.newShopCount > 0 ? `はじめて ${stats.newShopCount}人` : ""
-    )
-  );
+      stats.newShopCount > 0 ? `はじめて ${stats.newShopCount}人` : "",
+    ],
+  ];
   // BOOSTを使わない人には空の数字が並ぶだけなので、上乗せがあるときだけ出す
   if (stats.boost > 0) {
-    summaryCards.appendChild(
-      summaryCard("BOOSTの上乗せ", formatYen(stats.boost), `${stats.boostItemCount}点に上乗せ`)
-    );
+    cards.push(["BOOSTの上乗せ", formatYen(stats.boost), `${stats.boostItemCount}点に上乗せ`]);
   }
   if (stats.busiestMonth) {
-    summaryCards.appendChild(
-      summaryCard(
-        "いちばん買った月",
-        monthLabel(stats.busiestMonth.key),
-        formatYen(stats.busiestMonth.total)
-      )
-    );
+    cards.push([
+      "いちばん買った月",
+      monthLabel(stats.busiestMonth.key),
+      formatYen(stats.busiestMonth.total),
+    ]);
+  }
+  summaryCards.innerHTML = "";
+  for (const [label, value, note] of cards) {
+    summaryCards.appendChild(statCard(label, value, note));
   }
 
   // 過去の注文が未収集だと明細が無く、その作者を「はじめて」に数えてしまう
@@ -562,22 +553,14 @@ function renderYearSummary() {
       "その注文で買った作者は「はじめて」に数えてしまうことがあります。";
   }
 
-  summaryTopShopsBody.innerHTML = "";
-  stats.topShops.forEach((row, index) => {
-    const tr = el("tr", "rank-top");
-    tr.appendChild(rankCell(index + 1));
-    tr.appendChild(shopNameCell(row));
-    tr.appendChild(countCell(row.count, row.giftCount));
-    tr.appendChild(amountCell(row.total, row.gift));
-    summaryTopShopsBody.appendChild(tr);
-  });
+  renderShopRows(summaryTopShopsBody, stats.topShops, stats.topShops.length);
 }
 
-function trendSummaryCard(label, value, note, className) {
-  const card = el("div", `trend-summary-card${className ? ` ${className}` : ""}`);
-  card.appendChild(el("span", "trend-summary-label", label));
-  card.appendChild(el("strong", "trend-summary-value", value));
-  if (note) card.appendChild(el("span", "trend-summary-note", note));
+function statCard(label, value, note, className) {
+  const card = el("div", `stat-card${className ? ` ${className}` : ""}`);
+  card.appendChild(el("span", "stat-label", label));
+  card.appendChild(el("strong", "stat-value", value));
+  if (note) card.appendChild(el("span", "stat-note", note));
   return card;
 }
 
@@ -681,14 +664,14 @@ function renderSpendingTrends(now = new Date()) {
 
   trendSummary.innerHTML = "";
   trendSummary.appendChild(
-    trendSummaryCard(
+    statCard(
       `${trend.year}年 1〜${trend.throughMonth}月`,
       formatYen(trend.currentToDate),
       "収集済みの支払額"
     )
   );
   trendSummary.appendChild(
-    trendSummaryCard(
+    statCard(
       `${trend.previousYear}年 同期間`,
       formatYen(trend.previousToDate),
       "前年の1月から同じ月まで"
@@ -707,7 +690,7 @@ function renderSpendingTrends(now = new Date()) {
       ? "前年同期が0円のため割合は算出できません"
       : `前年同期比 ${trend.rate > 0 ? "+" : ""}${trend.rate.toFixed(1)}%`;
   trendSummary.appendChild(
-    trendSummaryCard("前年同期との差", differenceText, rateText, differenceClass)
+    statCard("前年同期との差", differenceText, rateText, differenceClass)
   );
 
   monthlyTrendChart.innerHTML = "";
