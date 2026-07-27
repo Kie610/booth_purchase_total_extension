@@ -35,8 +35,8 @@ async function render() {
     const { phase, current, total } = runState;
     runningText.textContent =
       total > 0 ? `${phase} (${current}/${total})` : `${phase}...`;
-    progressFill.style.width =
-      total > 0 ? `${Math.min(100, (current / total) * 100)}%` : "0%";
+    const ratio = total > 0 ? (current / total) * 100 : 0;
+    progressFill.style.width = `${Math.min(100, Math.max(0, ratio))}%`;
     runningBox.hidden = false;
     openBtn.textContent = "集計ページを表示";
   } else {

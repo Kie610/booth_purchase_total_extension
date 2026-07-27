@@ -176,6 +176,13 @@ function showNotice(message) {
   noticeBox.hidden = false;
 }
 
+// 一括集計は①と②が続けて通知を出すため、上書きせず書き足す。
+// (runTask が実行の最初に clearNotice() するので、実行をまたいで溜まることはない)
+function addNotice(message) {
+  const current = noticeBox.hidden ? "" : noticeBox.textContent;
+  showNotice(current ? `${current}\n${message}` : message);
+}
+
 function clearNotice() {
   noticeBox.hidden = true;
   noticeBox.textContent = "";
@@ -471,24 +478,28 @@ function renderOrderTable(results) {
 
 const SHARE_HASHTAG = "#BOOTHお買いものレポート";
 
-// 合計以下の項目から最も高いものを選ぶ。マスターは金額の昇順で管理する
+// 合計以下の項目から最も高いものを選ぶ。マスターは金額の昇順で管理する。
+// 最も安い項目にも届かない額のときは、何を選んでも「買えるくらい」が嘘になるので選ばない
 function purchaseComparison(amount) {
-  let selected = PURCHASE_EXAMPLE_MASTER[0];
+  let selected = null;
   for (const example of PURCHASE_EXAMPLE_MASTER) {
     if (example.amount > amount) break;
     selected = example;
   }
-  return selected.label;
+  return selected ? selected.label : null;
 }
 
 function buildShareText(stats) {
+  const comparison = purchaseComparison(stats.total);
   return [
     "BOOTHお買いもの振り返り🛍️",
     "",
     `合計：${formatYen(stats.total)}（${stats.count}件）`,
     `今年：${formatYen(stats.yearTotal)}（${stats.yearCount}件）`,
-    "",
-    `積み重ねてみると、${purchaseComparison(stats.total)}が買えるくらいの金額になりました。`,
+    // 比較できる額に届かないときは、この一段落ごと落とす
+    ...(comparison
+      ? ["", `積み重ねてみると、${comparison}が買えるくらいの金額になりました。`]
+      : []),
     "",
     SHARE_HASHTAG,
   ].join("\n");

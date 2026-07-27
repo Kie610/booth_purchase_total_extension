@@ -5,7 +5,9 @@
 <meta http-equiv="Content-Security-Policy" content="script-src 'self'; object-src 'self'">
 <title>dashboard test harness</title>
 </head>
-<body>
+<!-- dashboard.js の init() は保存データを非同期で state へ読み込む。
+     テストは state を直接差し替えるので、走らせると競合する -->
+<body data-no-auto-init>
 <!-- 途中で例外が出ると結果が「running...」のまま止まって原因が分からないので、
      ここで拾って画面に出す(構文エラーも拾えるよう capture 段階で待ち受ける) -->
 <script>

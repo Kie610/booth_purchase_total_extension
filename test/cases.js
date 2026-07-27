@@ -319,8 +319,14 @@ check("共有用の金額例は合計以下で最高額", purchaseComparison(599
 check("共有用の金額例は実価格で切り替わる", purchaseComparison(59980), "Nintendo Switch 2");
 check("共有用の金額例 ¥123,456", purchaseComparison(123456), "ルイ・ヴィトン ポルトフォイユ・ヴィクトリーヌ");
 check("共有用の金額例は上限超過でも最後を使う", purchaseComparison(12000000), "レクサス RZ550e");
+// 一番安い項目にも届かない額で比較を出すと「¥0でうまい棒が買える」という嘘になる
+check("共有用の金額例 最安に届かなければ選ばない", [purchaseComparison(0), purchaseComparison(14)], [null, null]);
+check("共有用の金額例 最安ちょうどは選ぶ", purchaseComparison(15), "うまい棒 コーンポタージュ味");
 check("共有文面", buildShareText({ year: 2026, total: 4000, count: 2, yearTotal: 1000, yearCount: 1 }),
   "BOOTHお買いもの振り返り🛍️\n\n合計：¥4,000（2件）\n今年：¥1,000（1件）\n\n積み重ねてみると、Minecraft（Nintendo Switch版）が買えるくらいの金額になりました。\n\n#BOOTHお買いものレポート");
+check("共有文面 比較できない額なら比較の段落ごと出さない",
+  buildShareText({ year: 2026, total: 0, count: 1, yearTotal: 0, yearCount: 1 }),
+  "BOOTHお買いもの振り返り🛍️\n\n合計：¥0（1件）\n今年：¥0（1件）\n\n#BOOTHお買いものレポート");
 
 // 進捗はフッターに出す。表示中はフッターが高くなるので本文の下余白も追従させる
 check("待機中は進捗を出さない", [document.getElementById("progress").hidden, document.body.classList.contains("has-progress")], [true, false]);
@@ -446,7 +452,9 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   // --- ①注文履歴の取得を、BOOTHへのアクセスを差し替えて実際に動かす ---
   // BOOTH以外(manifestやアイコン)への fetch は本物のまま通す
   const realFetch = window.fetch;
+  const okResponse = (path, html) => ({ ok: true, status: 200, url: path, text: () => Promise.resolve(html) });
   let routes = {};
+  // ルートは HTML文字列(そのまま200で返す)か、応答を組み立てる関数で指定する
   window.fetch = (url, init) => {
     const path = String(url);
     if (!path.startsWith("https://accounts.booth.pm")) return realFetch(url, init);
@@ -454,8 +462,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
     if (route === undefined) {
       return Promise.resolve({ ok: false, status: 404, url: path, text: () => Promise.resolve("") });
     }
-    if (typeof route === "function") return route();
-    return Promise.resolve({ ok: true, status: 200, url: path, text: () => Promise.resolve(route) });
+    return Promise.resolve(typeof route === "function" ? route(path) : okResponse(path, route));
   };
   const ORDERS_URL = "https://accounts.booth.pm/orders";
   const orderLink = (id, date) => `<a class="nav-reverse" href="/orders/${id}">
@@ -497,6 +504,73 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   check("中断は中断として扱われる", noticeBox.textContent.includes("中断しました"), true);
   forceRefreshAll.checked = false;
 
+  // --- ②金額の収集: 一時的な通信エラーで全体を止めない ---
+  const detailUrl = (id) => `https://accounts.booth.pm/orders/${id}`;
+  const detailHtml = (yen) => orderHtml(String(yen), sheetGroup("ダウンロード商品", [[yen, 0]]));
+  const indexOf2 = (a, b) => ({
+    updatedAt: "x", complete: true,
+    orders: [
+      { id: a, status: "completed", date: "2026年1月1日 00:00" },
+      { id: b, status: "completed", date: "2026年1月2日 00:00" },
+    ],
+  });
+  // 未収集のときに落ちず FAIL として出るよう、取り出しは防御的にする
+  const cachedAmount = (id) => (state.cache[id] ? state.cache[id].amount : undefined);
+  const savedRetryWait = fetchRetryWaitMs;
+  fetchRetryWaitMs = 1; // 待ち時間はテストでは詰める
+
+  // 1回失敗しても試し直して拾える
+  state.index = indexOf2("ok1", "flaky");
+  state.cache = {};
+  let flakyTries = 0;
+  routes = {
+    [detailUrl("ok1")]: detailHtml(1000),
+    [detailUrl("flaky")]: (path) => {
+      flakyTries++;
+      return flakyTries === 1
+        ? Promise.reject(new TypeError("Failed to fetch"))
+        : okResponse(path, detailHtml(2000));
+    },
+  };
+  await runTask((signal) => collectAmounts(targetOrders(), false, signal));
+  check("一時的な通信エラーは試し直す", flakyTries, 2);
+  check("試し直して収集できる", [cachedAmount("ok1"), cachedAmount("flaky")], [1000, 2000]);
+
+  // 試し直しても駄目な注文は飛ばして、残りの収集を続ける
+  state.index = indexOf2("ok2", "broken");
+  state.cache = {};
+  let brokenTries = 0;
+  routes = {
+    [detailUrl("ok2")]: detailHtml(3000),
+    [detailUrl("broken")]: () => {
+      brokenTries++;
+      return Promise.reject(new TypeError("Failed to fetch"));
+    },
+  };
+  await runTask((signal) => collectAmounts(targetOrders(), false, signal));
+  check("諦めるまでの試行回数", brokenTries, fetchRetryCount + 1);
+  check("失敗しても他の注文の収集は続く", cachedAmount("ok2"), 3000);
+  check("失敗した注文はキャッシュに残さない(未収集のまま拾い直せる)", state.cache.broken, undefined);
+  check("失敗した件数を知らせる", noticeBox.textContent.includes("1件は通信に失敗"), true);
+  check("失敗は例外にせず最後まで進む", errorBox.hidden, true);
+
+  // ログイン切れは試し直しても直らないので、その場で止めて理由を出す
+  state.index = indexOf2("s1", "s2");
+  state.cache = {};
+  let signInTries = 0;
+  routes = {
+    [detailUrl("s1")]: () => {
+      signInTries++;
+      return { ok: true, status: 200, url: "https://accounts.booth.pm/users/sign_in", text: () => Promise.resolve("") };
+    },
+    [detailUrl("s2")]: detailHtml(4000),
+  };
+  await runTask((signal) => collectAmounts(targetOrders(), false, signal));
+  check("ログイン切れは試し直さない", signInTries, 1);
+  check("ログイン切れはその場で止める", state.cache.s2, undefined);
+  check("ログイン切れは理由を出す", errorBox.textContent.includes("ログインが必要です"), true);
+
+  fetchRetryWaitMs = savedRetryWait;
   window.fetch = realFetch;
   resetIndex();
 

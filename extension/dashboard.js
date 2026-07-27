@@ -105,7 +105,9 @@ periodTableBody.addEventListener("click", (event) => {
   if (yearRow) toggleYearRow(periodTableBody, expandedPeriodYears, yearRow);
 });
 
-init();
+// テストでは state を直接差し替えて描画や取得を検証するため、
+// 保存データの読み込みは走らせない(非同期で state を上書きして競合するため)
+if (!document.body.dataset.noAutoInit) init();
 
 async function init() {
   // ポップアップから「集計ページを開く」で復帰できるよう、自分のタブIDを覚えておく
@@ -240,7 +242,8 @@ async function runTask(task) {
   await saveSummary(buildSummary(aborted));
 
   if (aborted) {
-    showNotice(
+    // 一括集計で①まで終わっている場合は、その結果も残したいので書き足す
+    addNotice(
       "中断しました。ここまでに取得した金額は保存されているため、再実行すると続きから取得します。"
     );
   }
@@ -285,6 +288,21 @@ async function publishRunState(runState, force) {
 
 // ---- 取得処理 ----------------------------------------------------------
 
+// ログイン切れは何度試しても直らず、以降の取得もすべて失敗するので、
+// 再試行や読み飛ばしの対象から外せるよう名前を付けておく
+function loginRequiredError() {
+  const err = new Error(
+    "ログインが必要です。accounts.booth.pm にログインしてから再度実行してください。"
+  );
+  err.name = "LoginRequiredError";
+  return err;
+}
+
+// 繰り返しても結果が変わらない失敗(中断・ログイン切れ)かどうか
+function isFatalFetchError(err) {
+  return err.name === "AbortError" || err.name === "LoginRequiredError";
+}
+
 // 注意: 集計中、取得1件につき以下のCSP違反がコンソールに記録される。
 //   Loading the script 'https://www.google.com/recaptcha/enterprise.js?...'
 //   violates ... "script-src 'self'"
@@ -300,9 +318,7 @@ async function publishRunState(runState, force) {
 async function fetchDoc(url, signal) {
   const res = await fetch(url, { credentials: "include", signal });
   if (res.url.includes("/users/sign_in")) {
-    throw new Error(
-      "ログインが必要です。accounts.booth.pm にログインしてから再度実行してください。"
-    );
+    throw loginRequiredError();
   }
   if (!res.ok) {
     throw new Error(`ページの取得に失敗しました (HTTP ${res.status}): ${url}`);
@@ -416,17 +432,17 @@ async function fetchIndexTask(signal, force) {
   }
 
   if (unreadable) {
-    showNotice(
+    addNotice(
       "購入履歴の一覧をうまく読み取れませんでした。BOOTHに購入履歴が無いか、" +
         "ページの構造が変わっている可能性があります。" +
         "この場合すべての注文を取得できていないため、合計は実際より少なくなります。"
     );
   } else if (reachedKnown) {
-    showNotice(
+    addNotice(
       `取得済みの注文に到達したため、そこで停止しました(以降は読み込み済み)。新しく追加された注文: ${added}件。`
     );
   } else {
-    showNotice(`注文履歴を取得しました(新しく追加された注文: ${added}件)。`);
+    addNotice(`注文履歴を取得しました(新しく追加された注文: ${added}件)。`);
   }
 }
 
@@ -446,38 +462,72 @@ function ordersInRange(from, to) {
   });
 }
 
+// 一時的な通信エラーで数百件の収集が丸ごと止まらないよう、少しだけ粘る。
+// 混雑している可能性があるので、通常の間隔より長めに待ってから試し直す。
+// テストから待ち時間を詰められるよう変数にしてある
+let fetchRetryCount = 2;
+let fetchRetryWaitMs = 2000;
+
+async function fetchDocWithRetry(url, signal) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fetchDoc(url, signal);
+    } catch (err) {
+      if (isFatalFetchError(err) || attempt >= fetchRetryCount) throw err;
+      await sleep(fetchRetryWaitMs, signal);
+    }
+  }
+}
+
 // ② 指定された注文の詳細ページから支払金額を集める
 async function collectAmounts(orders, force, signal) {
   const targets = pendingTargets(orders, force);
   if (targets.length === 0) {
-    showNotice("選択範囲に収集する注文はありません(すべて収集済みです)。");
+    addNotice("選択範囲に収集する注文はありません(すべて収集済みです)。");
     return 0;
   }
 
   let done = 0;
-  for (const order of targets) {
+  let failed = 0;
+  for (const [index, order] of targets.entries()) {
     setProgress(
-      `金額を収集中... (${done + 1}/${targets.length}件)`,
-      done / targets.length
+      `金額を収集中... (${index + 1}/${targets.length}件)`,
+      index / targets.length
     );
     await publishRunState({
       phase: "金額の収集",
-      current: done + 1,
+      current: index + 1,
       total: targets.length,
     });
 
-    const doc = await fetchDoc(`${ORDER_DETAIL_URL}${order.id}`, signal);
-    const detail = parseDetailPage(doc);
-    state.cache[order.id] = {
-      amount: detail.amount,
-      gift: detail.gift,
-      status: order.status,
-      date: order.date,
-    };
-    done++;
+    try {
+      const doc = await fetchDocWithRetry(`${ORDER_DETAIL_URL}${order.id}`, signal);
+      const detail = parseDetailPage(doc);
+      state.cache[order.id] = {
+        amount: detail.amount,
+        gift: detail.gift,
+        status: order.status,
+        date: order.date,
+      };
+      done++;
+      if (done % CACHE_FLUSH_EVERY === 0) await saveCache(state.cache);
+    } catch (err) {
+      // 中断とログイン切れは続けても仕方がないので、そのまま止める
+      if (isFatalFetchError(err)) throw err;
+      // それ以外は、この注文を飛ばして先へ進む。キャッシュに残さないので
+      // 「未収集」のままになり、再実行すれば自動で拾い直せる
+      // (キャッシュへ「取得失敗」として書くと、強制再取得しないと戻せなくなる)
+      failed++;
+    }
 
-    if (done % CACHE_FLUSH_EVERY === 0) await saveCache(state.cache);
-    if (done < targets.length) await sleep(REQUEST_INTERVAL_MS, signal);
+    if (index + 1 < targets.length) await sleep(REQUEST_INTERVAL_MS, signal);
+  }
+
+  if (failed > 0) {
+    addNotice(
+      `金額を収集しました(${done}件)。${failed}件は通信に失敗したため取得できていません。` +
+        "未収集のまま残してあるので、再実行すると続きから取得します。"
+    );
   }
   return done;
 }

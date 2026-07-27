@@ -317,6 +317,8 @@ button.secondary:hover:not(:disabled) {
   padding: 12px 14px;
   border-radius: 6px;
   font-size: 13px;
+  /* 一括集計では①と②の通知が改行区切りで並ぶ */
+  white-space: pre-line;
 }
 
 .notice {
