@@ -24,7 +24,10 @@ window.addEventListener("unhandledrejection", (e) => showFailure("ERROR " + ((e.
 <nav id="navDrawer" hidden>
   <a class="nav-link" href="#/report" data-view="report">お買いものレポート</a>
   <a class="nav-link" href="#/export" data-view="export">データ出力</a>
+  <a class="nav-link" href="#/backup" data-view="backup">データの引っ越し</a>
 </nav>
+
+<div id="pendingBanner" hidden><span id="pendingBannerText"></span><a href="#/report">お買いものレポートで収集する</a></div>
 
 <div class="view" id="view-report"></div>
 <div class="view" id="view-export" hidden>
@@ -36,6 +39,13 @@ window.addEventListener("unhandledrejection", (e) => showFailure("ERROR " + ((e.
     <button id="exportItemsBtn"></button>
     <table><tbody id="exportPreviewBody"></tbody></table>
   </div>
+</div>
+<div class="view" id="view-backup" hidden>
+  <div id="backupStats"></div>
+  <div id="backupCoverage" hidden></div>
+  <button id="backupSaveBtn"></button>
+  <input type="file" id="restoreFile">
+  <div id="restoreStatus"></div>
 </div>
 
 <div id="progress" hidden>
@@ -97,6 +107,7 @@ window.addEventListener("unhandledrejection", (e) => showFailure("ERROR " + ((e.
 <script src="../extension/common.js"></script>
 <script src="../extension/purchase-examples.js"></script>
 <script src="../extension/csv.js"></script>
+<script src="../extension/backup.js"></script>
 <script src="../extension/dashboard-parse.js"></script>
 <script src="../extension/dashboard-view.js"></script>
 <script src="../extension/dashboard.js"></script>

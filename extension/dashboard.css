@@ -402,6 +402,14 @@ button.secondary:hover:not(:disabled) {
   color: #a3272a;
 }
 
+/* レポート以外の画面で、数字が実際より少ないことを伝える案内。
+   収集はレポート画面でしか行えないので、そこへ戻る導線を同じ行に置く */
+#pendingBanner a {
+  margin-left: 10px;
+  color: inherit;
+  font-weight: 700;
+}
+
 /* ---- 結果 ---- */
 
 .summary {

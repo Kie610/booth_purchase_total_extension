@@ -45,12 +45,64 @@ exportItemsBtn.addEventListener("click", () =>
   downloadCsv(buildItemsCsv(buildResults()), csvFileName("items"))
 );
 
+backupSaveBtn.addEventListener("click", () =>
+  downloadFile(
+    JSON.stringify(buildBackup(state.index, state.cache), null, 1),
+    backupFileName(),
+    "application/json"
+  )
+);
+
+// 読み込みは、形を確かめてから今のデータと併合する。入れ替えにすると、
+// 古いバックアップを読んだときに今あるものを失う
+restoreFile.addEventListener("change", async () => {
+  const file = restoreFile.files && restoreFile.files[0];
+  if (!file) return;
+  if (running) {
+    restoreStatus.classList.add("warn");
+    restoreStatus.textContent = "収集の実行中は復元できません。終わってからもう一度選択してください。";
+    restoreFile.value = "";
+    return;
+  }
+  restoreStatus.classList.remove("warn");
+  restoreStatus.textContent = "読み込んでいます...";
+
+  let parsed;
+  try {
+    parsed = parseBackup(await file.text());
+  } catch (err) {
+    parsed = { ok: false, message: "ファイルを開けませんでした。" };
+  }
+  if (!parsed.ok) {
+    restoreStatus.classList.add("warn");
+    restoreStatus.textContent = parsed.message;
+    restoreFile.value = "";
+    return;
+  }
+
+  const merged = mergeBackup(state, parsed);
+  state.index = merged.index;
+  state.cache = merged.cache;
+  if (state.index) await saveIndex(state.index);
+  await saveCache(state.cache);
+  await saveSummary(buildSummary(false));
+  render();
+
+  restoreStatus.textContent =
+    `復元しました。注文が${merged.addedOrders}件、収集済みの金額が${merged.addedAmounts}件増えました` +
+    (parsed.exportedAt ? `(バックアップ日時: ${formatTimestamp(parsed.exportedAt)})` : "") +
+    "。";
+  restoreFile.value = "";
+});
+
 // 拡張の権限を増やさずに保存させるため、Blobへのリンクを自分で作って押す
 // ("downloads" 権限を足すと、権限は storage とBOOTHのドメインだけ、という現状が崩れる)
 function downloadCsv(text, fileName) {
-  const url = URL.createObjectURL(
-    new Blob([text], { type: "text/csv;charset=utf-8" })
-  );
+  return downloadFile(text, fileName, "text/csv;charset=utf-8");
+}
+
+function downloadFile(text, fileName, type) {
+  const url = URL.createObjectURL(new Blob([text], { type }));
   const link = document.createElement("a");
   link.href = url;
   link.download = fileName;

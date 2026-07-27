@@ -64,6 +64,13 @@ const exportGap = document.getElementById("exportGap");
 const exportOrdersBtn = document.getElementById("exportOrdersBtn");
 const exportItemsBtn = document.getElementById("exportItemsBtn");
 const exportPreviewBody = document.getElementById("exportPreviewBody");
+const pendingBanner = document.getElementById("pendingBanner");
+const pendingBannerText = document.getElementById("pendingBannerText");
+const backupStats = document.getElementById("backupStats");
+const backupCoverage = document.getElementById("backupCoverage");
+const backupSaveBtn = document.getElementById("backupSaveBtn");
+const restoreFile = document.getElementById("restoreFile");
+const restoreStatus = document.getElementById("restoreStatus");
 
 // 実行中は押せなくするボタン
 const ACTION_BUTTONS = [
@@ -73,6 +80,7 @@ const ACTION_BUTTONS = [
   selectPendingBtn,
   clearIndexBtn,
   clearAmountsBtn,
+  backupSaveBtn,
 ];
 
 // ---- 画面の切り替え ----------------------------------------------------
@@ -82,10 +90,10 @@ const ACTION_BUTTONS = [
 // (ポップアップではなく専用タブで処理しているのと同じ理由)。
 // 現在の画面はURLのハッシュに持たせるので、再読み込みしても同じ画面に戻る。
 
-const VIEW_NAMES = ["report", "export"];
+const VIEW_NAMES = ["report", "export", "backup"];
 const DEFAULT_VIEW = "report";
 // 見出しの右に添える画面名。既定の画面では何も足さない
-const VIEW_TITLES = { report: "", export: "データ出力" };
+const VIEW_TITLES = { report: "", export: "データ出力", backup: "データの引っ越し" };
 
 function viewFromHash(hash) {
   const name = String(hash || "").replace(/^#\/?/, "");
@@ -101,7 +109,30 @@ function renderCurrentView() {
     link.classList.toggle("current", link.dataset.view === current);
   });
   viewTitle.textContent = VIEW_TITLES[current];
+  renderPendingBanner(current);
   return current;
+}
+
+// レポート以外の画面に出ている数字は、未収集や取得しきれていない注文があると
+// 実際より少なくなる。数字だけを見せて黙っていると、それを正しい合計だと
+// 思わせてしまうので、足りないことと収集する場所を伝える。
+// 画面を増やしたときも自動で付くよう、区画の外に1つだけ置いてある
+function renderPendingBanner(current) {
+  if (current === DEFAULT_VIEW) {
+    pendingBanner.hidden = true;
+    return;
+  }
+  const pending = buildResults().filter((r) => needsCollect(state.cache[r.id])).length;
+  const incomplete = Boolean(state.index) && !indexIsComplete(state.index);
+  pendingBanner.hidden = pending === 0 && !incomplete;
+  if (pendingBanner.hidden) return;
+
+  const reasons = [];
+  if (pending > 0) reasons.push(`未収集の注文が${pending}件あります`);
+  // 索引が途中までだと、そもそも一覧に出ていない注文が残っている
+  if (incomplete) reasons.push("注文履歴の取得が途中で終わっています");
+  pendingBannerText.textContent =
+    `${reasons.join("。")}。この画面の内容は実際より少なくなります。`;
 }
 
 function setDrawerOpen(open) {
@@ -210,6 +241,8 @@ function renderRunningState(isRunning) {
   forceRefreshAll.disabled = isRunning;
   rangeFrom.disabled = isRunning;
   rangeTo.disabled = isRunning;
+  // 復元は state を丸ごと差し替えるので、収集中に走らせると取得結果と衝突する
+  restoreFile.disabled = isRunning;
   abortBtn.disabled = !isRunning;
   if (!isRunning) {
     progressBox.hidden = true;
@@ -264,6 +297,44 @@ function render() {
   updatePlannedCount();
   renderClearArea();
   renderExportArea();
+  renderBackupArea();
+}
+
+// 引っ越しの画面。何を持ち出せるのかが分かれば十分なので、件数と期間だけを出す
+function renderBackupArea() {
+  const results = buildResults();
+  const collected = results.filter((r) => !needsCollect(state.cache[r.id]));
+  const dated = results
+    .map((r) => parseOrderDate(r.date))
+    .filter(Boolean)
+    .sort((a, b) => a.sortKey - b.sortKey);
+
+  // 実行中の無効化を上書きしないよう、待機中だけ件数で決める(renderClearArea と同じ)
+  if (!running) backupSaveBtn.disabled = results.length === 0;
+  if (results.length === 0) {
+    backupStats.textContent = "保存できるデータがありません";
+    backupCoverage.hidden = true;
+    return;
+  }
+
+  const period =
+    dated.length > 0
+      ? ` / 期間: ${dateLabel(dated[0])} 〜 ${dateLabel(dated[dated.length - 1])}`
+      : "";
+  backupStats.textContent =
+    `注文: ${results.length}件(収集済み ${collected.length}件 / ` +
+    `未収集 ${results.length - collected.length}件)${period}`;
+
+  backupCoverage.hidden = false;
+  const complete = indexIsComplete(state.index);
+  backupCoverage.classList.toggle("warn", !complete);
+  backupCoverage.textContent = complete
+    ? "注文履歴の取得済みの範囲: 全期間"
+    : "注文履歴の取得済みの範囲: 途中まで(この状態のまま保存されます)";
+}
+
+function dateLabel(d) {
+  return d.day > 0 ? `${d.year}年${d.month}月${d.day}日` : `${d.year}年${d.month}月`;
 }
 
 // データ出力の画面。CSVそのものは押されたときに組み立てるが、

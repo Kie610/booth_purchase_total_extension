@@ -433,7 +433,7 @@ renderCurrentView();
 check("データ出力へ切り替わる",
   [document.getElementById("view-report").hidden, document.getElementById("view-export").hidden], [true, false]);
 check("メニューに現在地が出る",
-  [...navDrawer.querySelectorAll(".nav-link")].map(a => a.classList.contains("current")), [false, true]);
+  [...navDrawer.querySelectorAll(".nav-link")].map(a => a.classList.contains("current")), [false, true, false]);
 check("画面名を見出しに添える", viewTitle.textContent, "データ出力");
 location.hash = "#/report";
 renderCurrentView();
@@ -470,6 +470,95 @@ check("金額のずれを知らせる", exportGap.hidden, false);
 check("ずれた件数を出す", exportGap.textContent.includes("一致しない注文が1件"), true);
 state.cache.a1 = savedA1;
 render();
+
+// --- 未収集の案内(レポート以外の画面) ---
+// 数字だけを見せて黙っていると、実際より少ない額を正しい合計だと思わせてしまう
+location.hash = "#/report";
+renderCurrentView();
+check("レポート画面では出さない", pendingBanner.hidden, true);
+
+location.hash = "#/export";
+renderCurrentView();
+check("レポート以外では未収集を知らせる", pendingBanner.hidden, false);
+check("未収集の件数を出す", pendingBannerText.textContent,
+  "未収集の注文が4件あります。この画面の内容は実際より少なくなります。");
+check("収集できる画面へ戻す導線がある", pendingBanner.querySelector("a").getAttribute("href"), "#/report");
+
+// 索引が途中までなら、一覧に出ていない注文も残っている
+state.index.complete = false;
+renderCurrentView();
+check("索引が未完了なら理由を書き足す", pendingBannerText.textContent,
+  "未収集の注文が4件あります。注文履歴の取得が途中で終わっています。この画面の内容は実際より少なくなります。");
+delete state.index.complete;
+
+// 収集し終えていれば出さない
+const savedCache = state.cache;
+state.cache = Object.fromEntries(targetOrders().map(o => [o.id, { amount: 100, gift: 0, status: o.status, date: o.date, items: [item("何か", 100)] }]));
+renderCurrentView();
+check("すべて収集済みなら出さない", pendingBanner.hidden, true);
+state.cache = savedCache;
+location.hash = "#/report";
+renderCurrentView();
+
+// --- データの引っ越し(バックアップ／復元) ---
+render();
+check("引っ越し画面の件数と期間", backupStats.textContent,
+  "注文: 6件(収集済み 2件 / 未収集 4件) / 期間: 2025年12月10日 〜 2026年5月20日");
+check("取得済みの範囲も示す", backupCoverage.textContent, "注文履歴の取得済みの範囲: 全期間");
+
+const backup = buildBackup(state.index, state.cache, new Date(2026, 6, 5));
+check("バックアップの形式", [backup.format, backup.version], ["booth-purchase-report", 1]);
+check("バックアップに注文履歴と金額が入る",
+  [backup.index.orders.length, Object.keys(backup.cache).length], [7, 3]);
+check("バックアップのファイル名", backupFileName(new Date(2026, 6, 5)), "booth-backup-20260705.json");
+
+// 壊れたファイルでストレージを上書きしないよう、形を確かめてから使う
+check("読み込み JSONでない", parseBackup("これはJSONではない").ok, false);
+check("読み込み 別のJSON", parseBackup('{"foo":1}').message,
+  "このファイルはBOOTHお買いものレポートのバックアップではありません。");
+check("読み込み 配列", parseBackup("[1,2]").ok, false);
+check("読み込み 注文履歴が壊れている",
+  parseBackup('{"format":"booth-purchase-report","index":{"orders":"x"}}').message,
+  "バックアップの注文履歴が壊れています。");
+check("読み込み 金額データが壊れている",
+  parseBackup('{"format":"booth-purchase-report","cache":[]}').message,
+  "バックアップの金額データが壊れています。");
+const restored = parseBackup(JSON.stringify(backup));
+check("読み込み 書き出したものを読み戻せる",
+  [restored.ok, restored.index.orders.length, Object.keys(restored.cache).length], [true, 7, 3]);
+
+// 併合(入れ替えにすると、古いバックアップを読んだときに今あるものを失う)
+const stamp = new Date(2026, 6, 5);
+const idxA = { updatedAt: "x", complete: true, orders: [{ id: "m1", status: "completed", date: "2026年1月1日 00:00" }] };
+const idxB = { updatedAt: "y", complete: true, orders: [{ id: "m2", status: "completed", date: "2025年1月1日 00:00" }] };
+check("併合で両方の注文が残る", mergeOrderIndex(idxA, idxB, stamp).orders.map(o => o.id), ["m2", "m1"]);
+check("両方が全期間なら全期間のまま", mergeOrderIndex(idxA, idxB, stamp).complete, true);
+// 片方でも途中までだと、つないだ結果に抜けが無いとは言い切れない
+check("片方が途中までなら未完了にする",
+  [mergeOrderIndex({ ...idxA, complete: false }, idxB, stamp).complete,
+   mergeOrderIndex(idxA, { ...idxB, complete: false }, stamp).complete], [false, false]);
+check("読み込む側に注文履歴が無ければ今のまま", mergeOrderIndex(idxA, null, stamp), idxA);
+check("今の注文履歴が無ければ読み込んだ側を使う", mergeOrderIndex(null, idxB, stamp), idxB);
+
+const good = { amount: 500, gift: 0, items: [item("何か", 500)] };
+const older = { amount: 300, gift: 0, items: [item("昔のもの", 300)] };
+check("収集済みの方を残す",
+  mergeOrderCache({ x: good }, { x: older }).x.amount, 500);
+check("今が未収集なら読み込んだ側で埋める",
+  mergeOrderCache({ x: { amount: null, items: null } }, { x: older }).x.amount, 300);
+check("読み込んだ側にしか無い注文も取り込む",
+  Object.keys(mergeOrderCache({ x: good }, { y: older })).sort(), ["x", "y"]);
+check("どちらも未収集なら未収集のまま",
+  mergeOrderCache({ x: { amount: null, items: null } }, { x: { amount: null, items: null } }).x.amount, null);
+
+const mergedResult = mergeBackup(
+  { index: idxA, cache: { x: good } },
+  { index: idxB, cache: { x: older, y: good } },
+  stamp
+);
+check("併合で増えた注文の件数", mergedResult.addedOrders, 1);
+check("併合で増えた金額の件数", mergedResult.addedAmounts, 1);
+check("併合しても今の収集済みは残る", mergedResult.cache.x.amount, 500);
 
 // 画面下部の固定フッター(収集済みのみを対象にする)
 const nowYear = new Date().getFullYear();

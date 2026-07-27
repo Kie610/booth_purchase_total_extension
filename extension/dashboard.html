@@ -18,12 +18,19 @@
   <nav id="navDrawer" class="nav-drawer" aria-label="画面の切り替え" hidden>
     <a class="nav-link" href="#/report" data-view="report">お買いものレポート</a>
     <a class="nav-link" href="#/export" data-view="export">データ出力</a>
+    <a class="nav-link" href="#/backup" data-view="backup">データの引っ越し</a>
   </nav>
 
   <main class="page">
     <!-- 通知は画面をまたいで出るので、切り替える区画の外に置く -->
     <div id="noticeBox" class="notice" hidden></div>
     <div id="errorBox" class="error" hidden></div>
+
+    <!-- レポート以外の画面では、そこに出ている数字が実際より少ないことがあると伝える。
+         収集はレポート画面でしか行えないので、そこへ戻る導線も添える -->
+    <!-- .notice は white-space: pre-line なので、改行を入れるとそこで行が分かれる。
+         案内とリンクは続けて読ませたいので同じ行に書く -->
+    <div id="pendingBanner" class="notice" hidden><span id="pendingBannerText"></span><a href="#/report">お買いものレポートで収集する</a></div>
 
    <div class="view" id="view-report">
     <p class="lead">
@@ -205,6 +212,40 @@
        </div>
      </section>
    </div>
+
+   <div class="view" id="view-backup" hidden>
+     <section class="step">
+       <h2>データの引っ越し</h2>
+       <p class="hint">
+         収集したデータをファイルに保存し、別のブラウザやプロファイルで読み込み直せます。
+         注文が多いとBOOTHからの再取得に数分かかるため、環境を移すときはこちらを使ってください。
+         保存されるのは注文履歴と収集した金額だけで、BOOTHのログイン情報は含まれません。
+       </p>
+
+       <div class="index-status">
+         <div class="status" id="backupStats">まだ取得していません</div>
+         <div class="status" id="backupCoverage" hidden></div>
+       </div>
+
+       <div class="step-controls">
+         <button id="backupSaveBtn" class="primary">バックアップを保存</button>
+       </div>
+     </section>
+
+     <section class="step">
+       <h2>バックアップから復元</h2>
+       <p class="hint">
+         今あるデータは消えません。読み込んだ内容と<b>併合</b>し、同じ注文があれば
+         収集済みの方を残します。注文履歴の「取得済みの範囲」は、両方が全期間のときだけ
+         全期間のままにします(片方でも途中までだと、つないだ結果に抜けが無いとは
+         言い切れないため)。
+       </p>
+       <div class="step-controls">
+         <input type="file" id="restoreFile" accept="application/json,.json">
+       </div>
+       <div class="status" id="restoreStatus"></div>
+     </section>
+   </div>
   </main>
 
   <footer class="app-footer">
@@ -245,6 +286,7 @@
 <script src="common.js"></script>
 <script src="purchase-examples.js"></script>
 <script src="csv.js"></script>
+<script src="backup.js"></script>
 <script src="dashboard-parse.js"></script>
 <script src="dashboard-view.js"></script>
 <script src="dashboard.js"></script>
