@@ -4,18 +4,21 @@
 コードを読めば分かることは省き、**調査でしか得られなかった知見**と
 **作業の進め方**をまとめています。
 
-新しいチャットは次の一文で始められます。
+新しいチャットは、各エージェントに割り当てたworktreeを開いた状態で
+次の一文から始められます。
 
-> `D:\GitHub_ClaudeCode\booth_purchase_total_extension` の HANDOFF.md を読んで、
+> このworktreeの HANDOFF.md を読んで、
 > BOOTHお買いものレポート 拡張機能の開発を引き継いでください。
 
 ---
 
 ## 前提
 
-- 作業ディレクトリ: `D:\GitHub_ClaudeCode\booth_purchase_total_extension`
+- 作業ディレクトリ: CodexとClaude Codeにそれぞれ割り当てた専用worktree
 - リポジトリ: https://github.com/Kie610/booth_purchase_total_extension (main)
 - 日本語で応答すること
+- CodexとClaude Codeは、同じGitリポジトリに接続された**別々のworktree・別々のブランチ**で実装すること
+- 他方のworktreeへ直接ファイルを書き込まず、変更の受け渡しはcommitとmergeで行うこと
 
 ## これは何か
 
@@ -175,6 +178,30 @@ script / link(preload, modulepreload, prefetch, stylesheet) / img / iframe の
   スーパーサンプリングして滑らかに描いている
 
 ## 進め方
+
+### Git worktree運用
+
+- CodexとClaude Codeは、それぞれ自分専用のworktreeを開いて作業する。同じworktreeを
+  2つのエージェントから同時に編集しない
+- 各worktreeでは別々の作業ブランチを使う。Gitは通常、同じブランチを複数のworktreeで
+  同時にcheckoutできないため、エージェントごと、または機能ごとにブランチを分ける
+- 作業開始時に `git status`、`git branch --show-current`、`git worktree list` を実行し、
+  正しいworktreeとブランチにいること、意図しない未コミット変更がないことを確認する
+- 実装、テスト、commitは担当worktree内で完結させる。他方のエージェントのファイルや
+  未コミット変更を直接修正しない
+- 統合担当のworktreeで `main` を最新化し、各作業ブランチを順番にmergeする。
+  merge後に全テストを実行し、競合や組み合わせによる不具合がないことを確認する
+- リモート追跡情報やGitオブジェクトはworktree間で共有されるため、同じ更新を各フォルダで
+  何度もfetchする必要はない。ただし、作業ツリー、現在のブランチ、未コミット変更は
+  worktreeごとに独立している
+- `pull`は実行したworktreeの現在のブランチだけを更新する。通常は統合担当の`main`で
+  `git pull --ff-only`を行い、作業ブランチは最新の`main`をmergeまたはrebaseして追従する
+- `push`は統合と全テストが終わった後に、原則として統合担当から一度だけ行う。
+  作業ブランチをバックアップまたはレビュー目的でpushする場合は、その目的を明示する
+- 同時実装は可能だが、同じファイルや密接に関連する機能を変更するとmerge conflictや
+  論理的な競合が起きる。開始前に担当範囲を分け、統合時には差分とテスト結果を確認する
+- worktreeの追加・削除は通常のフォルダコピーや削除ではなく、リポジトリの管理用worktreeから
+  `git worktree add <path> -b <branch>` / `git worktree remove <path>` で行う
 
 - **テストは必ず実行すること。** node は無いので、Python 3.11 で配信してブラウザで開く。
 
