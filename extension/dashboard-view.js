@@ -744,7 +744,7 @@ function buildShareText(stats) {
     `今年：${formatYen(stats.yearTotal)}（${stats.yearCount}件）`,
     // 比較できる額に届かないときは、この一段落ごと落とす
     ...(comparison
-      ? ["", `積み重ねてみると、${comparison}が買えるくらいの金額になりました。`]
+      ? ["", `積み重なって、${comparison}が買えるくらいの金額になったようですね`]
       : []),
     "",
     SHARE_HASHTAG,

@@ -721,7 +721,7 @@ check("共有 未収集があれば合計を出せない", canShareTotal({ ...sh
 check("共有 索引が未完了なら合計を出せない", canShareTotal({ ...shareable, indexComplete: false }), false);
 
 check("共有文面", buildShareText(shareable),
-  "BOOTHお買いもの振り返り🛍️\n\n合計：¥4,000（2件）\n今年：¥1,000（1件）\n\n積み重ねてみると、Minecraft（Nintendo Switch版）が買えるくらいの金額になりました。\n\n#BOOTHお買いものレポート");
+  "BOOTHお買いもの振り返り🛍️\n\n合計：¥4,000（2件）\n今年：¥1,000（1件）\n\n積み重なって、Minecraft（Nintendo Switch版）が買えるくらいの金額になったようですね\n\n#BOOTHお買いものレポート");
 check("共有文面 比較できない額なら比較の段落ごと出さない",
   buildShareText({ ...shareable, total: 0, count: 1, yearTotal: 0 }),
   "BOOTHお買いもの振り返り🛍️\n\n合計：¥0（1件）\n今年：¥0（1件）\n\n#BOOTHお買いものレポート");
@@ -730,7 +730,7 @@ check("共有文面 比較できない額なら比較の段落ごと出さない
 // 文面のどこにも無い金額をもとに「これが買える」と言うことになる
 check("共有文面 未収集があれば合計の行を出さない",
   buildShareText({ ...shareable, pendingCount: 3 }),
-  "BOOTHお買いもの振り返り🛍️\n\n今年：¥1,000（1件）\n\n積み重ねてみると、すき家 ビビンバ牛丼（特盛）が買えるくらいの金額になりました。\n\n#BOOTHお買いものレポート");
+  "BOOTHお買いもの振り返り🛍️\n\n今年：¥1,000（1件）\n\n積み重なって、すき家 ビビンバ牛丼（特盛）が買えるくらいの金額になったようですね\n\n#BOOTHお買いものレポート");
 check("共有文面 比較の基準も今年の額になる",
   purchaseComparison(1000), "すき家 ビビンバ牛丼（特盛）");
 
