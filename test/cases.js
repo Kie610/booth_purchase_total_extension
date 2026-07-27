@@ -646,6 +646,36 @@ location.hash = "#/report";
 renderCurrentView();
 check("他の画面では合計の共有に戻る", shareBtn.textContent, "𝕏で共有");
 
+// --- 共有ウィンドウを開く ---
+// noopener を第3引数に渡すと、タブが開けても戻り値は必ず null になる(仕様)。
+// それを「止められた」と読むと、正常に開いているのに毎回押し直しを案内してしまう
+const realOpen = window.open;
+function openShareWith(returned) {
+  const calls = [];
+  window.open = (...args) => { calls.push(args); return returned; };
+  clearNotice();
+  try {
+    openShareWindow("テスト文面");
+  } finally {
+    window.open = realOpen;
+  }
+  return calls;
+}
+const openedCalls = openShareWith({ opener: {} });
+check("共有はXの投稿画面を新しいタブで開く",
+  [openedCalls.length, openedCalls[0][0].startsWith("https://x.com/intent/post?text="), openedCalls[0][1]],
+  [1, true, "_blank"]);
+check("開けたときは押し直しを案内しない", noticeBox.hidden, true);
+// 戻り値を使う代わりに opener を切る。共有先からこのページを触らせないため
+const openedWindow = { opener: {} };
+openShareWith(openedWindow);
+check("開いたタブの opener は切る", openedWindow.opener, null);
+// 本当に止められたときだけ案内する
+openShareWith(null);
+check("止められたときは押し直しを案内する",
+  noticeBox.textContent.includes("もう一度「Xで共有」を押してください"), true);
+clearNotice();
+
 // --- CSV出力(データ出力の画面) ---
 check("csvField そのまま", csvField("髪型A"), "髪型A");
 check("csvField カンマを含む値は囲む", csvField("帽子, 赤"), '"帽子, 赤"');

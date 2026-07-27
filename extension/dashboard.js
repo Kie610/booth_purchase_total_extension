@@ -185,13 +185,21 @@ rankingSortToggle.addEventListener("click", (event) => {
 function openShareWindow(text) {
   const url = new URL("https://x.com/intent/post");
   url.searchParams.set("text", text);
-  // 収集を挟むとクリックから時間が空くため、ブラウザに止められることがある。
-  // 収集は済んでいるので、押し直せば今度はその場で開ける
-  if (!window.open(url.toString(), "_blank", "noopener")) {
+  // 第3引数に noopener を渡すと、タブが開けても戻り値は必ず null になる(仕様)。
+  // それを「止められた」と読んでいたため、正常に開いているのに毎回
+  // 押し直しを案内していた。開いてから opener を切れば、戻り値が
+  // 本当に止められたかどうかを表すようになる
+  const opened = window.open(url.toString(), "_blank");
+  if (!opened) {
+    // 収集を挟むとクリックから時間が空くため、ブラウザに止められることがある。
+    // 収集は済んでいるので、押し直せば今度はその場で開ける
     addNotice(
       "ブラウザに新しいタブを止められました。もう一度「Xで共有」を押してください。"
     );
+    return;
   }
+  // 共有先から window.opener 経由でこのページを触らせない
+  opened.opener = null;
 }
 
 // 取り直しに時間がかかるので、消す前に必ず確認する
