@@ -17,6 +17,7 @@
   <div id="navOverlay" class="nav-overlay" hidden></div>
   <nav id="navDrawer" class="nav-drawer" aria-label="画面の切り替え" hidden>
     <a class="nav-link" href="#/report" data-view="report">お買いものレポート</a>
+    <a class="nav-link" href="#/trends" data-view="trends">支出推移・前年比較</a>
     <a class="nav-link" href="#/export" data-view="export">データ出力</a>
     <a class="nav-link" href="#/backup" data-view="backup">データの引っ越し</a>
   </nav>
@@ -177,6 +178,55 @@
         <span class="status" id="clearAmountsStatus"></span>
       </div>
     </details>
+   </div>
+
+   <div class="view" id="view-trends" hidden>
+     <section class="step">
+       <h2>支出推移・前年比較</h2>
+       <p class="hint">
+         収集済みの注文を月ごとにまとめ、今年と前年の支出ペースを比較します。
+         未収集の注文とキャンセルされた注文は金額に含みません。
+       </p>
+
+       <div id="trendsEmpty" class="empty-note">
+         比較できる支払額がありません。「お買いものレポート」で金額を収集してください。
+       </div>
+
+       <div id="trendsArea" hidden>
+         <div id="trendSummary" class="trend-summary"></div>
+
+         <section class="trend-section" aria-labelledby="monthlyTrendTitle">
+           <div class="trend-heading">
+             <h3 id="monthlyTrendTitle">月ごとの支出</h3>
+             <div class="trend-legend">
+               <span><i class="legend-swatch current"></i><span id="trendCurrentYearLabel"></span></span>
+               <span><i class="legend-swatch previous"></i><span id="trendPreviousYearLabel"></span></span>
+             </div>
+           </div>
+           <div id="monthlyTrendChart" class="trend-bars" role="img"></div>
+           <p class="hint">今年は今月まで、前年は12月までを表示します。上の前年差は同じ月までの金額で比較します。</p>
+         </section>
+
+         <section class="trend-section" aria-labelledby="cumulativeTrendTitle">
+           <div class="trend-heading">
+             <h3 id="cumulativeTrendTitle">年間累計</h3>
+             <span class="hint trend-caption">各月までに支払った金額の積み上がり</span>
+           </div>
+           <svg id="cumulativeTrendChart" class="cumulative-chart" viewBox="0 0 720 250" role="img"></svg>
+         </section>
+
+         <section class="panel trend-period-panel">
+           <h2>年別・月別の集計</h2>
+           <p class="hint">お買いものレポートと同じ集計です。年の行をクリックすると月別の内訳を開閉できます。</p>
+           <table class="data-table period-table">
+             <thead>
+               <tr><th>期間</th><th class="num">注文数</th><th class="num">支払額</th></tr>
+             </thead>
+             <tbody id="trendPeriodTableBody"></tbody>
+           </table>
+         </section>
+       </div>
+     </section>
    </div>
 
    <div class="view" id="view-export" hidden>

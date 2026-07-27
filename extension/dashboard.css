@@ -460,6 +460,193 @@ button.share-btn:hover:not(:disabled) {
   border-bottom: 1px solid var(--border);
 }
 
+/* ---- 支出推移・前年比較 ---- */
+
+.trend-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 18px 0 28px;
+}
+
+.trend-summary-card {
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-soft);
+}
+
+.trend-summary-label,
+.trend-summary-note {
+  display: block;
+  color: var(--fg-muted);
+  font-size: 11px;
+}
+
+.trend-summary-value {
+  display: block;
+  margin: 2px 0;
+  font-size: 21px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+}
+
+.trend-summary-card.increase .trend-summary-value {
+  color: #a3272a;
+}
+
+.trend-summary-card.decrease .trend-summary-value {
+  color: #287246;
+}
+
+.trend-section {
+  margin-top: 28px;
+}
+
+.trend-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.trend-heading h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.trend-legend {
+  display: flex;
+  gap: 14px;
+  color: var(--fg-muted);
+  font-size: 11px;
+}
+
+.trend-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.legend-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.legend-swatch.current,
+.trend-bar.current {
+  background: var(--accent);
+}
+
+.legend-swatch.previous,
+.trend-bar.previous {
+  background: #aeb4bd;
+}
+
+.trend-bars {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(24px, 1fr));
+  gap: 5px;
+  height: 230px;
+  padding: 14px 10px 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: linear-gradient(to top, var(--border) 1px, transparent 1px) 0 14px / 100% 50%;
+  overflow-x: auto;
+}
+
+.trend-month {
+  min-width: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.trend-bar-pair {
+  height: 188px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 3px;
+}
+
+.trend-bar {
+  width: min(14px, 42%);
+  min-height: 0;
+  border-radius: 3px 3px 0 0;
+}
+
+.trend-month-label {
+  padding-top: 6px;
+  color: var(--fg-muted);
+  font-size: 10px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.trend-caption {
+  margin: 0;
+}
+
+.cumulative-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.trend-grid-line {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.trend-line {
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.trend-line.current {
+  stroke: var(--accent);
+}
+
+.trend-line.previous {
+  stroke: #aeb4bd;
+}
+
+.trend-axis-value,
+.trend-axis-month {
+  fill: var(--fg-muted);
+  font-family: inherit;
+  font-size: 9px;
+}
+
+.trend-period-panel {
+  margin-top: 32px;
+}
+
+@media (max-width: 620px) {
+  .trend-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .trend-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .trend-bars {
+    grid-template-columns: repeat(12, minmax(28px, 1fr));
+  }
+}
+
 /* ---- アコーディオン ---- */
 
 .accordion > summary {

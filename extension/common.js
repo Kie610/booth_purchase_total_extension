@@ -291,6 +291,62 @@ function aggregateByPeriod(results) {
   );
 }
 
+// 今年と前年の月別支出・累計を、グラフと要約の両方で使える形にする。
+// 画面側で集計し直すと、表とグラフで対象条件がずれるため、ここで一度だけ
+// 「金額を収集できた注文」を同じ基準でまとめる。
+function buildSpendingTrend(
+  results,
+  year = new Date().getFullYear(),
+  throughMonth = new Date().getMonth() + 1
+) {
+  const currentYear = Number(year);
+  const previousYear = currentYear - 1;
+  const cutoff = Math.min(12, Math.max(1, Number(throughMonth) || 1));
+  const months = Array.from({ length: 12 }, (_, index) => ({
+    month: index + 1,
+    current: 0,
+    previous: 0,
+    currentCumulative: 0,
+    previousCumulative: 0,
+  }));
+
+  for (const result of results) {
+    if (typeof result.amount !== "number") continue;
+    const date = parseOrderDate(result.date);
+    if (!date || (date.year !== currentYear && date.year !== previousYear)) continue;
+    const key = date.year === currentYear ? "current" : "previous";
+    months[date.month - 1][key] += result.amount;
+  }
+
+  let currentCumulative = 0;
+  let previousCumulative = 0;
+  for (const month of months) {
+    currentCumulative += month.current;
+    previousCumulative += month.previous;
+    month.currentCumulative = currentCumulative;
+    month.previousCumulative = previousCumulative;
+  }
+
+  const currentToDate = months[cutoff - 1].currentCumulative;
+  const previousToDate = months[cutoff - 1].previousCumulative;
+  const difference = currentToDate - previousToDate;
+  return {
+    year: currentYear,
+    previousYear,
+    throughMonth: cutoff,
+    months,
+    currentToDate,
+    previousToDate,
+    difference,
+    rate: previousToDate === 0 ? null : (difference / previousToDate) * 100,
+    maxMonthly: Math.max(0, ...months.flatMap((month) => [month.current, month.previous])),
+    maxCumulative: Math.max(
+      0,
+      ...months.flatMap((month) => [month.currentCumulative, month.previousCumulative])
+    ),
+  };
+}
+
 async function readStored(key, fallback) {
   const stored = await ext.storage.local.get([key]);
   return stored[key] === undefined ? fallback : stored[key];

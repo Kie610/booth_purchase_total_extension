@@ -52,6 +52,14 @@ const totalCountEl = document.getElementById("totalCount");
 const pendingCountEl = document.getElementById("pendingCount");
 const skippedCountEl = document.getElementById("skippedCount");
 const periodTableBody = document.getElementById("periodTableBody");
+const trendsEmpty = document.getElementById("trendsEmpty");
+const trendsArea = document.getElementById("trendsArea");
+const trendSummary = document.getElementById("trendSummary");
+const trendCurrentYearLabel = document.getElementById("trendCurrentYearLabel");
+const trendPreviousYearLabel = document.getElementById("trendPreviousYearLabel");
+const monthlyTrendChart = document.getElementById("monthlyTrendChart");
+const cumulativeTrendChart = document.getElementById("cumulativeTrendChart");
+const trendPeriodTableBody = document.getElementById("trendPeriodTableBody");
 const orderTableBody = document.getElementById("orderTableBody");
 const noticeBox = document.getElementById("noticeBox");
 const errorBox = document.getElementById("errorBox");
@@ -92,10 +100,15 @@ const ACTION_BUTTONS = [
 // (ポップアップではなく専用タブで処理しているのと同じ理由)。
 // 現在の画面はURLのハッシュに持たせるので、再読み込みしても同じ画面に戻る。
 
-const VIEW_NAMES = ["report", "export", "backup"];
+const VIEW_NAMES = ["report", "trends", "export", "backup"];
 const DEFAULT_VIEW = "report";
 // 見出しの右に添える画面名。既定の画面では何も足さない
-const VIEW_TITLES = { report: "", export: "データ出力", backup: "データの引っ越し" };
+const VIEW_TITLES = {
+  report: "",
+  trends: "支出推移・前年比較",
+  export: "データ出力",
+  backup: "データの引っ越し",
+};
 
 function viewFromHash(hash) {
   const name = String(hash || "").replace(/^#\/?/, "");
@@ -157,6 +170,7 @@ function drawerIsOpen() {
 // 開閉状態はDOMではなくこちらで持つ(表ごとに1つ)
 const expandedMonthYears = new Set();
 const expandedPeriodYears = new Set();
+const expandedTrendPeriodYears = new Set();
 
 // 共有文面に使う集計値(描画のたびに更新する)
 let shareStats = null;
@@ -296,10 +310,179 @@ function render() {
   renderIndexStatus();
   renderMonthArea();
   renderResult();
+  renderSpendingTrends();
   updatePlannedCount();
   renderClearArea();
   renderExportArea();
   renderBackupArea();
+}
+
+function trendSummaryCard(label, value, note, className) {
+  const card = el("div", `trend-summary-card${className ? ` ${className}` : ""}`);
+  card.appendChild(el("span", "trend-summary-label", label));
+  card.appendChild(el("strong", "trend-summary-value", value));
+  if (note) card.appendChild(el("span", "trend-summary-note", note));
+  return card;
+}
+
+function barHeight(amount, max) {
+  if (amount <= 0 || max <= 0) return 0;
+  return Math.max(3, (amount / max) * 100);
+}
+
+function svgEl(tag, attributes, text) {
+  const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const [name, value] of Object.entries(attributes || {})) {
+    node.setAttribute(name, String(value));
+  }
+  if (text != null) node.textContent = text;
+  return node;
+}
+
+function trendPoints(months, key, max, limit = 12) {
+  const left = 48;
+  const top = 24;
+  const width = 640;
+  const height = 176;
+  const ceiling = max || 1;
+  return months
+    .slice(0, limit)
+    .map((month, index) => {
+      const x = left + (width * index) / 11;
+      const y = top + height - (height * month[key]) / ceiling;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+}
+
+function renderCumulativeChart(trend) {
+  cumulativeTrendChart.innerHTML = "";
+  cumulativeTrendChart.setAttribute(
+    "aria-label",
+    `${trend.year}年と${trend.previousYear}年の年間累計支出`
+  );
+  cumulativeTrendChart.appendChild(
+    svgEl("title", {}, `${trend.year}年と${trend.previousYear}年の年間累計支出`)
+  );
+
+  const gridValues = [0, 0.5, 1];
+  for (const ratio of gridValues) {
+    const y = 200 - 176 * ratio;
+    cumulativeTrendChart.appendChild(
+      svgEl("line", { x1: 48, y1: y, x2: 688, y2: y, class: "trend-grid-line" })
+    );
+    cumulativeTrendChart.appendChild(
+      svgEl(
+        "text",
+        { x: 42, y: y + 4, class: "trend-axis-value", "text-anchor": "end" },
+        formatYen(Math.round(trend.maxCumulative * ratio))
+      )
+    );
+  }
+
+  for (let index = 0; index < 12; index++) {
+    const x = 48 + (640 * index) / 11;
+    cumulativeTrendChart.appendChild(
+      svgEl("text", { x, y: 226, class: "trend-axis-month", "text-anchor": "middle" }, index + 1)
+    );
+  }
+
+  cumulativeTrendChart.appendChild(
+    svgEl("polyline", {
+      class: "trend-line previous",
+      points: trendPoints(trend.months, "previousCumulative", trend.maxCumulative),
+    })
+  );
+  cumulativeTrendChart.appendChild(
+    svgEl("polyline", {
+      class: "trend-line current",
+      points: trendPoints(
+        trend.months,
+        "currentCumulative",
+        trend.maxCumulative,
+        trend.throughMonth
+      ),
+    })
+  );
+}
+
+function renderSpendingTrends(now = new Date()) {
+  const results = buildResults();
+  const valid = results.filter((result) => typeof result.amount === "number");
+  trendsEmpty.hidden = valid.length > 0;
+  trendsArea.hidden = valid.length === 0;
+  if (valid.length === 0) {
+    trendSummary.innerHTML = "";
+    monthlyTrendChart.innerHTML = "";
+    cumulativeTrendChart.innerHTML = "";
+    trendPeriodTableBody.innerHTML = "";
+    return;
+  }
+
+  const trend = buildSpendingTrend(results, now.getFullYear(), now.getMonth() + 1);
+  trendCurrentYearLabel.textContent = `${trend.year}年`;
+  trendPreviousYearLabel.textContent = `${trend.previousYear}年`;
+
+  trendSummary.innerHTML = "";
+  trendSummary.appendChild(
+    trendSummaryCard(
+      `${trend.year}年 1〜${trend.throughMonth}月`,
+      formatYen(trend.currentToDate),
+      "収集済みの支払額"
+    )
+  );
+  trendSummary.appendChild(
+    trendSummaryCard(
+      `${trend.previousYear}年 同期間`,
+      formatYen(trend.previousToDate),
+      "前年の1月から同じ月まで"
+    )
+  );
+  const differenceClass =
+    trend.difference > 0 ? "increase" : trend.difference < 0 ? "decrease" : "";
+  const differenceText =
+    trend.difference > 0
+      ? `+${formatYen(trend.difference)}`
+      : trend.difference < 0
+        ? `-${formatYen(Math.abs(trend.difference))}`
+        : formatYen(0);
+  const rateText =
+    trend.rate === null
+      ? "前年同期が0円のため割合は算出できません"
+      : `前年同期比 ${trend.rate > 0 ? "+" : ""}${trend.rate.toFixed(1)}%`;
+  trendSummary.appendChild(
+    trendSummaryCard("前年同期との差", differenceText, rateText, differenceClass)
+  );
+
+  monthlyTrendChart.innerHTML = "";
+  monthlyTrendChart.setAttribute(
+    "aria-label",
+    `${trend.year}年と${trend.previousYear}年の月ごとの支出比較`
+  );
+  for (const month of trend.months) {
+    const group = el("div", "trend-month");
+    const bars = el("div", "trend-bar-pair");
+    for (const [key, label] of [
+      ["current", `${trend.year}年${month.month}月`],
+      ["previous", `${trend.previousYear}年${month.month}月`],
+    ]) {
+      const bar = el("span", `trend-bar ${key}`);
+      bar.style.height = `${barHeight(month[key], trend.maxMonthly)}%`;
+      bar.title = `${label}: ${formatYen(month[key])}`;
+      bar.setAttribute("aria-label", bar.title);
+      bars.appendChild(bar);
+    }
+    group.appendChild(bars);
+    group.appendChild(el("span", "trend-month-label", `${month.month}月`));
+    monthlyTrendChart.appendChild(group);
+  }
+
+  renderCumulativeChart(trend);
+  renderPeriodTableInto(
+    trendPeriodTableBody,
+    aggregateByPeriod(results),
+    expandedTrendPeriodYears
+  );
 }
 
 // 引っ越しの画面。何を持ち出せるのかが分かれば十分なので、件数と期間だけを出す
@@ -651,6 +834,12 @@ function renderFooter(results) {
 }
 
 function renderPeriodTable(results) {
+  renderPeriodTableInto(periodTableBody, aggregateByPeriod(results), expandedPeriodYears);
+}
+
+// レポート画面と支出推移画面で、まったく同じ年別・月別集計を使う。
+// 表ごとに開閉状態だけを分け、集計条件と行の組み立ては共有する。
+function renderPeriodTableInto(tbody, periodStats, expandedKeys) {
   const amountRow = (className, label, row) => {
     const tr = el("tr", className);
     tr.appendChild(label);
@@ -659,9 +848,9 @@ function renderPeriodTable(results) {
     return tr;
   };
   renderCollapsibleTable(
-    periodTableBody,
-    aggregateByPeriod(results),
-    expandedPeriodYears,
+    tbody,
+    periodStats,
+    expandedKeys,
     (year, expanded) => amountRow("year-row", toggleCell(year.label, expanded), year),
     // 年は親の行に出ているので、月は「5月」とだけ書く
     (month) => amountRow("month-row", td(month.shortLabel), month)

@@ -233,6 +233,14 @@ periodTableBody.addEventListener("click", (event) => {
   if (yearRow) toggleYearRow(periodTableBody, expandedPeriodYears, yearRow);
 });
 
+trendPeriodTableBody.addEventListener("click", (event) => {
+  if (running) return;
+  const yearRow = event.target.closest("tr.year-row");
+  if (yearRow) {
+    toggleYearRow(trendPeriodTableBody, expandedTrendPeriodYears, yearRow);
+  }
+});
+
 // テストでは state を直接差し替えて描画や取得を検証するため、
 // 保存データの読み込みは走らせない(非同期で state を上書きして競合するため)
 if (!document.body.dataset.noAutoInit) init();

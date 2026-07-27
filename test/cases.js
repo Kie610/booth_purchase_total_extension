@@ -362,6 +362,27 @@ check("未収集はundefined", results.find(r => r.id === "a2").amount, undefine
 check("取得失敗はnull", results.find(r => r.id === "c2").amount, null);
 check("収集済みは数値", results.find(r => r.id === "a1").amount, 1000);
 
+// --- 支出推移・前年比較の集計 ---
+const trend = buildSpendingTrend([
+  { amount: 100, date: "2026年1月5日" },
+  { amount: 250, date: "2026年3月5日" },
+  { amount: 80, date: "2025年1月5日" },
+  { amount: 120, date: "2025年2月5日" },
+  { amount: null, date: "2026年2月5日" },
+  { amount: 999, date: "日付なし" },
+], 2026, 3);
+check("支出推移は今年と前年だけを月別に集計", trend.months.slice(0, 3).map(m => [m.current, m.previous]),
+  [[100, 80], [0, 120], [250, 0]]);
+check("支出推移の年間累計", trend.months.slice(0, 3).map(m => [m.currentCumulative, m.previousCumulative]),
+  [[100, 80], [100, 200], [350, 200]]);
+check("前年同期間との差と比率", [trend.currentToDate, trend.previousToDate, trend.difference, trend.rate],
+  [350, 200, 150, 75]);
+check("月別グラフの最大値", trend.maxMonthly, 250);
+check("累計グラフの最大値", trend.maxCumulative, 350);
+check("前年同期が0円なら比率を出さない", buildSpendingTrend([
+  { amount: 100, date: "2026年1月5日" },
+], 2026, 1).rate, null);
+
 // --- 描画 ---
 render();
 check("合計は収集済みのみ", document.getElementById("totalAmount").textContent, "¥4,000");
@@ -458,6 +479,23 @@ check("初期状態で月行は畳まれている", [...periodTableBody.querySel
 yearRows[0].querySelector(".toggle").click();
 check("年行クリックで展開", [...periodTableBody.querySelectorAll('.month-row[data-year-key="2026"]')].every(r => !r.hidden), true);
 
+// 支出推移画面でも同じ年別・月別の集計部品を使う
+renderSpendingTrends(new Date(2026, 11, 1));
+check("支出推移は収集済みデータがあれば表示", [trendsEmpty.hidden, trendsArea.hidden], [true, false]);
+check("支出推移の要約", [...trendSummary.querySelectorAll(".trend-summary-value")].map(e => e.textContent),
+  ["¥1,000", "¥3,000", "-¥2,000"]);
+check("月別比較は12か月分", monthlyTrendChart.querySelectorAll(".trend-month").length, 12);
+check("月別比較の棒は今年と前年", monthlyTrendChart.querySelectorAll(".trend-bar").length, 24);
+check("累計グラフは2本", cumulativeTrendChart.querySelectorAll("polyline").length, 2);
+check("今年の累計線は対象月まで", cumulativeTrendChart.querySelector("polyline.current").getAttribute("points").split(" ").length, 12);
+check("支出推移にも同じ年別集計", [...trendPeriodTableBody.querySelectorAll(".year-row")].map(row => [row.cells[1].textContent, row.cells[2].textContent]),
+  [...periodTableBody.querySelectorAll(".year-row")].map(row => [row.cells[1].textContent, row.cells[2].textContent]));
+const trendYearRow = trendPeriodTableBody.querySelector('.year-row[data-year-key="2026"]');
+trendYearRow.click();
+check("支出推移の年別表も月を開閉できる",
+  [...trendPeriodTableBody.querySelectorAll('.month-row[data-year-key="2026"]')].every(row => !row.hidden), true);
+check("別画面の表の開閉状態は独立", [...periodTableBody.querySelectorAll('.month-row[data-year-key="2026"]')].every(row => !row.hidden), true);
+
 // 注文ごとの内訳
 const orderRows = [...orderTableBody.querySelectorAll("tr")];
 check("内訳は日付の降順(日付不明は末尾)", orderRows.map(tr => tr.cells[3].textContent), ["a2", "a1", "b1", "c2", "c1", "e1"]);
@@ -534,6 +572,7 @@ check("CSVのファイル名に書き出した日を入れる", csvFileName("ord
 // 同じページの中で区画を出し分ける。現在地はハッシュに持たせる
 check("既定の画面", [viewFromHash(""), viewFromHash("#/report")], ["report", "report"]);
 check("ハッシュで画面を決める", viewFromHash("#/export"), "export");
+check("支出推移のハッシュ", viewFromHash("#/trends"), "trends");
 check("知らないハッシュは既定の画面", viewFromHash("#/nope"), "report");
 
 location.hash = "#/export";
@@ -541,8 +580,13 @@ renderCurrentView();
 check("データ出力へ切り替わる",
   [document.getElementById("view-report").hidden, document.getElementById("view-export").hidden], [true, false]);
 check("メニューに現在地が出る",
-  [...navDrawer.querySelectorAll(".nav-link")].map(a => a.classList.contains("current")), [false, true, false]);
+  [...navDrawer.querySelectorAll(".nav-link")].map(a => a.classList.contains("current")), [false, false, true, false]);
 check("画面名を見出しに添える", viewTitle.textContent, "データ出力");
+location.hash = "#/trends";
+renderCurrentView();
+check("支出推移へ切り替わる",
+  [document.getElementById("view-report").hidden, document.getElementById("view-trends").hidden], [true, false]);
+check("支出推移の画面名", viewTitle.textContent, "支出推移・前年比較");
 location.hash = "#/report";
 renderCurrentView();
 check("レポートへ戻る",
@@ -1049,6 +1093,10 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   const dashboardShareBtn = dashboardDoc.getElementById("shareBtn");
   check("共有ボタンは飾り文字の𝕏を使う", dashboardShareBtn.textContent.trim(), "𝕏で共有");
   check("共有ボタンに専用クラスを付ける", dashboardShareBtn.classList.contains("share-btn"), true);
+  check("支出推移画面をメニューから開ける",
+    dashboardDoc.querySelector('.nav-link[data-view="trends"]').getAttribute("href"), "#/trends");
+  check("支出推移画面に共用の年別月別表がある",
+    Boolean(dashboardDoc.getElementById("trendPeriodTableBody")), true);
 
   const dashboardCss = await (await fetch("../extension/dashboard.css")).text();
   const dashboardStyle = document.createElement("style");
@@ -1057,6 +1105,12 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   const shareButtonStyle = getComputedStyle(shareBtn);
   check("共有ボタンの背景は黒", shareButtonStyle.backgroundColor, "rgb(0, 0, 0)");
   check("共有ボタンの文字は白", shareButtonStyle.color, "rgb(255, 255, 255)");
+  check("支出推移の要約はカード配置", getComputedStyle(trendSummary).display, "grid");
+  const trendLineFixture = svgEl("polyline", { class: "trend-line current" });
+  cumulativeTrendChart.appendChild(trendLineFixture);
+  check("今年の累計線はアクセント色",
+    getComputedStyle(trendLineFixture).stroke, "rgb(252, 77, 80)");
+  trendLineFixture.remove();
   dashboardStyle.remove();
 
   // --- アイコン(パッケージ化に必要。宣言と実ファイルがずれていても拡張は読み込めてしまう) ---
