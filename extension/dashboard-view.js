@@ -359,8 +359,8 @@ function renderExportArea() {
       ? ` (明細を取れていない注文が${results.length - withItems.length}件あります)`
       : "");
 
-  // お支払金額と商品合計が食い違う注文。送料やクーポンが入るとここに出るので、
-  // 合計を商品側から出してよいかどうかの判断材料になる
+  // お支払金額を商品合計と送料で説明しきれない注文。クーポンやポイントなど、
+  // まだ拾えていないものがあるとここに出る
   const gaps = results.filter((r) => {
     const gap = amountGapOf(r);
     return gap !== null && gap !== 0;
@@ -369,8 +369,8 @@ function renderExportArea() {
   exportGap.classList.toggle("warn", gaps.length > 0);
   if (gaps.length > 0) {
     exportGap.textContent =
-      `お支払金額と商品合計が一致しない注文が${gaps.length}件あります。` +
-      "CSVの「差額」列で内容を確認できます(送料・クーポンなどが考えられます)。";
+      `お支払金額を商品合計と送料で説明しきれない注文が${gaps.length}件あります。` +
+      "CSVの「差額」列で内容を確認できます(クーポンやポイントなどが考えられます)。";
   }
 
   exportPreviewBody.innerHTML = "";
@@ -387,6 +387,7 @@ function renderExportArea() {
     tr.appendChild(td(item.shop));
     tr.appendChild(td(item.name));
     tr.appendChild(td(typeof item.price === "number" ? formatYen(item.price) : "—", "num"));
+    tr.appendChild(td(typeof itemQuantity(item) === "number" ? itemQuantity(item) : "—", "num"));
     tr.appendChild(td(typeof item.boost === "number" ? formatYen(item.boost) : "—", "num"));
     tr.appendChild(td(item.gift ? "はい" : ""));
     exportPreviewBody.appendChild(tr);

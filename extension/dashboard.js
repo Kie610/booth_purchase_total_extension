@@ -320,6 +320,7 @@ function buildResults() {
         // (表示側は giftAmount() を通すので、数値でなければ0として扱われる)
         gift: entry ? entry.gift : undefined,
         items: hasItems(entry) ? entry.items : null,
+        shipping: entry ? entry.shipping : undefined,
       };
     });
   }
@@ -331,6 +332,7 @@ function buildResults() {
     amount: entry.amount,
     gift: entry.gift,
     items: hasItems(entry) ? entry.items : null,
+    shipping: entry.shipping,
   }));
 }
 
@@ -470,11 +472,8 @@ async function fetchDoc(url, signal) {
   return new DOMParser().parseFromString(html, "text/html");
 }
 
-// v1.2以前は全ページの巡回に成功したときだけ索引を保存していたため、
-// フラグを持たない索引は「最古まで取得済み」として扱ってよい
-function indexIsComplete(index) {
-  return Boolean(index) && index.complete !== false;
-}
+// 索引の意味づけを判定するだけの純関数なので indexIsComplete は common.js にある
+// (backup.js から参照しており、制御層に置くと依存の向きが逆になるため)
 
 // 一覧ページを読めていないと分かる兆候。どちらの場合も、実際は取得できていない
 // 古い注文があるのに「全期間を取得済み」と表示してしまい、少ない合計を
@@ -678,6 +677,7 @@ async function collectAmounts(orders, force, signal) {
         status: order.status,
         date: order.date,
         items: detail.items,
+        shipping: detail.shipping,
       };
       done++;
       if (done % CACHE_FLUSH_EVERY === 0) await saveCache(state.cache);

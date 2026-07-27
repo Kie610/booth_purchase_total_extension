@@ -38,14 +38,23 @@ function hasItems(entry) {
   return Boolean(entry) && Array.isArray(entry.items);
 }
 
-// 商品の金額はBOOSTを含めて数える。1件でも価格を読めていなければ、
-// 足りない分を0として扱うと少ない額を正しい合計に見せてしまうので不明(null)にする
+// 数量の行はデジタル商品の注文には無い。無ければ1個として数える
+function itemQuantity(item) {
+  return item.quantity === undefined ? 1 : item.quantity;
+}
+
+// 商品の金額は「単価×数量」にBOOSTを足したもの。BOOSTは行に1つ付くものとして
+// 数量を掛けない(数量が2以上でBOOSTのある注文をまだ実測できていない。
+// 掛け方を誤っていればお支払金額との差額に出る)。
+// 1件でも価格や数量を読めていなければ、足りない分を0として扱うと
+// 少ない額を正しい合計に見せてしまうので不明(null)にする
 function sumItemAmounts(items) {
   if (!Array.isArray(items)) return null;
   let total = 0;
   for (const item of items) {
-    if (typeof item.price !== "number") return null;
-    total += item.price + (typeof item.boost === "number" ? item.boost : 0);
+    const quantity = itemQuantity(item);
+    if (typeof item.price !== "number" || typeof quantity !== "number") return null;
+    total += item.price * quantity + (typeof item.boost === "number" ? item.boost : 0);
   }
   return total;
 }
@@ -60,12 +69,18 @@ function itemsTotalOf(entry) {
   return hasItems(entry) ? sumItemAmounts(entry.items) : null;
 }
 
-// お支払金額と商品合計の差。送料・クーポン・ポイントなどが入るとここに出る。
-// どちらかが不明なら差も出さない
+// 配送のある注文に付く送料。取得できていない注文では0として扱う
+function shippingAmount(entry) {
+  return entry && typeof entry.shipping === "number" ? entry.shipping : 0;
+}
+
+// お支払金額から、商品合計と送料を引いた残り。クーポンやポイントなど、
+// まだ拾えていないものがあればここに出る。
+// お支払金額か商品合計が不明なら差も出さない
 function amountGapOf(entry) {
   const items = itemsTotalOf(entry);
   if (items === null || !entry || typeof entry.amount !== "number") return null;
-  return entry.amount - items;
+  return entry.amount - items - shippingAmount(entry);
 }
 
 // まだ取りに行く必要がある注文かどうか。キャッシュに無いもの(未収集)に加え、
@@ -74,6 +89,13 @@ function amountGapOf(entry) {
 // 出たまま直す手段が全件再取得しかなくなるため、次の実行で自動的に取り直せるようにする
 function needsCollect(entry) {
   return !entry || entry.amount === null || !hasItems(entry);
+}
+
+// 索引が最古の注文まで到達できているか。
+// v1.2以前はフラグを持たないが、全ページの巡回に成功したときだけ索引を保存していたため
+// 「最古まで取得済み」として扱ってよい
+function indexIsComplete(index) {
+  return Boolean(index) && index.complete !== false;
 }
 
 // 支払額の左に小さく添えるギフト表記(0のときは何も出さない)

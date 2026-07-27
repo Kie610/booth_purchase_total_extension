@@ -43,8 +43,8 @@ const detailHtml = `<html><body>
 <div class="summary"><div>お支払金額</div><div>¥1,234</div></div>
 </body></html>`;
 // ステータスは索引側で読んだものを使うので、詳細ページからは読まない
-check("parseDetailPage 支払金額", parseDetailPage(parse(detailHtml)), { amount: 1234, gift: null, items: null });
-check("parseDetailPage 金額が無い場合", parseDetailPage(parse("<html><body></body></html>")), { amount: null, gift: null, items: null });
+check("parseDetailPage 支払金額", parseDetailPage(parse(detailHtml)), { amount: 1234, gift: null, items: null, shipping: null });
+check("parseDetailPage 金額が無い場合", parseDetailPage(parse("<html><body></body></html>")), { amount: null, gift: null, items: null, shipping: null });
 
 // --- 商品明細とギフト分 ---
 // 実ページの構造に合わせる。ショップ名は .sheet-group ではなく、その外側の
@@ -112,9 +112,11 @@ check("ギフトのグループだけを合計する", [withGiftDetail.amount, w
 // 商品明細(ショップ名は外側の区切りから、ギフトかどうかはグループの見出しから決まる)
 check("商品明細の件数", withGiftDetail.items.length, 4);
 check("商品明細の1件目", withGiftDetail.items[0],
-  { shop: "SOUR FLAVOR", shopUrl: "https://sourflavor.booth.pm/", name: "髪型A", price: 425, boost: 0, gift: false });
+  { shop: "SOUR FLAVOR", shopUrl: "https://sourflavor.booth.pm/", name: "髪型A", price: 425, quantity: 1, boost: 0, gift: false });
 check("ギフトのグループの商品には印が付く", withGiftDetail.items.map(i => i.gift), [false, false, true, true]);
-check("BOOSTは単価と分けて持つ", withGiftDetail.items[3], { shop: "SOUR FLAVOR", shopUrl: "https://sourflavor.booth.pm/", name: "髪型B", price: 425, boost: 100, gift: true });
+check("BOOSTは単価と分けて持つ", withGiftDetail.items[3], { shop: "SOUR FLAVOR", shopUrl: "https://sourflavor.booth.pm/", name: "髪型B", price: 425, quantity: 1, boost: 100, gift: true });
+check("数量の行が無ければ1個として数える", withGiftDetail.items.every(i => i.quantity === 1), true);
+check("ダウンロードのみの注文は送料0", withGiftDetail.shipping, 0);
 // ダウンロードファイル名の行も .u-tpg-caption1 だが金額を含まないので単価に混ざらない
 check("ファイル名の行を金額と取り違えない", withGiftDetail.items.every(i => i.price === 425), true);
 // 領収書の枠は商品リンクを持たないので商品として数えない
@@ -144,6 +146,67 @@ const multiShop = parseDetailPage(parse(`<html><body>
 </body></html>`));
 check("ショップごとに名前が付く", multiShop.items.map(i => [i.shop, i.name]),
   [["SOUR FLAVOR", "帽子"], ["べつのショップ", "靴"]]);
+
+// --- 配送商品(送料あり)の注文 ---
+// ダウンロード商品と構造が違う。b.u-tpg-title3 の見出しが無く、代わりに
+// 「〇〇から配送」の見出しと発送状況のバッジが入る。見出しの有無で商品のまとまりを
+// 判定していたため、配送商品の注文がまるごと「明細なし」になっていた
+function shippedGroup(itemName, price, quantity, boost, shippingFee) {
+  return `<div class="sheet-group sheet-group--outline0">
+    <div class="sheet sheet--p400">
+      <div class="badge align-middle mx-0 dispatched">発送済み</div>
+      <div class="desktop:flex"><div class="desktop:flex-1">
+        <div class="text-16 font-bold">白猫屋から配送</div>
+        <div class="text-14 text-text-gray500">自宅から通常配送</div>
+      </div></div>
+    </div>
+    <div class="sheet sheet--p400">
+      <div class="flex"><div class="flex-[1]"><div class="desktop:flex"><div class="desktop:flex-1">
+        <div class="text-14"><b><a class="nav" href="https://shironekya.booth.pm/items/5606882">${itemName}</a></b></div>
+        <div class="u-tpg-caption1 text-[#505c6b]">¥ ${price}</div>
+        <div class="u-tpg-caption1 text-[#505c6b]"><span class="particulars-heading">数量</span>${quantity}</div>
+        <div class="u-tpg-caption1 text-[#505c6b]"><span class="particulars-heading">BOOST<i class="icon-boost s-1x"></i></span>¥ ${boost}</div>
+      </div></div></div></div>
+    </div>
+    <div class="sheet sheet--p400">
+      <div class="text-14 text-right"><span class="particulars-heading">送料</span>¥ ${shippingFee}</div>
+    </div>
+  </div>`;
+}
+const shippedHtml = `<html><body>
+  <div class="l-row text-14">
+    <div class="l-col-pc-3 text-[#505c6b]">お支払金額</div><div class="l-col-pc-9">¥ 4,060</div>
+  </div>
+  <div class="l-order-detail-by-shop">
+    <div class="l-order-detail-sheet-group-header"><b><a class="nav u-tpg-title3" href="https://shironekya.booth.pm/">白猫屋</a></b></div>
+    ${shippedGroup("LSM6DSV ジャイロスコープ モジュール", "890", 4, 0, "500")}
+  </div>
+  ${receiptSection}
+</body></html>`;
+const shipped = parseDetailPage(parse(shippedHtml));
+// 修正前はここが null になり、注文がまるごと未収集として扱われていた
+check("配送商品の注文でも明細を読める", Array.isArray(shipped.items), true);
+check("配送商品の商品名とショップ名", shipped.items.map(i => [i.shop, i.name]),
+  [["白猫屋", "LSM6DSV ジャイロスコープ モジュール"]]);
+check("数量を単価と分けて持つ", [shipped.items[0].price, shipped.items[0].quantity], [890, 4]);
+check("見出しが無ければギフトにしない", shipped.items[0].gift, false);
+check("商品合計は単価×数量", sumItemAmounts(shipped.items), 3560);
+check("送料を取り出す", shipped.shipping, 500);
+// 890×4 + 送料500 = お支払金額4,060。説明の付かない差額は残らない
+check("商品合計と送料でお支払金額を説明しきれる",
+  amountGapOf({ amount: shipped.amount, items: shipped.items, shipping: shipped.shipping }), 0);
+check("送料は商品合計に混ぜない", shipped.items.length, 1);
+// 数量を読めなければ1個と断定せず不明にする(足りない分を黙って減らさない)
+const badQuantity = parseDetailPage(parse(shippedHtml.replace(">4<", ">?<")));
+check("数量を読めなければ不明", badQuantity.items[0].quantity, null);
+check("数量が不明なら商品合計も不明", sumItemAmounts(badQuantity.items), null);
+// 見出しの付いた未知の行をBOOSTと決めつけて足さない
+const unknownRow = parseDetailPage(parse(shippedHtml.replace(
+  '<span class="particulars-heading">BOOST<i class="icon-boost s-1x"></i></span>¥ 0',
+  '<span class="particulars-heading">なにか新しい項目</span>¥ 300')));
+check("未知の見出しの行は金額に混ぜない", unknownRow.items[0].boost, 0);
+check("取りこぼしは差額に出る",
+  amountGapOf({ amount: 4060, items: unknownRow.items, shipping: unknownRow.shipping }), 0);
 
 // 構造が変わって商品を1件も見つけられない場合は、0と断定せず不明にする
 const noItems = parseDetailPage(parse(`<html><body>
@@ -404,21 +467,28 @@ check("csvField 値なしは空欄", [csvField(null), csvField(undefined)], ["",
 check("toCsv はBOM付きのCRLF区切り", toCsv([["a", "b"], ["c", "d"]]), "\uFEFFa,b\r\nc,d");
 
 const ordersLines = buildOrdersCsv(buildResults()).replace(/^\uFEFF/, "").split("\r\n");
-check("注文CSVの見出し", ordersLines[0], "注文番号,注文日時,ステータス,お支払金額,ギフト額,商品合計,差額,商品点数");
+check("注文CSVの見出し", ordersLines[0], "注文番号,注文日時,ステータス,お支払金額,ギフト額,商品合計,送料,差額,商品点数");
 check("注文CSVは1注文1行", ordersLines.length, 1 + 6);
-check("注文CSV 収集済みの行", ordersLines[1], "a1,2026年5月3日 12:34,発送完了,1000,400,1000,0,2");
+check("注文CSV 収集済みの行", ordersLines[1], "a1,2026年5月3日 12:34,発送完了,1000,400,1000,0,0,2");
 // 0円の注文と区別が付かなくなるので、未収集や取得失敗は0ではなく空欄にする
-check("注文CSV 未収集は空欄", ordersLines[2], "a2,2026年5月20日 09:00,支払済み,,,,,");
-check("注文CSV 取得失敗も空欄", ordersLines[5], "c2,2025年12月25日 10:00,未払い,,,,,");
+check("注文CSV 未収集は空欄", ordersLines[2], "a2,2026年5月20日 09:00,支払済み,,,,,,");
+check("注文CSV 取得失敗も空欄", ordersLines[5], "c2,2025年12月25日 10:00,未払い,,,,,,");
+
+// \u9001\u6599\u306E\u3042\u308B\u6CE8\u6587\u306F\u3001\u5546\u54C1\u5408\u8A08\u3068\u9001\u6599\u306B\u5206\u3051\u3066\u66F8\u304D\u51FA\u3059
+const shippedCsv = buildOrdersCsv([{
+  id: "s1", date: "2026\u5E747\u670820\u65E5 17:01", status: "completed",
+  amount: 4060, gift: 0, items: shipped.items, shipping: shipped.shipping,
+}]).replace(/^\uFEFF/, "").split("\r\n");
+check("\u6CE8\u6587CSV \u9001\u6599\u3092\u5206\u3051\u3066\u51FA\u3059", shippedCsv[1], "s1,2026\u5E747\u670820\u65E5 17:01,\u767A\u9001\u5B8C\u4E86,4060,0,3560,500,0,1");
 
 const itemsLines = buildItemsCsv(buildResults()).replace(/^\uFEFF/, "").split("\r\n");
-check("商品CSVの見出し", itemsLines[0], "注文番号,注文日時,ステータス,ショップ名,ショップURL,商品名,単価,BOOST,ギフト");
+check("商品CSVの見出し", itemsLines[0], "注文番号,注文日時,ステータス,ショップ名,ショップURL,商品名,単価,数量,BOOST,ギフト");
 check("商品CSVは1商品1行", itemsLines.length, 1 + 2 + 1 + 1 + 1 + 1 + 1);
 check("商品CSV 商品の行", itemsLines[1],
-  "a1,2026年5月3日 12:34,発送完了,SOUR FLAVOR,https://sourflavor.booth.pm/,髪型A,600,0,いいえ");
-check("商品CSV ギフトの印", itemsLines[2].endsWith("髪型B,400,0,はい"), true);
+  "a1,2026年5月3日 12:34,発送完了,SOUR FLAVOR,https://sourflavor.booth.pm/,髪型A,600,1,0,いいえ");
+check("商品CSV ギフトの印", itemsLines[2].endsWith("髪型B,400,1,0,はい"), true);
 // 黙って落とすと、その注文を買っていないように見えてしまう
-check("商品CSV 明細の無い注文も行を残す", itemsLines[3], "a2,2026年5月20日 09:00,支払済み,,,(明細なし),,,");
+check("商品CSV 明細の無い注文も行を残す", itemsLines[3], "a2,2026年5月20日 09:00,支払済み,,,(明細なし),,,,");
 check("CSVのファイル名に書き出した日を入れる", csvFileName("orders", new Date(2026, 6, 5)), "booth-orders-20260705.csv");
 
 // --- 画面の切り替え ---
@@ -467,7 +537,7 @@ const savedA1 = state.cache.a1;
 state.cache.a1 = { ...savedA1, amount: 1200 };
 render();
 check("金額のずれを知らせる", exportGap.hidden, false);
-check("ずれた件数を出す", exportGap.textContent.includes("一致しない注文が1件"), true);
+check("ずれた件数を出す", exportGap.textContent.includes("説明しきれない注文が1件"), true);
 state.cache.a1 = savedA1;
 render();
 

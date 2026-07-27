@@ -30,12 +30,13 @@ const ORDER_CSV_HEADER = [
   "お支払金額",
   "ギフト額",
   "商品合計",
+  "送料",
   "差額",
   "商品点数",
 ];
 
-// 注文単位。お支払金額と商品合計を並べて出すことで、送料やクーポンで
-// 両者がずれる注文があるかどうかを実データで確かめられるようにしてある
+// 注文単位。お支払金額の内訳(商品合計・送料)を並べて出し、それでも説明の付かない
+// 分を「差額」に残す。クーポンなど、まだ拾えていないものがあればそこに出る
 function buildOrdersCsv(results) {
   const rows = results.map((r) => [
     r.id,
@@ -44,6 +45,7 @@ function buildOrdersCsv(results) {
     csvNumber(r.amount),
     csvNumber(typeof r.gift === "number" ? r.gift : null),
     csvNumber(sumItemAmounts(r.items)),
+    csvNumber(Array.isArray(r.items) ? shippingAmount(r) : null),
     csvNumber(amountGapOf(r)),
     Array.isArray(r.items) ? String(r.items.length) : "",
   ]);
@@ -58,6 +60,7 @@ const ITEM_CSV_HEADER = [
   "ショップURL",
   "商品名",
   "単価",
+  "数量",
   "BOOST",
   "ギフト",
 ];
@@ -69,7 +72,7 @@ function buildItemsCsv(results) {
   for (const r of results) {
     const head = [r.id, r.date, STATUS_LABELS[r.status] || r.status];
     if (!Array.isArray(r.items) || r.items.length === 0) {
-      rows.push([...head, "", "", "(明細なし)", "", "", ""]);
+      rows.push([...head, "", "", "(明細なし)", "", "", "", ""]);
       continue;
     }
     for (const item of r.items) {
@@ -79,6 +82,7 @@ function buildItemsCsv(results) {
         item.shopUrl,
         item.name,
         csvNumber(item.price),
+        csvNumber(itemQuantity(item)),
         csvNumber(item.boost),
         item.gift ? "はい" : "いいえ",
       ]);
