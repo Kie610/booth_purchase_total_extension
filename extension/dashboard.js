@@ -383,10 +383,17 @@ function listPageLooksUnreadable({ orders, maxPage, pagerFound }) {
   return pagerFound && maxPage === 1;
 }
 
-// 一覧は新しい順に並んでいるので、既知の注文に当たったらそこから先は取得済み
-function appendUntilKnown(target, rows, known) {
+// 一覧は新しい順に並んでいる。以前の索引が最古まで揃っているときに限り、
+// 既知の注文に当たった時点で「それより古い分も揃っている」と判断して打ち切れる。
+// 揃っていないとき(前回が中断で終わったときなど)は、既知の注文より古いところに
+// 取得できていない範囲が残っている可能性があるため、既知の注文は読み飛ばして
+// 最後のページまで進み、抜けている分を拾う
+function appendUnknown(target, rows, known, stopAtKnown) {
   for (const row of rows) {
-    if (known.has(row.id)) return true;
+    if (known.has(row.id)) {
+      if (stopAtKnown) return true;
+      continue;
+    }
     target.push(row);
   }
   return false;
@@ -426,6 +433,10 @@ async function fetchIndexTask(signal, force) {
     force || !state.index ? [] : state.index.orders.map((o) => o.id)
   );
   const previousComplete = !force && indexIsComplete(state.index);
+  // 打ち切ってよいのは、以前の索引が最古まで揃っているときだけ
+  const stopAtKnown = previousComplete;
+  // 前回が途中で終わっている索引。既知の注文の先に抜けが残っているかもしれない
+  const hadPartialIndex = !force && Boolean(state.index) && !previousComplete;
 
   const fetched = [];
   let reachedKnown = false;
@@ -441,7 +452,7 @@ async function fetchIndexTask(signal, force) {
     const firstPage = parseListPage(firstDoc);
     const { orders: firstOrders, maxPage } = firstPage;
     unreadable = listPageLooksUnreadable(firstPage);
-    reachedKnown = appendUntilKnown(fetched, firstOrders, known);
+    reachedKnown = appendUnknown(fetched, firstOrders, known, stopAtKnown);
 
     for (let page = 2; page <= maxPage && !reachedKnown; page++) {
       setProgress(
@@ -455,7 +466,12 @@ async function fetchIndexTask(signal, force) {
       });
       await sleep(REQUEST_INTERVAL_MS, signal);
       const doc = await fetchDoc(`${ORDERS_INDEX_URL}?page=${page}`, signal);
-      reachedKnown = appendUntilKnown(fetched, parseListPage(doc).orders, known);
+      reachedKnown = appendUnknown(
+        fetched,
+        parseListPage(doc).orders,
+        known,
+        stopAtKnown
+      );
     }
     // 例外で抜けた場合はここを通らないため、巡回しきったときだけ true になる。
     // 一覧を読めていない疑いがあるときは「最古まで辿った」と見なさない
@@ -478,6 +494,10 @@ async function fetchIndexTask(signal, force) {
   } else if (reachedKnown) {
     addNotice(
       `取得済みの注文に到達したため、そこで停止しました(以降は読み込み済み)。新しく追加された注文: ${added}件。`
+    );
+  } else if (hadPartialIndex) {
+    addNotice(
+      `前回は途中で終わっていたため、抜けていた範囲も含めて最古まで取得しました(新しく追加された注文: ${added}件)。`
     );
   } else {
     addNotice(`注文履歴を取得しました(新しく追加された注文: ${added}件)。`);

@@ -393,14 +393,20 @@ check("終了で進捗表示とクラスが戻る", [document.getElementById("pr
 
 // --- ①注文履歴の取得: 既知の注文への到達と、取得できた範囲の記録 ---
 
-// 一覧は新しい順なので、既知の注文に当たった時点で以降は取得済み
+// 一覧は新しい順なので、以前が最古まで揃っていれば既知の注文に当たった時点で打ち切れる
 const newRows = [{ id: "n1" }, { id: "n2" }, { id: "old1" }, { id: "n3" }];
 const collected = [];
-check("既知の注文で停止する", appendUntilKnown(collected, newRows, new Set(["old1"])), true);
+check("既知の注文で停止する", appendUnknown(collected, newRows, new Set(["old1"]), true), true);
 check("停止までの分だけ取り込む", collected.map(o => o.id), ["n1", "n2"]);
 const collected2 = [];
-check("既知が無ければ最後まで進む", appendUntilKnown(collected2, newRows, new Set()), false);
+check("既知が無ければ最後まで進む", appendUnknown(collected2, newRows, new Set(), true), false);
 check("全件取り込む", collected2.map(o => o.id), ["n1", "n2", "old1", "n3"]);
+
+// 以前が未完了なら、既知の注文より古いところに抜けが残っているかもしれないので、
+// 既知は読み飛ばして最後まで進む
+const collected3 = [];
+check("打ち切らない指定なら既知でも止まらない", appendUnknown(collected3, newRows, new Set(["old1"]), false), false);
+check("既知を飛ばして残りを取り込む", collected3.map(o => o.id), ["n1", "n2", "n3"]);
 
 // v1.2以前はフラグを持たないが、全ページ巡回に成功したときだけ保存していた
 check("フラグが無い索引は完了扱い", indexIsComplete({ orders: [] }), true);
@@ -451,7 +457,8 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   state.index = { updatedAt: "2026-07-26T00:00:00.000Z", orders: [...OLD, ...NEW], complete: false };
   render();
   check("未完了は最古を示して警告する", indexCoverage.textContent.startsWith("取得済みの範囲: 最新 〜 2025年1月1日 00:00"), true);
-  check("未完了は再取得を案内する", indexCoverage.textContent.includes("全件再取得"), true);
+  // 抜けは次の「注文履歴を取得」で埋まるので、全件再取得は案内しない
+  check("未完了は再取得を案内する", indexCoverage.textContent.includes("もう一度「注文履歴を取得」"), true);
   check("未完了は警告色", indexCoverage.classList.contains("warn"), true);
 
   // --- キャッシュ削除 ---
@@ -547,6 +554,46 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   routes = { [ORDERS_URL]: "<html><body></body></html>" };
   await runTask((signal) => fetchIndexTask(signal, false));
   check("1件も読めなければ全期間扱いにしない", state.index.complete, false);
+
+  // --- 中断で途中までしか取れていない索引は、次の取得で抜けた範囲まで辿り直す ---
+  // (既知の注文で打ち切ると、その先に残った抜けを永久に拾えない)
+  const pagedRoutes = (page2Seen) => ({
+    [ORDERS_URL]: `<html><body>${orderLink("g1", "2026年6月1日 00:00")}${orderLink("g2", "2026年5月1日 00:00")}
+      <div class="pager"><a href="/orders?page=2">2</a></div></body></html>`,
+    [`${ORDERS_URL}?page=2`]: (path) => {
+      page2Seen.push(path);
+      return okResponse(path, `<html><body>${orderLink("g3", "2025年4月1日 00:00")}${orderLink("g4", "2025年3月1日 00:00")}
+        <div class="pager"><a href="/orders?page=2">2</a></div></body></html>`);
+    },
+  });
+  const partialIndex = (complete) => ({
+    updatedAt: "x", complete,
+    orders: [
+      { id: "g1", status: "completed", date: "2026年6月1日 00:00" },
+      { id: "g2", status: "completed", date: "2026年5月1日 00:00" },
+    ],
+  });
+
+  resetIndex();
+  const seenWhenPartial = [];
+  routes = pagedRoutes(seenWhenPartial);
+  state.index = partialIndex(false);
+  await runTask((signal) => fetchIndexTask(signal, false));
+  check("未完了の索引は既知で止まらず最古まで辿る", state.index.orders.map(o => o.id), ["g1", "g2", "g3", "g4"]);
+  check("未完了なら2ページ目まで見に行く", seenWhenPartial.length, 1);
+  check("抜けを埋めたら全期間として記録", state.index.complete, true);
+  check("抜けを埋めたことを知らせる", noticeBox.textContent.includes("抜けていた範囲も含めて最古まで取得"), true);
+
+  // 最古まで揃っている索引なら、既知に当たった時点で打ち切る(取得済みを読み直さない)
+  resetIndex();
+  const seenWhenComplete = [];
+  routes = pagedRoutes(seenWhenComplete);
+  state.index = partialIndex(true);
+  await runTask((signal) => fetchIndexTask(signal, false));
+  check("揃っていれば既知で停止する", noticeBox.textContent.includes("取得済みの注文に到達したため"), true);
+  check("新しい注文が無ければ0件と伝える", noticeBox.textContent.includes("新しく追加された注文: 0件"), true);
+  check("揃っていれば2ページ目は見に行かない", seenWhenComplete.length, 0);
+  check("停止しても全期間のまま", state.index.complete, true);
 
   // 全件再取得を中断しても、収集済みの金額は消さない。
   // 消してしまうと「ここまでに取得した金額は保存されている」という案内が嘘になる
