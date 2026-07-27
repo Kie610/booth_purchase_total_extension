@@ -295,14 +295,16 @@ const item = (name, price, gift, shop) => ({
 });
 state.cache = {
   a1: {
-    amount: 1000, gift: 400, status: "completed", date: "2026年5月3日 12:34",
+    v: CACHE_SCHEMA_VERSION,
+    amount: 1000, gift: 400, shipping: 0, status: "completed", date: "2026年5月3日 12:34",
     items: [item("髪型A", 600), item("髪型B", 400, true)],
   },
   c1: {
-    amount: 3000, gift: 0, status: "completed", date: "2025年12月10日 10:00",
+    v: CACHE_SCHEMA_VERSION,
+    amount: 3000, gift: 0, shipping: 0, status: "completed", date: "2025年12月10日 10:00",
     items: [item("靴", 3000, false, "べつのショップ")],
   },
-  c2: { amount: null, gift: null, status: "unpaid", date: "2025年12月25日 10:00", items: null }, // 取得失敗
+  c2: { v: CACHE_SCHEMA_VERSION, amount: null, gift: null, status: "unpaid", date: "2025年12月25日 10:00", items: null }, // 取得失敗
 };
 
 check("キャンセルは集計対象から外れる", targetOrders().map(o => o.id), ["a1", "a2", "b1", "c1", "c2", "e1"]);
@@ -330,10 +332,29 @@ check("強制再取得では収集済みも対象", pendingTargets(ordersInRange
 // 取得失敗をそのままにすると強制再取得でしか直せないので、既定で拾い直す
 check("取得失敗は次の実行で自動的に再取得される", pendingTargets(ordersInRange("2025-12", "2025-12"), false).map(o => o.id), ["c2"]);
 // 商品明細を読めなかった注文も、次の実行で拾い直せるよう対象に含める
-const collectedEntry = (amount) => ({ amount, items: [item("何か", amount)] });
+const collectedEntry = (amount) => ({ v: CACHE_SCHEMA_VERSION, amount, items: [item("何か", amount)] });
 check("needsCollect 未収集・取得失敗・明細なしが対象",
   [needsCollect(undefined), needsCollect({ amount: null, items: null }), needsCollect({ amount: 500 }), needsCollect(collectedEntry(0)), needsCollect(collectedEntry(500))],
   [true, true, true, false, false]);
+
+// --- キャッシュの版数(保存済みデータから欠落を推測せず、何を保存したかを記録する) ---
+//
+// v0.15.0は配送商品のグループを読み飛ばしていたため、1つの注文にダウンロード商品と
+// 配送商品が混在していると、ダウンロード側だけがitemsに入り、配送側の商品と送料が
+// 欠けたまま「収集済み」として残っていた。
+// このエントリは「ダウンロードのみの正しい注文」と保存された形がまったく同じで、
+// データを見て区別することはできない
+const oldEntry = { amount: 1000, gift: 0, items: [item("髪型A", 1000)] }; // v0.15.0以前
+const newEntry = { ...oldEntry, v: CACHE_SCHEMA_VERSION, shipping: 0 };
+check("版数の無いエントリは最古として扱う", entrySchemaVersion(oldEntry), 0);
+check("版数を持つエントリはその版", entrySchemaVersion(newEntry), CACHE_SCHEMA_VERSION);
+check("版数が無ければ取り直す", [isOutdatedEntry(oldEntry), needsCollect(oldEntry)], [true, true]);
+check("現行版なら取り直さない", [isOutdatedEntry(newEntry), needsCollect(newEntry)], [false, false]);
+// バックアップの復元で、この環境より新しい版のデータが入ってくることがある
+check("新しい版は取り直さない", isOutdatedEntry({ ...newEntry, v: CACHE_SCHEMA_VERSION + 1 }), false);
+// 混在注文の欠落は差額に出るが、差額はクーポン利用でも出るので判定材料にはしない
+check("欠落したエントリの差額は0にならない",
+  amountGapOf({ amount: 4060, items: [item("髪型A", 500)] }), 3560);
 
 // 表示用の一覧(未収集と取得失敗を区別する)
 const results = buildResults();
@@ -457,6 +478,23 @@ check("明細なしは未収集として数える", buildMonthStats(targetOrders
 delete state.cache.b1;
 render();
 
+// 以前の版で保存された注文。混在注文では配送側の商品と送料が欠けているが、
+// 保存された形からは区別できないので、版数を見て取り直す
+state.cache.b1 = { amount: 700, gift: 0, status: "completed", date: "2026年3月1日 10:00", items: [item("何か", 700)] };
+render();
+check("以前の版の注文は内訳で分かる",
+  [...orderTableBody.querySelectorAll("tr")].find(tr => tr.cells[3].textContent === "b1").cells[2].textContent,
+  "要再取得¥700");
+check("以前の版は未収集として数える", buildMonthStats(targetOrders(), state.cache).find(s => s.key === "2026-03").pending, 1);
+check("以前の版は取得予定に入る", pendingTargets(ordersInRange("2026-03", "2026-03"), false).map(o => o.id), ["b1"]);
+// 何も操作していないのに未収集が増えたように見えると、不具合と区別が付かない
+check("取り直す理由を画面に出す", outdatedArea.hidden, false);
+check("取り直す件数と理由", outdatedCount.textContent.includes("以前の版で収集した1件を取り直します"), true);
+check("金額の集計は変わらないと伝える", outdatedCount.textContent.includes("金額の集計は今のまま"), true);
+delete state.cache.b1;
+render();
+check("現行版だけなら案内を出さない", outdatedArea.hidden, true);
+
 // --- CSV出力(データ出力の画面) ---
 check("csvField そのまま", csvField("髪型A"), "髪型A");
 check("csvField カンマを含む値は囲む", csvField("帽子, 赤"), '"帽子, 赤"');
@@ -563,7 +601,7 @@ delete state.index.complete;
 
 // 収集し終えていれば出さない
 const savedCache = state.cache;
-state.cache = Object.fromEntries(targetOrders().map(o => [o.id, { amount: 100, gift: 0, status: o.status, date: o.date, items: [item("何か", 100)] }]));
+state.cache = Object.fromEntries(targetOrders().map(o => [o.id, { v: CACHE_SCHEMA_VERSION, amount: 100, gift: 0, shipping: 0, status: o.status, date: o.date, items: [item("何か", 100)] }]));
 renderCurrentView();
 check("すべて収集済みなら出さない", pendingBanner.hidden, true);
 state.cache = savedCache;
@@ -610,8 +648,8 @@ check("片方が途中までなら未完了にする",
 check("読み込む側に注文履歴が無ければ今のまま", mergeOrderIndex(idxA, null, stamp), idxA);
 check("今の注文履歴が無ければ読み込んだ側を使う", mergeOrderIndex(null, idxB, stamp), idxB);
 
-const good = { amount: 500, gift: 0, items: [item("何か", 500)] };
-const older = { amount: 300, gift: 0, items: [item("昔のもの", 300)] };
+const good = { v: CACHE_SCHEMA_VERSION, amount: 500, gift: 0, shipping: 0, items: [item("何か", 500)] };
+const older = { v: CACHE_SCHEMA_VERSION, amount: 300, gift: 0, shipping: 0, items: [item("昔のもの", 300)] };
 check("収集済みの方を残す",
   mergeOrderCache({ x: good }, { x: older }).x.amount, 500);
 check("今が未収集なら読み込んだ側で埋める",
@@ -620,6 +658,10 @@ check("読み込んだ側にしか無い注文も取り込む",
   Object.keys(mergeOrderCache({ x: good }, { y: older })).sort(), ["x", "y"]);
 check("どちらも未収集なら未収集のまま",
   mergeOrderCache({ x: { amount: null, items: null } }, { x: { amount: null, items: null } }).x.amount, null);
+// 以前の版のバックアップを読み込んでも、それを収集済みとしては扱わない
+// (取り直しが必要な状態が、復元によって収集済みに見えてしまうと直す手段が無くなる)
+check("以前の版の復元は収集済みにしない",
+  needsCollect(mergeOrderCache({}, { x: { amount: 300, items: [item("昔のもの", 300)] } }).x), true);
 
 const mergedResult = mergeBackup(
   { index: idxA, cache: { x: good } },
@@ -959,6 +1001,9 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   await runTask((signal) => collectAmounts(targetOrders(), false, signal));
   check("一時的な通信エラーは試し直す", flakyTries, 2);
   check("試し直して収集できる", [cachedAmount("ok1"), cachedAmount("flaky")], [1000, 2000]);
+  // 版数を書き忘れると、収集した直後から未収集に戻り、毎回の実行で取り直し続ける
+  check("収集したエントリに版数が入る", state.cache.ok1.v, CACHE_SCHEMA_VERSION);
+  check("収集した直後は取り直しの対象にならない", needsCollect(state.cache.ok1), false);
 
   // 試し直しても駄目な注文は飛ばして、残りの収集を続ける
   state.index = indexOf2("ok2", "broken");

@@ -38,6 +38,34 @@ function hasItems(entry) {
   return Boolean(entry) && Array.isArray(entry.items);
 }
 
+// ---- キャッシュの版数 --------------------------------------------------
+//
+// 注文詳細ページから「何を保存したか」を注文ごとに記録する。保存済みのデータを
+// 見て欠落を推測する方式は採らない。例えばv0.15.0が保存した
+// 「ダウンロード商品だけの注文(正しい)」と「配送商品が欠けた混在注文(欠落あり)」は、
+// どちらも quantity と shipping を持たないため、形がまったく同じで区別できない。
+// 索引の complete と同じで、記録しておく方が同じ情報で確実になる。
+//
+// 版数は注文ごとに持つ。ストレージ全体に1つだと途中まで取り直した状態を表せず、
+// 中断のたびに全件やり直しになる。
+//
+// **上げてよいのは、注文詳細ページから保存する項目が増えたときだけ。**
+// 表示や集計の変更で上げると、無関係な再取得を全ユーザーに強いることになる。
+//
+//   1 — 商品明細(shop/shopUrl/name/price/quantity/boost/gift)と送料
+//       v0.15.0以前は版数を持たず、配送商品の行と送料と数量が欠けている
+const CACHE_SCHEMA_VERSION = 1;
+
+function entrySchemaVersion(entry) {
+  return entry && typeof entry.v === "number" ? entry.v : 0;
+}
+
+// 新しい版で保存されたものは取り直さない(バックアップの復元で、この環境より
+// 新しい版のデータが入ってくることがある)
+function isOutdatedEntry(entry) {
+  return entrySchemaVersion(entry) < CACHE_SCHEMA_VERSION;
+}
+
 // 数量の行はデジタル商品の注文には無い。無ければ1個として数える
 function itemQuantity(item) {
   return item.quantity === undefined ? 1 : item.quantity;
@@ -84,11 +112,17 @@ function amountGapOf(entry) {
 }
 
 // まだ取りに行く必要がある注文かどうか。キャッシュに無いもの(未収集)に加え、
-// 取得はできたが金額を読めなかったもの(amount:null)、商品明細を読めなかったものも
-// 対象にする。対象から外すと強制再取得でしか拾い直せず、内訳に「取得失敗」と
-// 出たまま直す手段が全件再取得しかなくなるため、次の実行で自動的に取り直せるようにする
+// 取得はできたが金額を読めなかったもの(amount:null)、商品明細を読めなかったもの、
+// 保存する項目が増える前の版で保存されたものも対象にする。
+// 対象から外すと強制再取得でしか拾い直せず、内訳に「取得失敗」と出たまま直す手段が
+// 全件再取得しかなくなるため、次の実行で自動的に取り直せるようにする
 function needsCollect(entry) {
-  return !entry || entry.amount === null || !hasItems(entry);
+  return (
+    !entry ||
+    entry.amount === null ||
+    !hasItems(entry) ||
+    isOutdatedEntry(entry)
+  );
 }
 
 // 索引が最古の注文まで到達できているか。

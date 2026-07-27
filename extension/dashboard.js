@@ -321,6 +321,8 @@ function buildResults() {
         gift: entry ? entry.gift : undefined,
         items: hasItems(entry) ? entry.items : null,
         shipping: entry ? entry.shipping : undefined,
+        // 何を保存した注文なのかを画面側でも判断できるようにする
+        v: entry ? entry.v : undefined,
       };
     });
   }
@@ -333,6 +335,7 @@ function buildResults() {
     gift: entry.gift,
     items: hasItems(entry) ? entry.items : null,
     shipping: entry.shipping,
+    v: entry.v,
   }));
 }
 
@@ -672,6 +675,7 @@ async function collectAmounts(orders, force, signal) {
       const doc = await fetchDocWithRetry(`${ORDER_DETAIL_URL}${order.id}`, signal);
       const detail = parseDetailPage(doc);
       state.cache[order.id] = {
+        v: CACHE_SCHEMA_VERSION,
         amount: detail.amount,
         gift: detail.gift,
         status: order.status,

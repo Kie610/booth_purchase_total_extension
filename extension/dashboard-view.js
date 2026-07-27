@@ -23,6 +23,8 @@ const plannedCountEl = document.getElementById("plannedCount");
 const forceRefreshRange = document.getElementById("forceRefreshRange");
 const unknownArea = document.getElementById("unknownArea");
 const unknownCount = document.getElementById("unknownCount");
+const outdatedArea = document.getElementById("outdatedArea");
+const outdatedCount = document.getElementById("outdatedCount");
 const clearIndexBtn = document.getElementById("clearIndexBtn");
 const clearIndexStatus = document.getElementById("clearIndexStatus");
 const clearAmountsBtn = document.getElementById("clearAmountsBtn");
@@ -475,6 +477,21 @@ function renderMonthArea() {
     rangeTo.innerHTML = "";
   }
 
+  // 拡張の更新で保存項目が増えると、収集済みだった注文が取り直しの対象に戻る。
+  // 何も操作していないのに未収集が増えたように見えると、不具合と区別が付かない
+  const outdated = targetOrders().filter((o) => {
+    const entry = state.cache[o.id];
+    // 未収集や取得失敗は別の案内があるので、ここでは版数だけを理由にする
+    return entry && entry.amount !== null && hasItems(entry) && isOutdatedEntry(entry);
+  }).length;
+  outdatedArea.hidden = outdated === 0;
+  if (outdated > 0) {
+    outdatedCount.textContent =
+      `拡張機能の更新で、注文詳細から保存する項目が増えました。` +
+      `以前の版で収集した${outdated}件を取り直します(金額の集計は今のままで、` +
+      `商品明細・数量・送料が増えます)。`;
+  }
+
   const unknown = stats.find((s) => s.key === null);
   unknownArea.hidden = !unknown;
   if (unknown) {
@@ -651,6 +668,13 @@ function renderPeriodTable(results) {
   );
 }
 
+// 金額は読めているのに取り直しの対象になっている理由。無ければ空文字
+function collectNote(entry) {
+  if (!hasItems(entry)) return "明細なし";
+  if (isOutdatedEntry(entry)) return "要再取得";
+  return "";
+}
+
 function renderOrderTable(results) {
   orderTableBody.innerHTML = "";
   const sorted = [...results].sort((a, b) => orderSortKey(b) - orderSortKey(a));
@@ -660,10 +684,11 @@ function renderOrderTable(results) {
     tr.appendChild(td(STATUS_LABELS[r.status] || r.status));
     if (typeof r.amount === "number") {
       const cell = amountCell(r.amount, giftAmount(r));
-      // 金額は読めたが商品明細を読めなかった注文。次の実行で拾い直す対象になっており、
-      // 月別表では未収集として数えているので、内訳でも黙って収集済みには見せない
-      if (!Array.isArray(r.items)) {
-        cell.insertBefore(el("span", "amount-pending", "明細なし"), cell.firstChild);
+      // 金額は読めたが取り直しの対象になっている注文。月別表では未収集として
+      // 数えているので、内訳でも黙って収集済みには見せない
+      const note = collectNote(r);
+      if (note) {
+        cell.insertBefore(el("span", "amount-pending", note), cell.firstChild);
       }
       tr.appendChild(cell);
     } else if (r.amount === null) {

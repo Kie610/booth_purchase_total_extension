@@ -138,8 +138,9 @@ Service Worker常駐はChromeでDOMParserが使えず、offscreen APIとFirefox�
 
 ### ストレージキー
 
-- `boothOrderCache` — `{ [orderId]: { amount, gift, shipping, status, date, items } }`
-  `items` は `[{ shop, shopUrl, name, price, quantity, boost, gift }]`。読めなかった場合は `null`
+- `boothOrderCache` — `{ [orderId]: { v, amount, gift, shipping, status, date, items } }`
+  `items` は `[{ shop, shopUrl, name, price, quantity, boost, gift }]`。読めなかった場合は `null`。
+  `v` は保存した項目の版数（`CACHE_SCHEMA_VERSION`）
 - `boothOrderIndex` — `{ updatedAt, orders: [{id, status, date}], complete }`
 - `boothSummary` — ポップアップ表示用の要約
 - `boothRunState` — 実行中の進捗
@@ -224,6 +225,21 @@ python -m http.server 8731
 - ショップ名は `.sheet-group` ではなく、外側の `.l-order-detail-by-shop` に1つだけ入る。
   同じショップのダウンロード商品とギフトは別グループだが同じ区切りの中に並ぶため、
   ショップの特定は必ず外側から行う。表示名は変わりうるので `shopUrl` も持つ
+- **キャッシュのエントリには「何を保存したか」の版数 `v` を持たせ、現行版より古いものは
+  `needsCollect` の対象にする**(`CACHE_SCHEMA_VERSION` / `isOutdatedEntry`)。
+  保存済みのデータを見て欠落を推測する方式は採らない。日付から索引の抜けを検知しないのと
+  同じ理由だが、この件では推測が原理的に不可能でもある。v0.15.0が保存した
+  「ダウンロード商品だけの正しい注文」と「配送商品が欠けた混在注文」は、どちらも
+  `quantity` と `shipping` を持たず、保存された形がまったく同じで区別できない。
+  「差額が0でなければ疑う」も、クーポン利用の注文と見分けられないので使えない
+  - 版数は**注文ごと**に持つ。ストレージ全体に1つだと途中まで取り直した状態を表せず、
+    中断のたびに全件やり直しになる
+  - **上げてよいのは、注文詳細ページから保存する項目が増えたときだけ。**
+    表示や集計の変更で上げると、無関係な再取得を全ユーザーに強いることになる
+  - 比較は `<` で行う。バックアップの復元でこの環境より新しい版のデータが
+    入ってくることがあり、`!==` だと将来版まで取り直してしまう
+  - 版を上げたら、なぜ再取得が走るのかを画面に出す(`outdatedArea`)。
+    何も操作していないのに未収集が増えたように見えると、不具合と区別が付かない
 - 商品明細を読めなかった注文は `needsCollect` の対象にし、次の実行で自動的に取り直す。
   内訳では金額の左に「明細なし」と出す(月別表では未収集として数えているので、
   内訳だけ収集済みに見せると食い違う)
