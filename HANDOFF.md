@@ -231,13 +231,46 @@ Service Worker常駐はChromeでDOMParserが使えず、offscreen APIとFirefox�
 
 **コード変更時は必ずテストを実行します。** Node.jsは無いため、Python 3.11で配信します。
 
+**worktreeごとにポートを分けます。** 同じポートを使い回すと、別のworktreeのファイルを
+読んだまま`ALL PASS`が出ます(下記「テストが嘘をつく条件」)。
+
+| worktree | ポート | 開くURL |
+|---|---|---|
+| 統合用 | 8731 | `http://localhost:8731/test/index.html` |
+| Codex用 | 8732 | `http://localhost:8732/test/index.html` |
+| Claude用 | 8733 | `http://localhost:8733/test/index.html` |
+
 ```bash
-python -m http.server 8731
+python -m http.server 8733   # 自分のworktreeに割り当てられたポート
 ```
 
-リポジトリのルートで起動し、`http://localhost:8731/test/index.html`を開きます。
+各worktreeのルートで起動し、割り当てられたポートの`/test/index.html`を開きます。
 最終行が`ALL PASS`であることを確認してください。詳細は`test/README.md`にあります。
 
+#### テストが嘘をつく条件
+
+**`ALL PASS`だけで判断せず、必ずcheck件数まで見ます。** 件数が前回より減っていたら、
+追加したテストが読み込まれていない、つまり別のファイルを見ている疑いがあります。
+実際に、新規追加した22件が一度も実行されないまま`ALL PASS (357 checks)`と表示され、
+FAILゼロで通ってしまったことがあります(正しくは379件)。
+
+原因は、別のworktreeから起動した`python -m http.server`が同じポートに残っていたことです。
+**Windowsでは、後から同じポートで起動してもエラーになりません。** Pythonの`http.server`が
+`SO_REUSEADDR`を設定するため、2つ目のプロセスもそのままLISTENINGに入り、
+同じポートに2つの待ち受けが並びます(実測確認済み)。どちらが応答するかは決まらないので、
+古いworktreeのファイルが返ります。**起動時のエラー出力を見る対処は、そもそもエラーが
+出ないので効きません。**ポートを分ける以外に確実な方法がありません。
+
+疑わしいときは、そのポートに待ち受けが2つ以上無いかを見ます。
+
+```bash
+netstat -ano | grep ':8733' | grep LISTENING   # 2行以上あれば別プロセスが残っている
+```
+
+- 報告テンプレートの`テスト`欄には、`ALL PASS`と一緒にcheck件数も書く
+- **受け取る側は、その件数を自分で実行した結果と突き合わせる。** 減っていれば、
+  マージ後の全体テストが古いファイルを見ている
+- 用が済んだテストサーバーは止める。止め忘れが次のworktreeの結果を狂わせる
 - 機能を追加・変更したらテストも追加する
 - 拡張APIは`test/stub.js`でスタブし、`extension/`の実ファイルを読み込んで検証している
 - ブラウザペインのスクリーンショットは失敗しやすいため、必要に応じてDOMの位置、サイズ、
