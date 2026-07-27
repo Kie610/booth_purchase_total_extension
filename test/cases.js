@@ -694,6 +694,22 @@ check("合計には未収集の件数を添える",
 check("この年の推し作者を並べる",
   [...summaryTopShopsBody.querySelectorAll("tr")].map(tr => tr.cells[1].textContent), ["SOUR FLAVOR", "べつのショップ"]);
 check("過去に未収集が無ければ断らない", summaryNewShopWarn.hidden, true);
+
+// まとめの共有(ボタンには年が入る。何年分が出るのか押す前に分かる必要がある)
+location.hash = "#/summary";
+renderCurrentView();
+check("まとめでは年入りの共有ボタンになる", [shareBtn.textContent, shareBtn.disabled], ["𝕏で2026年のまとめを共有", false]);
+check("まとめの共有文面", buildSummaryShareText(summaryShareStats),
+  "2026年のBOOTHお買いもの🛍️\n\n支払い ¥3,800（2件）\n買ったもの 4点\n支援した作者 2人\nうちはじめて 1人\nBOOSTの上乗せ ¥300\nいちばん買った月 2026年2月\n\n推し作者\n🥇 SOUR FLAVOR\n🥈 べつのショップ\n\n#BOOTHお買いものレポート");
+// 未収集があると数字がずれるので、出す前に断る
+check("まとめの共有 未収集を断る", summaryShareIssues(summaryShareStats), ["2026年に未収集の注文が1件あります"]);
+check("まとめの共有 揃っていれば断らない",
+  summaryShareIssues({ ...summaryShareStats, pendingCount: 0, beforePending: 0 }), []);
+// 「はじめて」が0人なら、過去が未収集でもずれようがない
+check("まとめの共有 はじめてが0人なら過去の未収集を断らない",
+  summaryShareIssues({ ...summaryShareStats, pendingCount: 0, beforePending: 3, newShopCount: 0 }), []);
+location.hash = "#/report";
+renderCurrentView();
 // BOOSTを使っていない年に空の数字を並べない
 setSummaryYear(2024);
 check("BOOSTが無ければカードごと出さない",
@@ -732,6 +748,47 @@ openShareWith(null);
 check("止められたときは押し直しを案内する",
   noticeBox.textContent.includes("もう一度「Xで共有」を押してください"), true);
 clearNotice();
+
+// --- 共有カード ---
+// カードは文面と同じ集計値から組む。組み直すと本文と画像で数字が食い違う
+// state はこの時点で元に戻っているので、まとめの集計は作り直して渡す
+const summaryShareCard = buildSummaryShareCard(buildYearSummary(summaryRows, 2026));
+check("まとめのカードの見出し", [summaryShareCard.title, summaryShareCard.subtitle],
+  ["2026年のお買いもの", "BOOTHお買いものレポート"]);
+check("まとめのカードの数字", summaryShareCard.stats.map(s => [s.label, s.value]),
+  [["支払い", "¥3,800"], ["買ったもの", "4点"], ["支援した作者", "2人"], ["BOOSTの上乗せ", "¥300"]]);
+check("まとめのカードは推し作者を並べる", summaryShareCard.list.map(r => [r.rank, r.name]),
+  [[1, "SOUR FLAVOR"], [2, "べつのショップ"]]);
+// 画像だけが転載されることがあるので、断り書きは画像にも要る
+const rankingCard = buildRankingShareCard({ sort: "amount", rows: [{ name: "A", count: 1, total: 100 }] }, false);
+check("ランキングのカードに断り書きを載せる", rankingCard.note, "金額は商品の合計（送料・クーポンを除く）");
+check("ランキングのカードは金額を出す", rankingCard.list[0].value, "¥100");
+const hiddenCard = buildRankingShareCard({ sort: "amount", rows: [{ name: "A", count: 1, total: 100 }] }, true);
+check("金額を伏せたら断り書きも出さない", [hiddenCard.list[0].value, hiddenCard.note], ["", ""]);
+const totalCard = buildTotalShareCard({ year: 2026, total: 100000, count: 5, yearTotal: 400, yearCount: 1, pendingCount: 0, indexComplete: true });
+check("合計のカードは合計と今年を並べる", totalCard.stats.map(s => s.label), ["合計", "2026年"]);
+
+// 描画(実際にcanvasへ描けること。文字が1つも乗らないと真っ白なカードが出る)
+const testCanvas = document.createElement("canvas");
+testCanvas.width = SHARE_CARD_WIDTH;
+testCanvas.height = SHARE_CARD_HEIGHT;
+const testCtx = testCanvas.getContext("2d");
+drawShareCard(testCtx, summaryShareCard, null);
+const drawn = testCtx.getImageData(0, 0, SHARE_CARD_WIDTH, SHARE_CARD_HEIGHT).data;
+check("カードは背景で埋まる", drawn[3], 255);
+check("カードに濃い文字が乗る",
+  (() => { for (let i = 0; i < drawn.length; i += 4) { if (drawn[i] < 80 && drawn[i + 1] < 80) return true; } return false; })(), true);
+// 長い名前をそのまま描くと隣の数字に重なる
+testCtx.font = `bold 36px ${SHARE_CARD_FONT}`;
+check("収まらない名前は切って…を付ける", fitText(testCtx, "あ".repeat(80), 200).endsWith("…"), true);
+check("収まる名前はそのまま", fitText(testCtx, "短い名前", 400), "短い名前");
+
+// パネルの開閉(背景を選び直しても同じ数字で描き直せるよう、押した時点の中身を持つ)
+openSharePanel({ name: "booth-2026", text: "本文", card: summaryShareCard });
+check("パネルを開くと本文を出す", [sharePanel.hidden, shareOverlay.hidden, shareText.value], [false, false, "本文"]);
+check("保存するファイル名", shareCardFileName(), "booth-2026.png");
+closeSharePanel();
+check("閉じると中身を捨てる", [sharePanel.hidden, sharePayload], [true, null]);
 
 // --- CSV出力(データ出力の画面) ---
 check("csvField そのまま", csvField("髪型A"), "髪型A");
@@ -1306,7 +1363,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
     dashboardDoc.querySelector('.nav-link[data-view="ranking"]').getAttribute("href"), "#/ranking");
   check("メニューに追加した画面が並んでいる",
     [...dashboardDoc.querySelectorAll(".nav-link")].map((a) => a.getAttribute("href")),
-    ["#/report", "#/summary", "#/trends", "#/ranking", "#/export", "#/backup"]);
+    ["#/report", "#/ranking", "#/trends", "#/summary", "#/export", "#/backup"]);
   // まとめの作者別金額もランキングと同じ商品合計なので、同じ断りを画面に出す
   check("まとめに合計と一致しない旨の断りがある",
     dashboardHtml.includes("足しても上の合計金額とは一致しません"), true);

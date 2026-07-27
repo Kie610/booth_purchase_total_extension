@@ -94,6 +94,18 @@ const backupCoverage = document.getElementById("backupCoverage");
 const backupSaveBtn = document.getElementById("backupSaveBtn");
 const restoreFile = document.getElementById("restoreFile");
 const restoreStatus = document.getElementById("restoreStatus");
+const shareOverlay = document.getElementById("shareOverlay");
+const sharePanel = document.getElementById("sharePanel");
+const shareCloseBtn = document.getElementById("shareCloseBtn");
+const shareCanvas = document.getElementById("shareCanvas");
+const shareBgFile = document.getElementById("shareBgFile");
+const shareBgClearBtn = document.getElementById("shareBgClearBtn");
+const shareBgName = document.getElementById("shareBgName");
+const shareText = document.getElementById("shareText");
+const shareCopyBtn = document.getElementById("shareCopyBtn");
+const shareSaveBtn = document.getElementById("shareSaveBtn");
+const shareOpenBtn = document.getElementById("shareOpenBtn");
+const shareCardStatus = document.getElementById("shareCardStatus");
 
 // 実行中は押せなくするボタン
 const ACTION_BUTTONS = [
@@ -113,7 +125,7 @@ const ACTION_BUTTONS = [
 // (ポップアップではなく専用タブで処理しているのと同じ理由)。
 // 現在の画面はURLのハッシュに持たせるので、再読み込みしても同じ画面に戻る。
 
-const VIEW_NAMES = ["report", "summary", "trends", "ranking", "export", "backup"];
+const VIEW_NAMES = ["report", "ranking", "trends", "summary", "export", "backup"];
 const DEFAULT_VIEW = "report";
 // 見出しの右に添える画面名。既定の画面では何も足さない
 const VIEW_TITLES = {
@@ -193,6 +205,7 @@ const expandedTrendPeriodYears = new Set();
 // 共有文面に使う集計値(描画のたびに更新する)
 let shareStats = null;
 let rankingShareStats = null;
+let summaryShareStats = null;
 
 // ---- 要素の組み立て ----------------------------------------------------
 
@@ -351,8 +364,6 @@ const RANKING_BOLD = 5;
 // ここで持つ(開いている年の集合と同じ扱い)
 let rankingSort = DEFAULT_SHOP_SORT;
 
-const RANKING_SORT_LABELS = { amount: "金額編", count: "購入数編" };
-
 function setRankingSort(sort) {
   if (!SHOP_SORTS[sort] || sort === rankingSort) return;
   rankingSort = sort;
@@ -458,6 +469,8 @@ function setSummaryYear(year) {
   if (!Number.isFinite(value) || value === summarySelectedYear) return;
   summarySelectedYear = value;
   renderYearSummary();
+  // 共有ボタンには年が入っているので、選び直したら文言も追従させる
+  updateShareButton();
 }
 
 // 1月に見ると去年を振り返りたいので、今年に注文が無ければ最も新しい年へ落とす
@@ -492,12 +505,15 @@ function renderYearSummary() {
   if (years.length === 0) {
     summaryCards.innerHTML = "";
     summaryTopShopsBody.innerHTML = "";
+    summaryShareStats = null;
     return;
   }
 
   summarySelectedYear = resolveSummaryYear(years);
   renderSummaryYearOptions(years, summarySelectedYear);
   const stats = buildYearSummary(results, summarySelectedYear);
+  // 共有するのは画面に出したものそのもの。共有時に集計し直さない
+  summaryShareStats = stats;
 
   // 未収集はまとめの数字を実際より少なくする。合計のすぐ横で断る
   const totalNote = [`注文${stats.orderCount}件`];
@@ -1128,61 +1144,7 @@ function renderOrderTable(results) {
   }
 }
 
-// ---- 共有文面 ----------------------------------------------------------
-
-const SHARE_HASHTAG = "#BOOTHお買いものレポート";
-
-// 合計以下の項目から最も高いものを選ぶ。マスターは金額の昇順で管理する。
-// 最も安い項目にも届かない額のときは、何を選んでも「買えるくらい」が嘘になるので選ばない
-function purchaseComparison(amount) {
-  let selected = null;
-  for (const example of PURCHASE_EXAMPLE_MASTER) {
-    if (example.amount > amount) break;
-    selected = example;
-  }
-  return selected ? selected.label : null;
-}
-
-// 全期間の合計を名乗ってよいのは、索引が最古まで揃っていて、かつ未収集も
-// 残っていないときだけ。どちらか欠けたまま出すと、実際より少ない額を
-// 「合計」として外に出すことになる
-function canShareTotal(stats) {
-  return stats.indexComplete && stats.pendingCount === 0;
-}
-
-// 合計を出せないときの確認文面。今年分は共有の前に収集してしまう
-function shareConfirmMessage(stats) {
-  const head = "未収集の注文が残っているため、全期間の合計は実際より少なくなります。\n";
-  return stats.yearPendingCount > 0
-    ? `${head}今年分の未収集 ${stats.yearPendingCount}件 を取得してから、今年の金額だけを共有します。\nよろしいですか?`
-    : `${head}今年の金額だけを共有します。\nよろしいですか?`;
-}
-
-function buildShareText(stats) {
-  // 合計を出せないときは今年の分だけにする。比較の基準も出した額に合わせないと、
-  // 文面に無い金額をもとに「これが買える」と言うことになってしまう
-  const full = canShareTotal(stats);
-  const basis = full ? stats.total : stats.yearTotal;
-  const comparison = purchaseComparison(basis);
-  return [
-    "BOOTHお買いもの振り返り🛍️",
-    "",
-    ...(full ? [`合計：${formatYen(stats.total)}（${stats.count}件）`] : []),
-    `今年：${formatYen(stats.yearTotal)}（${stats.yearCount}件）`,
-    // 比較できる額に届かないときは、この一段落ごと落とす
-    ...(comparison
-      ? ["", `積み重なって、${comparison}が買えるくらいの金額になったようですね`]
-      : []),
-    "",
-    SHARE_HASHTAG,
-  ].join("\n");
-}
-
-// ---- ランキングの共有 --------------------------------------------------
-
-// 文面に載せる順位。表は10位まで出すが、投稿は長くなると読まれないので絞る
-const RANKING_SHARE_LIMIT = 5;
-const RANKING_MEDALS = ["🥇", "🥈", "🥉"];
+// ---- 共有 --------------------------------------------------------------
 
 // 描画に使った並びをそのまま持ち回る。共有のときに集計し直すと、
 // 画面に出ている順位と違うものを外に出しかねない
@@ -1198,64 +1160,79 @@ function buildRankingShareStats(results, shops) {
   };
 }
 
-// 順位がずれうる理由。無ければ空配列で、そのまま共有してよい
-function rankingShareIssues(stats) {
-  const issues = [];
-  if (stats.pending > 0) issues.push(`未収集の注文が${stats.pending}件あります`);
-  if (!stats.indexComplete) issues.push("注文履歴の取得が途中で終わっています");
-  // 金額を読めなかった商品は点数には入っているので、購入数編では順位に響かない
-  if (stats.sort === "amount" && stats.unknown > 0) {
-    issues.push(`金額を読み取れなかった商品が${stats.unknown}点あります`);
-  }
-  return issues;
-}
-
-function rankingShareConfirmMessage(stats) {
-  return (
-    `${rankingShareIssues(stats).join("。")}。\n` +
-    "このまま共有すると、順位や数字が実際とは違うことがあります。\n" +
-    "よろしいですか?"
-  );
-}
-
-function rankingShareValue(row, sort) {
-  return sort === "count" ? `${row.count}点` : formatYen(row.total);
-}
-
-function buildRankingShareText(stats, hideNumbers) {
-  const label = RANKING_SORT_LABELS[stats.sort];
-  return [
-    `BOOTHの推し作者ランキング🛍️（${label}）`,
-    "",
-    ...stats.rows.map((row, index) => {
-      const rank = RANKING_MEDALS[index] || `${index + 1}.`;
-      return hideNumbers
-        ? `${rank} ${row.name}`
-        : `${rank} ${row.name} ${rankingShareValue(row, stats.sort)}`;
-    }),
-    // 画面では断り書きを出している。数字を外に出すときは文面にも同じ断りを付ける
-    ...(hideNumbers || stats.sort !== "amount"
-      ? []
-      : ["", "※金額は商品の合計（送料・クーポンを除く）"]),
-    "",
-    SHARE_HASHTAG,
-  ].join("\n");
-}
-
 // フッターの共有ボタンは開いている画面によって共有するものが変わる。
 // ボタンの文言も変えないと、何が投稿されるのか押すまで分からない
 function shareMode() {
-  return viewFromHash(location.hash) === "ranking" ? "ranking" : "total";
+  const view = viewFromHash(location.hash);
+  return view === "ranking" || view === "summary" ? view : "total";
 }
 
 function updateShareButton() {
-  if (shareMode() === "ranking") {
+  const mode = shareMode();
+  if (mode === "ranking") {
     shareBtn.textContent = "𝕏でランキングを共有";
     shareBtn.disabled = !rankingShareStats || rankingShareStats.rows.length === 0;
+    return;
+  }
+  if (mode === "summary") {
+    // 何年のまとめが出るのかは、押す前に分かる必要がある
+    shareBtn.textContent = summaryShareStats
+      ? `𝕏で${summaryShareStats.year}年のまとめを共有`
+      : "𝕏でまとめを共有";
+    shareBtn.disabled = !summaryShareStats || summaryShareStats.orderCount === 0;
     return;
   }
   shareBtn.textContent = "𝕏で共有";
   // 今年分に未収集があるなら、押したあとに収集してから共有できる
   shareBtn.disabled =
     !shareStats || (shareStats.count === 0 && shareStats.yearPendingCount === 0);
+}
+
+// ---- 共有カードのパネル ------------------------------------------------
+//
+// 𝕏の投稿画面(intent)には画像を添付できない。URLで渡せるのは文面だけなので、
+// 画像はここで作って保存かコピーをしてもらい、投稿画面へ本人に貼ってもらう。
+
+// 押した時点の中身。背景を差し替えても同じ数字で描き直せるよう持っておく
+let sharePayload = null;
+// 選ばれた背景画像。タブの中だけで持ち、保存も送信もしない
+let shareBackground = null;
+
+function openSharePanel(payload) {
+  sharePayload = payload;
+  shareText.value = payload.text;
+  setShareCardStatus("");
+  shareOverlay.hidden = false;
+  sharePanel.hidden = false;
+  drawSharePanelCard();
+  shareOpenBtn.focus();
+}
+
+function closeSharePanel() {
+  shareOverlay.hidden = true;
+  sharePanel.hidden = true;
+  sharePayload = null;
+  shareBtn.focus();
+}
+
+function drawSharePanelCard() {
+  if (!sharePayload) return;
+  const ctx = shareCanvas.getContext("2d");
+  ctx.clearRect(0, 0, shareCanvas.width, shareCanvas.height);
+  drawShareCard(ctx, sharePayload.card, shareBackground);
+}
+
+function setShareBackground(image, name) {
+  shareBackground = image;
+  shareBgName.textContent = image ? name : "未選択（既定の背景を使います）";
+  shareBgClearBtn.hidden = !image;
+  drawSharePanelCard();
+}
+
+function setShareCardStatus(text) {
+  shareCardStatus.textContent = text;
+}
+
+function shareCardFileName() {
+  return `${sharePayload ? sharePayload.name : "share"}.png`;
 }

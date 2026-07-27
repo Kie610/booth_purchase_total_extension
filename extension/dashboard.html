@@ -17,9 +17,9 @@
   <div id="navOverlay" class="nav-overlay" hidden></div>
   <nav id="navDrawer" class="nav-drawer" aria-label="画面の切り替え" hidden>
     <a class="nav-link" href="#/report" data-view="report">お買いものレポート</a>
-    <a class="nav-link" href="#/summary" data-view="summary">今年のまとめ</a>
-    <a class="nav-link" href="#/trends" data-view="trends">支出推移・前年比較</a>
     <a class="nav-link" href="#/ranking" data-view="ranking">推し作者ランキング</a>
+    <a class="nav-link" href="#/trends" data-view="trends">支出推移・前年比較</a>
+    <a class="nav-link" href="#/summary" data-view="summary">今年のまとめ</a>
     <a class="nav-link" href="#/export" data-view="export">データ出力</a>
     <a class="nav-link" href="#/backup" data-view="backup">データの引っ越し</a>
   </nav>
@@ -436,10 +436,60 @@
     </div>
   </footer>
 
+  <!-- 共有カード。𝕏の投稿画面には画像を自動で添付できないため、
+       ここで画像を作って保存またはコピーしてもらい、本人に貼ってもらう -->
+  <div class="share-overlay" id="shareOverlay" hidden></div>
+  <div class="share-panel" id="sharePanel" role="dialog" aria-modal="true" aria-labelledby="sharePanelTitle" hidden>
+    <div class="share-panel-head">
+      <h2 id="sharePanelTitle">共有カード</h2>
+      <button type="button" id="shareCloseBtn" class="icon-btn" aria-label="閉じる">×</button>
+    </div>
+
+    <div class="share-panel-body">
+      <canvas id="shareCanvas" class="share-canvas" width="1200" height="675" role="img"></canvas>
+
+      <div class="share-controls">
+        <div class="share-bg">
+          <span class="share-bg-label">背景画像</span>
+          <div class="share-bg-row">
+            <label class="secondary small file-btn">
+              画像を選ぶ
+              <input type="file" id="shareBgFile" accept="image/*" hidden>
+            </label>
+            <button type="button" id="shareBgClearBtn" class="secondary small" hidden>元に戻す</button>
+            <span class="hint" id="shareBgName">未選択（既定の背景を使います）</span>
+          </div>
+          <p class="hint">
+            選んだ画像はこのタブの中だけで使い、保存も送信もしません。
+            文字が読めるように、上から暗く重ねます。
+          </p>
+        </div>
+
+        <div class="share-text-box">
+          <span class="share-bg-label">投稿する文面</span>
+          <textarea id="shareText" class="share-text" rows="8" readonly></textarea>
+        </div>
+      </div>
+
+      <p class="hint share-note">
+        𝕏の投稿画面には画像を自動で添付できません。
+        <strong>画像を保存またはコピーしてから、投稿画面に貼り付けてください。</strong>
+      </p>
+    </div>
+
+    <div class="share-panel-foot">
+      <button type="button" id="shareCopyBtn" class="secondary">画像をコピー</button>
+      <button type="button" id="shareSaveBtn" class="secondary">画像を保存</button>
+      <button type="button" id="shareOpenBtn" class="share-btn">𝕏の投稿画面を開く</button>
+    </div>
+    <span class="hint" id="shareCardStatus" role="status"></span>
+  </div>
+
 <script src="common.js"></script>
 <script src="purchase-examples.js"></script>
 <script src="csv.js"></script>
 <script src="backup.js"></script>
+<script src="share.js"></script>
 <script src="dashboard-parse.js"></script>
 <script src="dashboard-view.js"></script>
 <script src="dashboard.js"></script>

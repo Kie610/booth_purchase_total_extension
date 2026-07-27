@@ -102,7 +102,12 @@ function downloadCsv(text, fileName) {
 }
 
 function downloadFile(text, fileName, type) {
-  const url = URL.createObjectURL(new Blob([text], { type }));
+  downloadBlob(new Blob([text], { type }), fileName);
+}
+
+// downloads 権限を足さずに保存する。権限は storage と BOOTH のドメインだけに保つ
+function downloadBlob(blob, fileName) {
+  const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
   link.download = fileName;
@@ -141,6 +146,10 @@ shareBtn.addEventListener("click", async () => {
     shareRanking();
     return;
   }
+  if (shareMode() === "summary") {
+    shareYearSummary();
+    return;
+  }
   if (!shareStats) return;
 
   if (!canShareTotal(shareStats)) {
@@ -163,7 +172,11 @@ shareBtn.addEventListener("click", async () => {
       );
     }
   }
-  openShareWindow(buildShareText(shareStats));
+  openSharePanel({
+    name: "booth-share",
+    text: buildShareText(shareStats),
+    card: buildTotalShareCard(shareStats),
+  });
 });
 
 // ランキングは全期間が対象なので、合計のように「今年の分だけ」へ逃がせない。
@@ -173,8 +186,89 @@ function shareRanking() {
   if (rankingShareIssues(rankingShareStats).length > 0) {
     if (!confirm(rankingShareConfirmMessage(rankingShareStats))) return;
   }
-  openShareWindow(buildRankingShareText(rankingShareStats, rankingHideNumbers.checked));
+  const hide = rankingHideNumbers.checked;
+  openSharePanel({
+    name: "booth-ranking",
+    text: buildRankingShareText(rankingShareStats, hide),
+    card: buildRankingShareCard(rankingShareStats, hide),
+  });
 }
+
+// まとめもランキングと同じで、期間を切り出しても数字は正しくならない
+function shareYearSummary() {
+  if (!summaryShareStats || summaryShareStats.orderCount === 0) return;
+  if (summaryShareIssues(summaryShareStats).length > 0) {
+    if (!confirm(summaryShareConfirmMessage(summaryShareStats))) return;
+  }
+  openSharePanel({
+    name: `booth-${summaryShareStats.year}`,
+    text: buildSummaryShareText(summaryShareStats),
+    card: buildSummaryShareCard(summaryShareStats),
+  });
+}
+
+// ---- 共有カードのパネル ------------------------------------------------
+
+shareCloseBtn.addEventListener("click", closeSharePanel);
+shareOverlay.addEventListener("click", closeSharePanel);
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !sharePanel.hidden) closeSharePanel();
+});
+
+// 選んだ画像はこのタブの中だけで使う。ストレージへ入れると、
+// 画像1枚で保存できる注文データを圧迫しかねない
+shareBgFile.addEventListener("change", async () => {
+  const file = shareBgFile.files && shareBgFile.files[0];
+  if (!file) return;
+  try {
+    setShareBackground(await createImageBitmap(file), file.name);
+    setShareCardStatus("背景を適用しました。");
+  } catch {
+    // 拡張子だけ画像で中身が違うファイルもある。黙って既定の背景に戻さない
+    setShareCardStatus("この画像は読み込めませんでした。別の画像を選んでください。");
+  }
+  // 同じファイルを選び直したときも change が起きるようにする
+  shareBgFile.value = "";
+});
+
+shareBgClearBtn.addEventListener("click", () => {
+  setShareBackground(null, "");
+  setShareCardStatus("既定の背景に戻しました。");
+});
+
+function shareCardBlob() {
+  return new Promise((resolve) => shareCanvas.toBlob(resolve, "image/png"));
+}
+
+shareSaveBtn.addEventListener("click", async () => {
+  const blob = await shareCardBlob();
+  if (!blob) {
+    setShareCardStatus("画像を作れませんでした。");
+    return;
+  }
+  downloadBlob(blob, shareCardFileName());
+  setShareCardStatus("画像を保存しました。投稿画面へ貼り付けてください。");
+});
+
+shareCopyBtn.addEventListener("click", async () => {
+  const blob = await shareCardBlob();
+  if (!blob) {
+    setShareCardStatus("画像を作れませんでした。");
+    return;
+  }
+  try {
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+    setShareCardStatus("画像をコピーしました。投稿画面で貼り付けてください。");
+  } catch {
+    // クリップボードは権限やブラウザの対応で失敗する。保存なら必ずできる
+    setShareCardStatus("コピーできませんでした。「画像を保存」を使ってください。");
+  }
+});
+
+shareOpenBtn.addEventListener("click", () => {
+  if (!sharePayload) return;
+  openShareWindow(sharePayload.text);
+});
 
 // まとめる年の切り替え
 summaryYear.addEventListener("change", () => setSummaryYear(summaryYear.value));

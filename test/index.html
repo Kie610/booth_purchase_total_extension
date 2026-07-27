@@ -22,12 +22,12 @@ window.addEventListener("unhandledrejection", (e) => showFailure("ERROR " + ((e.
 <span id="viewTitle"></span>
 <div id="navOverlay" hidden></div>
 <nav id="navDrawer" hidden>
-  <a class="nav-link" href="#/report" data-view="report">お買いものレポート</a>
-  <a class="nav-link" href="#/summary" data-view="summary">今年のまとめ</a>
+<a class="nav-link" href="#/report" data-view="report">お買いものレポート</a>
+<a class="nav-link" href="#/ranking" data-view="ranking">推し作者ランキング</a>
 <a class="nav-link" href="#/trends" data-view="trends">支出推移・前年比較</a>
-  <a class="nav-link" href="#/ranking" data-view="ranking">推し作者ランキング</a>
-  <a class="nav-link" href="#/export" data-view="export">データ出力</a>
-  <a class="nav-link" href="#/backup" data-view="backup">データの引っ越し</a>
+<a class="nav-link" href="#/summary" data-view="summary">今年のまとめ</a>
+<a class="nav-link" href="#/export" data-view="export">データ出力</a>
+<a class="nav-link" href="#/backup" data-view="backup">データの引っ越し</a>
 </nav>
 
 <div id="pendingBanner" hidden><span id="pendingBannerText"></span><a href="#/report">お買いものレポートで収集する</a></div>
@@ -143,11 +143,26 @@ window.addEventListener("unhandledrejection", (e) => showFailure("ERROR " + ((e.
   <button id="shareBtn" class="share-btn" disabled>𝕏で共有</button>
 </div>
 
+<div id="shareOverlay" hidden></div>
+<div id="sharePanel" hidden>
+  <button id="shareCloseBtn"></button>
+  <canvas id="shareCanvas" width="1200" height="675"></canvas>
+  <input type="file" id="shareBgFile">
+  <button id="shareBgClearBtn" hidden></button>
+  <span id="shareBgName"></span>
+  <textarea id="shareText"></textarea>
+  <button id="shareCopyBtn"></button>
+  <button id="shareSaveBtn"></button>
+  <button id="shareOpenBtn"></button>
+  <span id="shareCardStatus"></span>
+</div>
+
 <script src="stub.js"></script>
 <script src="../extension/common.js"></script>
 <script src="../extension/purchase-examples.js"></script>
 <script src="../extension/csv.js"></script>
 <script src="../extension/backup.js"></script>
+<script src="../extension/share.js"></script>
 <script src="../extension/dashboard-parse.js"></script>
 <script src="../extension/dashboard-view.js"></script>
 <script src="../extension/dashboard.js"></script>
