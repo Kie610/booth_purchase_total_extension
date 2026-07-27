@@ -87,7 +87,8 @@ function parseGiftTotal(doc) {
   return total;
 }
 
-// 注文詳細ページを解析し、実際の支払金額と、そこに含まれるギフト分を取得する
+// 注文詳細ページを解析し、実際の支払金額と、そこに含まれるギフト分を取得する。
+// ステータスは一覧ページ(索引)側で読んだものを正とするため、ここでは読まない
 function parseDetailPage(doc) {
   let amount = null;
   const labels = Array.from(doc.querySelectorAll("div")).filter(
@@ -103,7 +104,5 @@ function parseDetailPage(doc) {
       }
     }
   }
-  const badge = doc.querySelector(".order-state");
-  const status = extractStatusFromBadge(badge);
-  return { amount, gift: parseGiftTotal(doc), status };
+  return { amount, gift: parseGiftTotal(doc) };
 }

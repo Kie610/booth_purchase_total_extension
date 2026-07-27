@@ -42,8 +42,9 @@ const detailHtml = `<html><body>
 <div class="summary"><div>商品代金</div><div>¥1,000</div></div>
 <div class="summary"><div>お支払金額</div><div>¥1,234</div></div>
 </body></html>`;
-check("parseDetailPage 支払金額とステータス", parseDetailPage(parse(detailHtml)), { amount: 1234, gift: null, status: "paid" });
-check("parseDetailPage 金額が無い場合", parseDetailPage(parse("<html><body></body></html>")), { amount: null, gift: null, status: "unknown" });
+// ステータスは索引側で読んだものを使うので、詳細ページからは読まない
+check("parseDetailPage 支払金額", parseDetailPage(parse(detailHtml)), { amount: 1234, gift: null });
+check("parseDetailPage 金額が無い場合", parseDetailPage(parse("<html><body></body></html>")), { amount: null, gift: null });
 
 // --- 支払額に含まれるギフト分 ---
 // 注文詳細はショップ・商品種別ごとに .sheet-group で区切られ、先頭に見出しが入る
@@ -79,7 +80,7 @@ check("parseYenAmount 金額が無い", parseYenAmount("ショップにメッセ
 const withGift = orderHtml("5,100",
   sheetGroup("ダウンロード商品", [[425, 0], [425, 0]]) +
   sheetGroup("ギフト", [[425, 0], [425, 100]]));
-check("ギフトのグループだけを合計する", parseDetailPage(parse(withGift)), { amount: 5100, gift: 950, status: "completed" });
+check("ギフトのグループだけを合計する", parseDetailPage(parse(withGift)), { amount: 5100, gift: 950 });
 
 const noGift = orderHtml("850", sheetGroup("ダウンロード商品", [[425, 0], [425, 0]]));
 check("ギフトが無い注文は0", parseDetailPage(parse(noGift)).gift, 0);
@@ -98,6 +99,17 @@ check("グループが無ければ不明", parseDetailPage(parse(`<html><body>
 check("giftText あり", giftText(1500), "ギフト ¥1,500");
 check("giftText 0", giftText(0), "");
 check("giftAmount 未取得は0扱い", [giftAmount({ amount: 1 }), giftAmount(undefined), giftAmount({ gift: 300 })], [0, 0, 300]);
+
+// --- ポップアップの件数行(取得失敗だけは色を分けるので文面を分けて返す) ---
+check("件数行 収集済みのみ",
+  summaryCounts({ count: 3, pendingCount: 0, skippedCancelled: 0, failedCount: 0 }),
+  { text: "収集済み: 3件", failed: "" });
+check("件数行 未収集と除外を添える",
+  summaryCounts({ count: 3, pendingCount: 2, skippedCancelled: 1, failedCount: 0 }).text,
+  "収集済み: 3件 / 未収集: 2件 / 除外(キャンセル): 1件");
+check("件数行 取得失敗は別に返す",
+  summaryCounts({ count: 3, pendingCount: 0, skippedCancelled: 0, failedCount: 4 }),
+  { text: "収集済み: 3件", failed: " / 取得失敗: 4件" });
 
 const listHtml = `<html><body>
 <a class="nav-reverse" href="/orders/1001">
@@ -166,7 +178,8 @@ const stats = buildMonthStats(targetOrders(), state.cache);
 check("月別の並び", stats.map(s => s.label), ["2026年5月", "2026年3月", "2025年12月", "日付不明"]);
 check("2026年5月の注文数/収集済み/未収集", [stats[0].count, stats[0].collected, stats[0].pending], [2, 1, 1]);
 check("2026年3月は全て未収集", [stats[1].count, stats[1].collected, stats[1].pending], [1, 0, 1]);
-check("2025年12月は取得失敗も収集済みとして数える", [stats[2].count, stats[2].collected, stats[2].pending], [2, 2, 0]);
+// 取得失敗は再取得の対象なので未収集として数える(pendingTargets と数え方をそろえる)
+check("2025年12月は取得失敗を未収集として数える", [stats[2].count, stats[2].collected, stats[2].pending], [2, 1, 1]);
 check("日付不明の集計", [stats[3].key, stats[3].count, stats[3].pending], [null, 1, 1]);
 
 // 範囲指定(両端を含む・日付不明は入らない)
@@ -180,7 +193,9 @@ check("範囲指定にキャンセルは含まれない", ordersInRange("2025-11
 // キャッシュの扱い
 check("通常は未収集のみが対象", pendingTargets(ordersInRange("2026-05", "2026-05"), false).map(o => o.id), ["a2"]);
 check("強制再取得では収集済みも対象", pendingTargets(ordersInRange("2026-05", "2026-05"), true).map(o => o.id), ["a1", "a2"]);
-check("取得失敗は再取得されない(強制指定が必要)", pendingTargets(ordersInRange("2025-12", "2025-12"), false).map(o => o.id), []);
+// 取得失敗をそのままにすると強制再取得でしか直せないので、既定で拾い直す
+check("取得失敗は次の実行で自動的に再取得される", pendingTargets(ordersInRange("2025-12", "2025-12"), false).map(o => o.id), ["c2"]);
+check("needsCollect 未収集と取得失敗だけが対象", [needsCollect(undefined), needsCollect({ amount: null }), needsCollect({ amount: 0 }), needsCollect({ amount: 500 })], [true, true, false, false]);
 
 // 表示用の一覧(未収集と取得失敗を区別する)
 const results = buildResults();
@@ -209,7 +224,8 @@ check("年の行数", monthYearRows.length, 2);
 check("月の行数", monthSubRows.length, 3);
 check("月は初期状態で畳まれている", monthSubRows.every(r => r.hidden), true);
 check("未収集がある年は強調", monthYearRows[0].classList.contains("has-pending"), true);
-check("未収集が無い年は強調しない", monthYearRows[1].classList.contains("has-pending"), false);
+// 2025年は c2 が取得失敗。取得失敗は再取得の対象なのでこの年も強調される
+check("取得失敗の残る年も強調", monthYearRows[1].classList.contains("has-pending"), true);
 check("日付不明は独立した行", [...monthTableBody.querySelectorAll("tr.unknown-row")].length, 1);
 check("範囲の選択肢は日付不明を除く", [...rangeFrom.options].map(o => o.value), ["2026-05", "2026-03", "2025-12"]);
 check("初期選択は未収集のある最新月", [rangeFrom.value, rangeTo.value], ["2026-05", "2026-05"]);
@@ -242,6 +258,19 @@ check("日付不明は一括集計へ誘導する", unknownCount.textContent.inc
 render();
 check("再描画で展開状態が保たれる", [...monthTableBody.querySelectorAll('tr.month-row[data-year-key="2026"]')].every(r => !r.hidden), true);
 
+// すべて収集済みの年は強調しない(c2をいったん収集済みにして確かめ、元へ戻す)
+const failedC2 = state.cache.c2;
+state.cache.c2 = { ...failedC2, amount: 500 };
+render();
+check("未収集が無い年は強調しない",
+  [...monthTableBody.querySelectorAll("tr.year-row")][1].classList.contains("has-pending"), false);
+setRange("2025-12", "2025-12");
+check("すべて収集済みなら予定なし", plannedCount.textContent, "取得予定: なし(収集済み)");
+check("予定が0ならボタンを押せない", collectRangeBtn.disabled, true);
+state.cache.c2 = failedC2;
+render();
+setRange("2026-05", "2026-05"); // 以降の検証のため元の範囲へ戻す
+
 // 取得予定件数(ボタン横の表示)
 check("取得予定件数 未収集のみ", plannedCount.textContent, "取得予定: 1件");
 check("取得予定が0でなければボタンは押せる", collectRangeBtn.disabled, false);
@@ -252,13 +281,12 @@ forceRefreshRange.dispatchEvent(new Event("change"));
 check("強制再取得では収集済みも予定に入る", plannedCount.textContent, "取得予定: 2件");
 forceRefreshRange.checked = false;
 setRange("2025-12", "2025-12");
-check("すべて収集済みなら予定なし", plannedCount.textContent, "取得予定: なし(収集済み)");
-check("予定が0ならボタンを押せない", collectRangeBtn.disabled, true);
+check("取得失敗の残る月は予定に入る", plannedCount.textContent, "取得予定: 1件");
 
-// 未収集のある範囲をまとめて選択
+// 未収集のある範囲をまとめて選択(取得失敗の残る月も未収集として拾う)
 selectPendingBtn.click();
-check("未収集のある範囲を選択", [rangeFrom.value, rangeTo.value], ["2026-03", "2026-05"]);
-check("範囲選択で予定件数も更新される", plannedCount.textContent, "取得予定: 2件");
+check("未収集のある範囲を選択", [rangeFrom.value, rangeTo.value], ["2025-12", "2026-05"]);
+check("範囲選択で予定件数も更新される", plannedCount.textContent, "取得予定: 3件");
 
 // 年別・月別の集計(収集済みのみ)
 const yearRows = [...periodTableBody.querySelectorAll(".year-row")];
@@ -322,11 +350,38 @@ check("共有用の金額例は上限超過でも最後を使う", purchaseCompa
 // 一番安い項目にも届かない額で比較を出すと「¥0でうまい棒が買える」という嘘になる
 check("共有用の金額例 最安に届かなければ選ばない", [purchaseComparison(0), purchaseComparison(14)], [null, null]);
 check("共有用の金額例 最安ちょうどは選ぶ", purchaseComparison(15), "うまい棒 コーンポタージュ味");
-check("共有文面", buildShareText({ year: 2026, total: 4000, count: 2, yearTotal: 1000, yearCount: 1 }),
+// 全期間の合計を名乗れるのは、索引が最古まで揃っていて未収集も無いときだけ
+const shareable = { year: 2026, total: 4000, count: 2, yearTotal: 1000, yearCount: 1, pendingCount: 0, yearPendingCount: 0, indexComplete: true };
+check("共有 未収集も取りこぼしも無ければ合計を出せる", canShareTotal(shareable), true);
+check("共有 未収集があれば合計を出せない", canShareTotal({ ...shareable, pendingCount: 1 }), false);
+check("共有 索引が未完了なら合計を出せない", canShareTotal({ ...shareable, indexComplete: false }), false);
+
+check("共有文面", buildShareText(shareable),
   "BOOTHお買いもの振り返り🛍️\n\n合計：¥4,000（2件）\n今年：¥1,000（1件）\n\n積み重ねてみると、Minecraft（Nintendo Switch版）が買えるくらいの金額になりました。\n\n#BOOTHお買いものレポート");
 check("共有文面 比較できない額なら比較の段落ごと出さない",
-  buildShareText({ year: 2026, total: 0, count: 1, yearTotal: 0, yearCount: 1 }),
+  buildShareText({ ...shareable, total: 0, count: 1, yearTotal: 0 }),
   "BOOTHお買いもの振り返り🛍️\n\n合計：¥0（1件）\n今年：¥0（1件）\n\n#BOOTHお買いものレポート");
+
+// 合計を出せないときは今年の分だけにする。比較も文面に出した額(今年)を基準にしないと、
+// 文面のどこにも無い金額をもとに「これが買える」と言うことになる
+check("共有文面 未収集があれば合計の行を出さない",
+  buildShareText({ ...shareable, pendingCount: 3 }),
+  "BOOTHお買いもの振り返り🛍️\n\n今年：¥1,000（1件）\n\n積み重ねてみると、すき家 ビビンバ牛丼（特盛）が買えるくらいの金額になりました。\n\n#BOOTHお買いものレポート");
+check("共有文面 比較の基準も今年の額になる",
+  purchaseComparison(1000), "すき家 ビビンバ牛丼（特盛）");
+
+// 共有前の確認。今年分に未収集があるなら、共有の前にそこだけ収集してしまう
+check("共有の確認 今年分を取得してから共有する",
+  shareConfirmMessage({ ...shareable, pendingCount: 5, yearPendingCount: 2 }),
+  "未収集の注文が残っているため、全期間の合計は実際より少なくなります。\n今年分の未収集 2件 を取得してから、今年の金額だけを共有します。\nよろしいですか?");
+check("共有の確認 今年分が揃っていれば取得しない",
+  shareConfirmMessage({ ...shareable, pendingCount: 5, yearPendingCount: 0 }),
+  "未収集の注文が残っているため、全期間の合計は実際より少なくなります。\n今年の金額だけを共有します。\nよろしいですか?");
+
+// 共有前に収集する対象(日付を読めない注文はどの年にも入れない)
+check("年で絞った注文", ordersInYear(2026).map(o => o.id), ["a1", "a2", "b1"]);
+check("年で絞った注文 キャンセルは入らない", ordersInYear(2025).map(o => o.id), ["c1", "c2"]);
+check("年で絞った注文 該当なし", ordersInYear(2024).map(o => o.id), []);
 
 // 進捗はフッターに出す。表示中はフッターが高くなるので本文の下余白も追従させる
 check("待機中は進捗を出さない", [document.getElementById("progress").hidden, document.body.classList.contains("has-progress")], [true, false]);
@@ -578,6 +633,10 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   const ICON_SIZES = [16, 32, 48, 128];
   const manifest = await (await fetch("../extension/manifest.json")).json();
   const expectedIcons = Object.fromEntries(ICON_SIZES.map((s) => [String(s), `icons/icon${s}.png`]));
+
+  // 未リリースのうちは 0.x に留める。1.0.0 に上げるのはリリースを宣言するときだけ
+  check("バージョンは 0.x(未リリース)", /^0\.\d+\.\d+$/.test(manifest.version), true);
+
   check("manifestのiconsに4サイズを宣言", manifest.icons, expectedIcons);
   check("ツールバー用のdefault_iconも同じ4サイズ", manifest.action.default_icon, expectedIcons);
 

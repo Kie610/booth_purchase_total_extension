@@ -62,6 +62,12 @@ h1 {
   color: #6b7280;
 }
 
+/* 取得失敗だけは目に留まるように赤くする。11pxの小さな文字なので、
+   白地に対して4.5:1を下回らない範囲でいちばん薄い赤にしてある */
+.summary-sub .failed {
+  color: #c94c4f;
+}
+
 .empty {
   margin-bottom: 14px;
   font-size: 12px;

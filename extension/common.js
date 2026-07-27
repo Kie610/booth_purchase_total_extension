@@ -26,9 +26,31 @@ function giftAmount(entry) {
   return entry && typeof entry.gift === "number" ? entry.gift : 0;
 }
 
+// まだ金額を取りに行く必要がある注文かどうか。キャッシュに無いもの(未収集)に加え、
+// 取得はできたが金額を読めなかったもの(amount:null)も対象にする。
+// 対象から外すと強制再取得でしか拾い直せず、内訳に「取得失敗」と出たまま直す手段が
+// 全件再取得しかなくなるため、次の実行で自動的に取り直せるようにしておく
+function needsCollect(entry) {
+  return !entry || entry.amount === null;
+}
+
 // 支払額の左に小さく添えるギフト表記(0のときは何も出さない)
 function giftText(total) {
   return total > 0 ? `ギフト ${formatYen(total)}` : "";
+}
+
+// ポップアップの件数行。取得失敗だけは要対処なので色を分けて出したく、
+// 別の要素にする必要があるため文面を分けて返す
+function summaryCounts(summary) {
+  return {
+    text:
+      `収集済み: ${summary.count}件` +
+      (summary.pendingCount ? ` / 未収集: ${summary.pendingCount}件` : "") +
+      (summary.skippedCancelled
+        ? ` / 除外(キャンセル): ${summary.skippedCancelled}件`
+        : ""),
+    failed: summary.failedCount ? ` / 取得失敗: ${summary.failedCount}件` : "",
+  };
 }
 
 function formatTimestamp(iso) {
@@ -145,7 +167,9 @@ function buildYearStats(orders, cache) {
     () => ({ count: 0, collected: 0 }),
     (row, order) => {
       row.count++;
-      if (cache[order.id]) row.collected++;
+      // 取得失敗は再取得の対象なので、ここでも未収集として数える
+      // (数え方が pendingTargets とずれると「取得予定」の件数と食い違う)
+      if (!needsCollect(cache[order.id])) row.collected++;
     }
   ).map((year) => ({ ...withPending(year), months: year.months.map(withPending) }));
 }

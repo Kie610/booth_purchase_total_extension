@@ -49,12 +49,15 @@ async function render() {
       ? "収集済みの合計(中断時点)"
       : "収集済みの合計";
     totalAmountEl.textContent = formatYen(summary.total);
-    totalCountEl.textContent =
-      `収集済み: ${summary.count}件` +
-      (summary.pendingCount ? ` / 未収集: ${summary.pendingCount}件` : "") +
-      (summary.skippedCancelled
-        ? ` / 除外(キャンセル): ${summary.skippedCancelled}件`
-        : "");
+    const counts = summaryCounts(summary);
+    totalCountEl.textContent = counts.text;
+    // 取得失敗は色を分けるので、同じ行の中で別の要素にして添える
+    if (counts.failed) {
+      const failed = document.createElement("span");
+      failed.className = "failed";
+      failed.textContent = counts.failed;
+      totalCountEl.appendChild(failed);
+    }
     updatedAtEl.textContent = `最終更新: ${formatTimestamp(summary.updatedAt)}`;
     summaryBox.hidden = false;
     emptyBox.hidden = true;

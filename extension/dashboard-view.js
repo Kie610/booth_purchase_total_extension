@@ -409,11 +409,13 @@ function renderResult() {
 // 画面下部に固定表示する合計。収集済みの注文のみを対象にする
 function renderFooter(results) {
   const thisYear = new Date().getFullYear();
+  const inThisYear = (rows) =>
+    rows.filter((r) => {
+      const d = parseOrderDate(r.date);
+      return d !== null && d.year === thisYear;
+    });
   const valid = results.filter((r) => typeof r.amount === "number");
-  const ofThisYear = valid.filter((r) => {
-    const d = parseOrderDate(r.date);
-    return d !== null && d.year === thisYear;
-  });
+  const ofThisYear = inThisYear(valid);
   const sum = (rows) => rows.reduce((total, r) => total + r.amount, 0);
   const sumGift = (rows) => rows.reduce((total, r) => total + giftAmount(r), 0);
 
@@ -433,8 +435,14 @@ function renderFooter(results) {
     yearCount: ofThisYear.length,
     gift: sumGift(valid),
     yearGift: sumGift(ofThisYear),
+    // 共有してよい範囲の判定に使う。未収集が残っていたり索引が最古まで
+    // 揃っていなかったりすると、合計は実際より少ない額になる
+    pendingCount: results.length - valid.length,
+    yearPendingCount: inThisYear(results).length - ofThisYear.length,
+    indexComplete: indexIsComplete(state.index),
   };
-  shareBtn.disabled = valid.length === 0;
+  // 今年分に未収集があるなら、押したあとに収集してから共有できる
+  shareBtn.disabled = valid.length === 0 && shareStats.yearPendingCount === 0;
 }
 
 function renderPeriodTable(results) {
@@ -489,12 +497,31 @@ function purchaseComparison(amount) {
   return selected ? selected.label : null;
 }
 
+// 全期間の合計を名乗ってよいのは、索引が最古まで揃っていて、かつ未収集も
+// 残っていないときだけ。どちらか欠けたまま出すと、実際より少ない額を
+// 「合計」として外に出すことになる
+function canShareTotal(stats) {
+  return stats.indexComplete && stats.pendingCount === 0;
+}
+
+// 合計を出せないときの確認文面。今年分は共有の前に収集してしまう
+function shareConfirmMessage(stats) {
+  const head = "未収集の注文が残っているため、全期間の合計は実際より少なくなります。\n";
+  return stats.yearPendingCount > 0
+    ? `${head}今年分の未収集 ${stats.yearPendingCount}件 を取得してから、今年の金額だけを共有します。\nよろしいですか?`
+    : `${head}今年の金額だけを共有します。\nよろしいですか?`;
+}
+
 function buildShareText(stats) {
-  const comparison = purchaseComparison(stats.total);
+  // 合計を出せないときは今年の分だけにする。比較の基準も出した額に合わせないと、
+  // 文面に無い金額をもとに「これが買える」と言うことになってしまう
+  const full = canShareTotal(stats);
+  const basis = full ? stats.total : stats.yearTotal;
+  const comparison = purchaseComparison(basis);
   return [
     "BOOTHお買いもの振り返り🛍️",
     "",
-    `合計：${formatYen(stats.total)}（${stats.count}件）`,
+    ...(full ? [`合計：${formatYen(stats.total)}（${stats.count}件）`] : []),
     `今年：${formatYen(stats.yearTotal)}（${stats.yearCount}件）`,
     // 比較できる額に届かないときは、この一段落ごと落とす
     ...(comparison

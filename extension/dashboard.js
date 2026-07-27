@@ -37,13 +37,46 @@ function onRangeChanged() {
   updatePlannedCount();
 }
 
-// 投稿画面を開くだけで、投稿そのものはユーザーがXの画面で行う
-shareBtn.addEventListener("click", () => {
-  if (!shareStats) return;
+// 投稿画面を開くだけで、投稿そのものはユーザーがXの画面で行う。
+// 未収集が残ったまま「合計」を名乗ると実際より少ない額が外に出てしまうため、
+// その場合は今年分だけを収集し、今年の金額だけを共有する
+shareBtn.addEventListener("click", async () => {
+  if (!shareStats || running) return;
+
+  if (!canShareTotal(shareStats)) {
+    if (!confirm(shareConfirmMessage(shareStats))) return;
+    if (shareStats.yearPendingCount > 0) {
+      const { aborted, failed } = await runTask((signal) =>
+        collectAmounts(ordersInYear(shareStats.year), false, signal)
+      );
+      // 中断や失敗のあとに開くと、案内した内容と違う額を共有することになる
+      if (aborted || failed) return;
+    }
+    if (shareStats.yearCount === 0) {
+      showNotice("今年の注文が無いため、共有できる金額がありません。");
+      return;
+    }
+    // 取得しきれなかった場合は、共有はするが黙っては出さない
+    if (shareStats.yearPendingCount > 0) {
+      addNotice(
+        `今年分のうち${shareStats.yearPendingCount}件を取得できなかったため、共有する金額は実際より少なくなります。`
+      );
+    }
+  }
+  openShareWindow();
+});
+
+function openShareWindow() {
   const url = new URL("https://x.com/intent/post");
   url.searchParams.set("text", buildShareText(shareStats));
-  window.open(url.toString(), "_blank", "noopener");
-});
+  // 収集を挟むとクリックから時間が空くため、ブラウザに止められることがある。
+  // 収集は済んでいるので、押し直せば今度はその場で開ける
+  if (!window.open(url.toString(), "_blank", "noopener")) {
+    addNotice(
+      "ブラウザに新しいタブを止められました。もう一度「Xで共有」を押してください。"
+    );
+  }
+}
 
 // 取り直しに時間がかかるので、消す前に必ず確認する
 clearIndexBtn.addEventListener("click", async () => {
@@ -215,13 +248,16 @@ function buildSummary(partial) {
 
 // ---- 実行の共通処理 ----------------------------------------------------
 
+// 呼び出し側が「やり切れたか」で分岐できるよう結果を返す
+// (共有は、中断や失敗のあとに投稿画面を開かないようにするために使う)
 async function runTask(task) {
-  if (running) return;
+  if (running) return { aborted: false, failed: true };
   setRunning(true);
   clearError();
   clearNotice();
   abortController = new AbortController();
   let aborted = false;
+  let failed = false;
 
   try {
     await task(abortController.signal);
@@ -229,6 +265,7 @@ async function runTask(task) {
     if (err.name === "AbortError") {
       aborted = true;
     } else {
+      failed = true;
       showError(err.message || String(err));
     }
   } finally {
@@ -247,6 +284,7 @@ async function runTask(task) {
       "中断しました。ここまでに取得した金額は保存されているため、再実行すると続きから取得します。"
     );
   }
+  return { aborted, failed };
 }
 
 function setRunning(isRunning) {
@@ -448,7 +486,7 @@ async function fetchIndexTask(signal, force) {
 
 // 収集対象の絞り込み。forceが立っている場合は収集済みでも取り直す
 function pendingTargets(orders, force) {
-  return force ? orders : orders.filter((o) => !state.cache[o.id]);
+  return force ? orders : orders.filter((o) => needsCollect(state.cache[o.id]));
 }
 
 // 指定された月の範囲(両端を含む)に入る注文。日付が読めない注文は範囲に入れない。
@@ -459,6 +497,14 @@ function ordersInRange(from, to) {
   return targetOrders().filter((o) => {
     const key = monthKeyOf(o.date);
     return key !== null && key >= lo && key <= hi;
+  });
+}
+
+// その年の注文(集計対象のみ)。日付を読めない注文はどの年にも入れない
+function ordersInYear(year) {
+  return targetOrders().filter((o) => {
+    const d = parseOrderDate(o.date);
+    return d !== null && d.year === year;
   });
 }
 
