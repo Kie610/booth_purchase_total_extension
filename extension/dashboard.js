@@ -176,6 +176,9 @@ function shareRanking() {
   openShareWindow(buildRankingShareText(rankingShareStats, rankingHideNumbers.checked));
 }
 
+// まとめる年の切り替え
+summaryYear.addEventListener("change", () => setSummaryYear(summaryYear.value));
+
 // 金額編と購入数編の切り替え
 rankingSortToggle.addEventListener("click", (event) => {
   const btn = event.target.closest(".segmented-btn");

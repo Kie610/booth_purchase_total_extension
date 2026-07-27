@@ -79,6 +79,12 @@ const rankingArea = document.getElementById("rankingArea");
 const rankingStats = document.getElementById("rankingStats");
 const rankingUnknown = document.getElementById("rankingUnknown");
 const rankingTableBody = document.getElementById("rankingTableBody");
+const summaryEmpty = document.getElementById("summaryEmpty");
+const summaryArea = document.getElementById("summaryArea");
+const summaryYear = document.getElementById("summaryYear");
+const summaryCards = document.getElementById("summaryCards");
+const summaryNewShopWarn = document.getElementById("summaryNewShopWarn");
+const summaryTopShopsBody = document.getElementById("summaryTopShopsBody");
 const rankingSortToggle = document.getElementById("rankingSortToggle");
 const rankingHideNumbers = document.getElementById("rankingHideNumbers");
 const pendingBanner = document.getElementById("pendingBanner");
@@ -107,11 +113,12 @@ const ACTION_BUTTONS = [
 // (ポップアップではなく専用タブで処理しているのと同じ理由)。
 // 現在の画面はURLのハッシュに持たせるので、再読み込みしても同じ画面に戻る。
 
-const VIEW_NAMES = ["report", "trends", "ranking", "export", "backup"];
+const VIEW_NAMES = ["report", "summary", "trends", "ranking", "export", "backup"];
 const DEFAULT_VIEW = "report";
 // 見出しの右に添える画面名。既定の画面では何も足さない
 const VIEW_TITLES = {
   report: "",
+  summary: "今年のまとめ",
   trends: "支出推移・前年比較",
   ranking: "推し作者ランキング",
   export: "データ出力",
@@ -326,6 +333,7 @@ function render() {
   updatePlannedCount();
   renderClearArea();
   renderRankingArea();
+  renderYearSummary();
   renderExportArea();
   renderBackupArea();
   // 共有ボタンの状態は上の描画結果に依るので、最後にまとめて決める
@@ -437,6 +445,115 @@ function renderRankingArea() {
     tr.appendChild(countCell(row.count, row.giftCount));
     tr.appendChild(amountCell(row.total, row.gift));
     rankingTableBody.appendChild(tr);
+  });
+}
+
+// ---- 今年のまとめ ------------------------------------------------------
+
+// 選んでいる年。注文の無い年は選べないので、描画のたびに実在する年へ寄せる
+let summarySelectedYear = null;
+
+function setSummaryYear(year) {
+  const value = Number(year);
+  if (!Number.isFinite(value) || value === summarySelectedYear) return;
+  summarySelectedYear = value;
+  renderYearSummary();
+}
+
+// 1月に見ると去年を振り返りたいので、今年に注文が無ければ最も新しい年へ落とす
+function resolveSummaryYear(years) {
+  if (years.includes(summarySelectedYear)) return summarySelectedYear;
+  const thisYear = new Date().getFullYear();
+  return years.includes(thisYear) ? thisYear : years[0];
+}
+
+function renderSummaryYearOptions(years, selected) {
+  const same =
+    summaryYear.options.length === years.length &&
+    years.every((year, index) => summaryYear.options[index].value === String(year));
+  if (!same) {
+    summaryYear.innerHTML = "";
+    for (const year of years) {
+      summaryYear.appendChild(el("option", "", `${year}年`)).value = String(year);
+    }
+  }
+  summaryYear.value = String(selected);
+}
+
+function summaryCard(label, value, note) {
+  return trendSummaryCard(label, value, note, "summary-card");
+}
+
+function renderYearSummary() {
+  const results = buildResults();
+  const years = orderYears(results);
+  summaryEmpty.hidden = years.length > 0;
+  summaryArea.hidden = years.length === 0;
+  if (years.length === 0) {
+    summaryCards.innerHTML = "";
+    summaryTopShopsBody.innerHTML = "";
+    return;
+  }
+
+  summarySelectedYear = resolveSummaryYear(years);
+  renderSummaryYearOptions(years, summarySelectedYear);
+  const stats = buildYearSummary(results, summarySelectedYear);
+
+  // 未収集はまとめの数字を実際より少なくする。合計のすぐ横で断る
+  const totalNote = [`注文${stats.orderCount}件`];
+  if (stats.gift > 0) totalNote.push(`ギフト ${formatYen(stats.gift)}`);
+  if (stats.pendingCount > 0) totalNote.push(`未収集${stats.pendingCount}件`);
+
+  summaryCards.innerHTML = "";
+  summaryCards.appendChild(
+    summaryCard(`${stats.year}年の支払い`, formatYen(stats.total), totalNote.join(" / "))
+  );
+  summaryCards.appendChild(
+    summaryCard(
+      "買ったもの",
+      `${stats.itemCount}点`,
+      stats.giftItemCount > 0 ? `ギフト ${stats.giftItemCount}点` : ""
+    )
+  );
+  summaryCards.appendChild(
+    summaryCard(
+      "支援した作者",
+      `${stats.shopCount}人`,
+      stats.newShopCount > 0 ? `はじめて ${stats.newShopCount}人` : ""
+    )
+  );
+  // BOOSTを使わない人には空の数字が並ぶだけなので、上乗せがあるときだけ出す
+  if (stats.boost > 0) {
+    summaryCards.appendChild(
+      summaryCard("BOOSTの上乗せ", formatYen(stats.boost), `${stats.boostItemCount}点に上乗せ`)
+    );
+  }
+  if (stats.busiestMonth) {
+    summaryCards.appendChild(
+      summaryCard(
+        "いちばん買った月",
+        monthLabel(stats.busiestMonth.key),
+        formatYen(stats.busiestMonth.total)
+      )
+    );
+  }
+
+  // 過去の注文が未収集だと明細が無く、その作者を「はじめて」に数えてしまう
+  summaryNewShopWarn.hidden = stats.beforePending === 0;
+  if (stats.beforePending > 0) {
+    summaryNewShopWarn.textContent =
+      `${stats.year}年より前の注文に未収集が${stats.beforePending}件あります。` +
+      "その注文で買った作者は「はじめて」に数えてしまうことがあります。";
+  }
+
+  summaryTopShopsBody.innerHTML = "";
+  stats.topShops.forEach((row, index) => {
+    const tr = el("tr", "rank-top");
+    tr.appendChild(rankCell(index + 1));
+    tr.appendChild(shopNameCell(row));
+    tr.appendChild(countCell(row.count, row.giftCount));
+    tr.appendChild(amountCell(row.total, row.gift));
+    summaryTopShopsBody.appendChild(tr);
   });
 }
 

@@ -646,6 +646,63 @@ location.hash = "#/report";
 renderCurrentView();
 check("他の画面では合計の共有に戻る", shareBtn.textContent, "𝕏で共有");
 
+// --- 今年のまとめ ---
+// 「はじめて出会った作者」を出すため、その年より前の注文も見る必要がある
+const summaryRows = [
+  { id: "s1", date: "2024年5月1日 00:00", amount: 1000, gift: 0,
+    items: [item("旧作", 1000)] },
+  { id: "s2", date: "2026年2月1日 00:00", amount: 3300, gift: 0,
+    items: [{ ...item("服", 1000), quantity: 3, boost: 300 }] },
+  { id: "s3", date: "2026年3月1日 00:00", amount: 500, gift: 500,
+    items: [item("ギフト", 500, true, "べつのショップ")] },
+  { id: "s4", date: "2026年3月2日 00:00", amount: null, gift: 0, items: null },
+];
+const yearSummary = buildYearSummary(summaryRows, 2026);
+check("その年の支払いだけを合計する", [yearSummary.total, yearSummary.orderCount], [3800, 2]);
+// 未収集を黙って落とすと、実際より少ない額を「その年の全部」として見せてしまう
+check("未収集の件数を持つ", yearSummary.pendingCount, 1);
+check("ギフト額はその年の分だけ", yearSummary.gift, 500);
+check("点数は数量ぶん数える", [yearSummary.itemCount, yearSummary.giftItemCount], [4, 1]);
+check("支援した作者の数", yearSummary.shopCount, 2);
+// 2024年にも買っている SOUR FLAVOR は「はじめて」に入らない
+check("その年にはじめて買った作者だけ数える", yearSummary.newShopCount, 1);
+check("BOOSTの上乗せを合計する", [yearSummary.boost, yearSummary.boostItemCount], [300, 1]);
+check("いちばん買った月", [yearSummary.busiestMonth.key, yearSummary.busiestMonth.total], ["2026-02", 3300]);
+check("この年の推し作者は3件まで", yearSummary.topShops.map(s => s.name), ["SOUR FLAVOR", "べつのショップ"]);
+// 0円のBOOSTは「応援した」と数えない(金額の行自体は常にあるため)
+check("0円のBOOSTは数えない",
+  buildYearSummary([{ id: "z", date: "2026年1月1日 00:00", amount: 100, items: [item("A", 100)] }], 2026).boostItemCount, 0);
+// 過去の注文が未収集だと明細が無く、その作者を「はじめて」に数えてしまう
+check("過去の未収集は件数として返す",
+  buildYearSummary([{ id: "p", date: "2024年1月1日 00:00", amount: null, items: null }, summaryRows[1]], 2026).beforePending, 1);
+check("注文のある年を新しい順に返す", orderYears(summaryRows), [2026, 2024]);
+
+// 表示(年を選べる。カードはBOOSTの有無で数が変わる)
+const savedSummaryIndex = state.index;
+const savedSummaryCache = state.cache;
+state.index = { updatedAt: "x", complete: true, orders: summaryRows.map(r => ({ id: r.id, status: "completed", date: r.date })) };
+state.cache = Object.fromEntries(summaryRows.map(r => [r.id, { ...r, v: CACHE_SCHEMA_VERSION, status: "completed", shipping: 0 }]));
+setSummaryYear(2026);
+render();
+check("年のプルダウンは注文のある年だけ", [...summaryYear.options].map(o => o.value), ["2026", "2024"]);
+check("カードの見出し", [...summaryCards.querySelectorAll(".trend-summary-label")].map(e => e.textContent),
+  ["2026年の支払い", "買ったもの", "支援した作者", "BOOSTの上乗せ", "いちばん買った月"]);
+check("カードの数字", [...summaryCards.querySelectorAll(".trend-summary-value")].map(e => e.textContent),
+  ["¥3,800", "4点", "2人", "¥300", "2026年2月"]);
+check("合計には未収集の件数を添える",
+  summaryCards.querySelector(".trend-summary-note").textContent, "注文2件 / ギフト ¥500 / 未収集1件");
+check("この年の推し作者を並べる",
+  [...summaryTopShopsBody.querySelectorAll("tr")].map(tr => tr.cells[1].textContent), ["SOUR FLAVOR", "べつのショップ"]);
+check("過去に未収集が無ければ断らない", summaryNewShopWarn.hidden, true);
+// BOOSTを使っていない年に空の数字を並べない
+setSummaryYear(2024);
+check("BOOSTが無ければカードごと出さない",
+  [...summaryCards.querySelectorAll(".trend-summary-label")].map(e => e.textContent).includes("BOOSTの上乗せ"), false);
+setSummaryYear(2026);
+state.index = savedSummaryIndex;
+state.cache = savedSummaryCache;
+render();
+
 // --- 共有ウィンドウを開く ---
 // noopener を第3引数に渡すと、タブが開けても戻り値は必ず null になる(仕様)。
 // それを「止められた」と読むと、正常に開いているのに毎回押し直しを案内してしまう
@@ -723,7 +780,7 @@ renderCurrentView();
 check("データ出力へ切り替わる",
   [document.getElementById("view-report").hidden, document.getElementById("view-export").hidden], [true, false]);
 check("メニューに現在地が出る",
-  [...navDrawer.querySelectorAll(".nav-link")].map(a => a.classList.contains("current")), [false, false, false, true, false]);
+  [...navDrawer.querySelectorAll(".nav-link")].map(a => a.classList.contains("current")), [false, false, false, false, true, false]);
 check("画面名を見出しに添える", viewTitle.textContent, "データ出力");
 location.hash = "#/trends";
 renderCurrentView();
@@ -1249,7 +1306,10 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
     dashboardDoc.querySelector('.nav-link[data-view="ranking"]').getAttribute("href"), "#/ranking");
   check("メニューに追加した画面が並んでいる",
     [...dashboardDoc.querySelectorAll(".nav-link")].map((a) => a.getAttribute("href")),
-    ["#/report", "#/trends", "#/ranking", "#/export", "#/backup"]);
+    ["#/report", "#/summary", "#/trends", "#/ranking", "#/export", "#/backup"]);
+  // まとめの作者別金額もランキングと同じ商品合計なので、同じ断りを画面に出す
+  check("まとめに合計と一致しない旨の断りがある",
+    dashboardHtml.includes("足しても上の合計金額とは一致しません"), true);
 
   const dashboardCss = await (await fetch("../extension/dashboard.css")).text();
   const dashboardStyle = document.createElement("style");

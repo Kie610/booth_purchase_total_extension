@@ -853,6 +853,40 @@ span.amount-pending {
   font-size: 11px;
 }
 
+/* ---- 今年のまとめ ---- */
+
+/* 見出しと年の選択を同じ行に置く。狭いときは折り返す */
+.summary-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.summary-head h2 {
+  margin: 0;
+}
+
+.summary-year {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+
+/* カードの数はBOOSTの有無などで変わるので、列数を決め打ちしない */
+.summary-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin: 18px 0 8px;
+}
+
+.summary-cards .summary-card {
+  min-width: 0;
+}
+
 /* ---- 推し作者ランキング ---- */
 
 /* 見出しと基準の切り替えを同じ行に置く。狭いときは折り返す */

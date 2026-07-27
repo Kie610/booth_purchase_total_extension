@@ -17,6 +17,7 @@
   <div id="navOverlay" class="nav-overlay" hidden></div>
   <nav id="navDrawer" class="nav-drawer" aria-label="画面の切り替え" hidden>
     <a class="nav-link" href="#/report" data-view="report">お買いものレポート</a>
+    <a class="nav-link" href="#/summary" data-view="summary">今年のまとめ</a>
     <a class="nav-link" href="#/trends" data-view="trends">支出推移・前年比較</a>
     <a class="nav-link" href="#/ranking" data-view="ranking">推し作者ランキング</a>
     <a class="nav-link" href="#/export" data-view="export">データ出力</a>
@@ -179,6 +180,52 @@
         <span class="status" id="clearAmountsStatus"></span>
       </div>
     </details>
+   </div>
+
+   <div class="view" id="view-summary" hidden>
+     <section class="step">
+       <div class="summary-head">
+         <h2>今年のまとめ</h2>
+         <label class="summary-year">
+           対象の年
+           <select id="summaryYear"></select>
+         </label>
+       </div>
+       <p class="hint">
+         その年に買ったものを振り返ります。金額は注文ごとのお支払金額から、
+         点数・作者数・BOOSTは商品の明細から数えています。
+       </p>
+
+       <div id="summaryEmpty" class="empty-note">
+         まとめられる注文がありません。「お買いものレポート」で金額を収集してください。
+       </div>
+
+       <div id="summaryArea" hidden>
+         <div id="summaryCards" class="summary-cards"></div>
+
+         <!-- 過去の注文に未収集があると、その作者を「はじめて」と数えてしまう。
+              数字だけ見せると新規の作者が多いと誤解させるので必ず断る -->
+         <div class="status warn" id="summaryNewShopWarn" hidden></div>
+
+         <section class="trend-section" aria-labelledby="summaryTopShopsTitle">
+           <div class="trend-heading">
+             <h3 id="summaryTopShopsTitle">この年の推し作者</h3>
+             <span class="hint trend-caption">商品の合計金額が多い順に3ショップ</span>
+           </div>
+           <table class="data-table ranking-table">
+             <thead>
+               <tr><th class="rank">順位</th><th>ショップ名</th><th class="num">購入商品数</th><th class="num">合計金額</th></tr>
+             </thead>
+             <tbody id="summaryTopShopsBody"></tbody>
+           </table>
+         </section>
+
+         <p class="hint">
+           作者ごとの金額は商品の合計（単価×数量＋BOOST）です。送料やクーポンが入らないため、
+           足しても上の合計金額とは一致しません。
+         </p>
+       </div>
+     </section>
    </div>
 
    <div class="view" id="view-trends" hidden>

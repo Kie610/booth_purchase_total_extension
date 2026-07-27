@@ -422,6 +422,106 @@ function aggregateByShop(results, sortBy) {
     .sort((a, b) => compare(a, b) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 }
 
+// ---- 年ごとの振り返り --------------------------------------------------
+
+const YEAR_SUMMARY_TOP_SHOPS = 3;
+
+// 注文のある年を新しい順に返す。まとめの年を選ぶプルダウンに使う
+function orderYears(results) {
+  const years = new Set();
+  for (const result of results) {
+    const date = parseOrderDate(result.date);
+    if (date) years.add(date.year);
+  }
+  return Array.from(years).sort((a, b) => b - a);
+}
+
+// 「その年にはじめて出会った作者」を数えるには、その年より前に買っているかを
+// 知る必要がある。年で絞った結果だけでは判定できないので、全期間を受け取る。
+//
+// 合計金額は他の画面と同じく注文単位のお支払金額から出す。作者数・点数・BOOSTは
+// 商品明細からしか出せないため、ここでも「ショップ別の合計を足しても total には
+// ならない」というランキングと同じずれが残る。画面に断りを出すこと。
+function buildYearSummary(results, year) {
+  const target = Number(year);
+  const inYear = [];
+  const before = [];
+  for (const result of results) {
+    const date = parseOrderDate(result.date);
+    if (!date) continue;
+    if (date.year === target) inYear.push(result);
+    else if (date.year < target) before.push(result);
+  }
+  const valid = inYear.filter((result) => typeof result.amount === "number");
+
+  // その年より前に買ったことのある作者。未収集の注文は明細を持たないので
+  // ここに現れず、「はじめて」を多めに数えてしまう。件数を返して画面で断る
+  const knownShops = new Set();
+  let beforePending = 0;
+  for (const result of before) {
+    if (!Array.isArray(result.items)) {
+      beforePending++;
+      continue;
+    }
+    for (const item of result.items) knownShops.add(item.shopUrl || item.shop);
+  }
+
+  const shops = new Set();
+  const newShops = new Set();
+  let itemCount = 0;
+  let giftItemCount = 0;
+  let boost = 0;
+  let boostItemCount = 0;
+  for (const result of valid) {
+    if (!Array.isArray(result.items)) continue;
+    for (const item of result.items) {
+      const key = item.shopUrl || item.shop;
+      shops.add(key);
+      if (!knownShops.has(key)) newShops.add(key);
+
+      const quantity = itemQuantity(item);
+      const count = typeof quantity === "number" ? quantity : 0;
+      itemCount += count;
+      if (item.gift) giftItemCount += count;
+      // 0円のBOOSTは「応援した」と数えない。金額の行は常に出るため
+      if (typeof item.boost === "number" && item.boost > 0) {
+        boost += item.boost;
+        boostItemCount += 1;
+      }
+    }
+  }
+
+  const months = new Map();
+  for (const result of valid) {
+    const key = monthKeyOf(result.date);
+    if (!key) continue;
+    months.set(key, (months.get(key) || 0) + result.amount);
+  }
+  let busiestMonth = null;
+  for (const [key, total] of months) {
+    // 同額なら先に出てきた月を残し、並びで結果が変わらないようにする
+    if (!busiestMonth || total > busiestMonth.total) busiestMonth = { key, total };
+  }
+
+  return {
+    year: target,
+    total: valid.reduce((sum, result) => sum + result.amount, 0),
+    gift: valid.reduce((sum, result) => sum + giftAmount(result), 0),
+    orderCount: valid.length,
+    // 金額を収集できていない注文。まとめは「その年の全部」を名乗るので必ず出す
+    pendingCount: inYear.length - valid.length,
+    itemCount,
+    giftItemCount,
+    boost,
+    boostItemCount,
+    shopCount: shops.size,
+    newShopCount: newShops.size,
+    beforePending,
+    busiestMonth,
+    topShops: aggregateByShop(valid).slice(0, YEAR_SUMMARY_TOP_SHOPS),
+  };
+}
+
 async function readStored(key, fallback) {
   const stored = await ext.storage.local.get([key]);
   return stored[key] === undefined ? fallback : stored[key];
