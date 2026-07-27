@@ -53,6 +53,17 @@ const periodTableBody = document.getElementById("periodTableBody");
 const orderTableBody = document.getElementById("orderTableBody");
 const noticeBox = document.getElementById("noticeBox");
 const errorBox = document.getElementById("errorBox");
+const menuBtn = document.getElementById("menuBtn");
+const navDrawer = document.getElementById("navDrawer");
+const navOverlay = document.getElementById("navOverlay");
+const viewTitle = document.getElementById("viewTitle");
+const exportEmpty = document.getElementById("exportEmpty");
+const exportArea = document.getElementById("exportArea");
+const exportStats = document.getElementById("exportStats");
+const exportGap = document.getElementById("exportGap");
+const exportOrdersBtn = document.getElementById("exportOrdersBtn");
+const exportItemsBtn = document.getElementById("exportItemsBtn");
+const exportPreviewBody = document.getElementById("exportPreviewBody");
 
 // 実行中は押せなくするボタン
 const ACTION_BUTTONS = [
@@ -63,6 +74,51 @@ const ACTION_BUTTONS = [
   clearIndexBtn,
   clearAmountsBtn,
 ];
+
+// ---- 画面の切り替え ----------------------------------------------------
+//
+// 画面ごとにHTMLを分けず、同じページの中で区画を出し分ける。別ページへ移ると
+// JSのコンテキストごと破棄され、数分かかる収集が丸ごと止まってしまうため
+// (ポップアップではなく専用タブで処理しているのと同じ理由)。
+// 現在の画面はURLのハッシュに持たせるので、再読み込みしても同じ画面に戻る。
+
+const VIEW_NAMES = ["report", "export"];
+const DEFAULT_VIEW = "report";
+// 見出しの右に添える画面名。既定の画面では何も足さない
+const VIEW_TITLES = { report: "", export: "データ出力" };
+
+function viewFromHash(hash) {
+  const name = String(hash || "").replace(/^#\/?/, "");
+  return VIEW_NAMES.includes(name) ? name : DEFAULT_VIEW;
+}
+
+function renderCurrentView() {
+  const current = viewFromHash(location.hash);
+  for (const name of VIEW_NAMES) {
+    document.getElementById(`view-${name}`).hidden = name !== current;
+  }
+  navDrawer.querySelectorAll(".nav-link").forEach((link) => {
+    link.classList.toggle("current", link.dataset.view === current);
+  });
+  viewTitle.textContent = VIEW_TITLES[current];
+  return current;
+}
+
+function setDrawerOpen(open) {
+  navDrawer.hidden = !open;
+  navOverlay.hidden = !open;
+  menuBtn.setAttribute("aria-expanded", String(open));
+  if (open) {
+    const first = navDrawer.querySelector(".nav-link");
+    if (first) first.focus();
+  } else {
+    menuBtn.focus();
+  }
+}
+
+function drawerIsOpen() {
+  return !navDrawer.hidden;
+}
 
 // 折りたたみ表で開いている年。再描画のたびに行を作り直すため、
 // 開閉状態はDOMではなくこちらで持つ(表ごとに1つ)
@@ -201,11 +257,69 @@ function setProgress(text, ratio) {
 // ---- 描画 --------------------------------------------------------------
 
 function render() {
+  renderCurrentView();
   renderIndexStatus();
   renderMonthArea();
   renderResult();
   updatePlannedCount();
   renderClearArea();
+  renderExportArea();
+}
+
+// データ出力の画面。CSVそのものは押されたときに組み立てるが、
+// 何件書き出せるのかと、お支払金額と商品合計にずれがあるかはここで示す
+function renderExportArea() {
+  const results = buildResults();
+  const withItems = results.filter((r) => Array.isArray(r.items));
+  const itemCount = withItems.reduce((sum, r) => sum + r.items.length, 0);
+
+  exportEmpty.hidden = results.length > 0;
+  exportArea.hidden = results.length === 0;
+  exportOrdersBtn.disabled = results.length === 0;
+  exportItemsBtn.disabled = results.length === 0;
+  if (results.length === 0) {
+    exportPreviewBody.innerHTML = "";
+    return;
+  }
+
+  exportStats.textContent =
+    `注文: ${results.length}件 / 商品明細のある注文: ${withItems.length}件 / 商品: ${itemCount}行` +
+    (withItems.length < results.length
+      ? ` (明細を取れていない注文が${results.length - withItems.length}件あります)`
+      : "");
+
+  // お支払金額と商品合計が食い違う注文。送料やクーポンが入るとここに出るので、
+  // 合計を商品側から出してよいかどうかの判断材料になる
+  const gaps = results.filter((r) => {
+    const gap = amountGapOf(r);
+    return gap !== null && gap !== 0;
+  });
+  exportGap.hidden = gaps.length === 0;
+  exportGap.classList.toggle("warn", gaps.length > 0);
+  if (gaps.length > 0) {
+    exportGap.textContent =
+      `お支払金額と商品合計が一致しない注文が${gaps.length}件あります。` +
+      "CSVの「差額」列で内容を確認できます(送料・クーポンなどが考えられます)。";
+  }
+
+  exportPreviewBody.innerHTML = "";
+  const preview = [];
+  for (const r of withItems) {
+    for (const item of r.items) {
+      if (preview.length >= 10) break;
+      preview.push(item);
+    }
+    if (preview.length >= 10) break;
+  }
+  for (const item of preview) {
+    const tr = el("tr");
+    tr.appendChild(td(item.shop));
+    tr.appendChild(td(item.name));
+    tr.appendChild(td(typeof item.price === "number" ? formatYen(item.price) : "—", "num"));
+    tr.appendChild(td(typeof item.boost === "number" ? formatYen(item.boost) : "—", "num"));
+    tr.appendChild(td(item.gift ? "はい" : ""));
+    exportPreviewBody.appendChild(tr);
+  }
 }
 
 function renderClearArea() {
@@ -473,7 +587,13 @@ function renderOrderTable(results) {
     tr.appendChild(td(r.date));
     tr.appendChild(td(STATUS_LABELS[r.status] || r.status));
     if (typeof r.amount === "number") {
-      tr.appendChild(amountCell(r.amount, giftAmount(r)));
+      const cell = amountCell(r.amount, giftAmount(r));
+      // 金額は読めたが商品明細を読めなかった注文。次の実行で拾い直す対象になっており、
+      // 月別表では未収集として数えているので、内訳でも黙って収集済みには見せない
+      if (!Array.isArray(r.items)) {
+        cell.insertBefore(el("span", "amount-pending", "明細なし"), cell.firstChild);
+      }
+      tr.appendChild(cell);
     } else if (r.amount === null) {
       tr.appendChild(td("取得失敗", "num amount-failed"));
     } else {

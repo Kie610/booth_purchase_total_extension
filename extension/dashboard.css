@@ -35,6 +35,75 @@ body {
   max-width: 900px;
   margin: 0 auto;
   padding: 0 24px;
+  display: flex;
+  align-items: stretch;
+}
+
+/* 見出しの帯(h1::before)が画面左端まで塗るので、ボタンはその上に重ねて白抜きで置く */
+.menu-btn {
+  position: relative;
+  z-index: 1;
+  padding: 0 14px 0 0;
+  border: 0;
+  background: none;
+  color: #fff;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.menu-btn:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: -4px;
+}
+
+.view-title {
+  align-self: center;
+  margin-left: 14px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--fg-muted);
+}
+
+/* ---- 画面切り替えのメニュー ---- */
+
+.nav-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: rgba(0, 0, 0, 0.32);
+}
+
+.nav-drawer {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 21;
+  width: 260px;
+  padding: 16px 0;
+  background: #fff;
+  border-right: 1px solid var(--border);
+  box-shadow: 2px 0 12px rgba(0, 0, 0, 0.08);
+}
+
+.nav-link {
+  display: block;
+  padding: 12px 24px;
+  color: var(--fg);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.nav-link:hover {
+  background: var(--bg-soft);
+}
+
+/* 今どの画面にいるかは、左の線と太字で示す */
+.nav-link.current {
+  font-weight: 700;
+  color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 /* 見出しはヘッダーの縦幅いっぱいの帯にし、画面左端まで届かせる */
@@ -570,5 +639,20 @@ button.secondary:hover:not(:disabled) {
 }
 
 .amount-pending {
+  color: var(--fg-muted);
+}
+
+/* 金額は読めたが商品明細が無い注文。金額の左に小さく添える */
+span.amount-pending {
+  margin-right: 8px;
+  font-size: 11px;
+}
+
+/* ---- データ出力 ---- */
+
+.export-preview-title {
+  margin: 24px 0 8px;
+  font-size: 13px;
+  font-weight: 700;
   color: var(--fg-muted);
 }

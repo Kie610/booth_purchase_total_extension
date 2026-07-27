@@ -8,19 +8,30 @@
 <body>
   <header class="app-header">
     <div class="app-header-inner">
+      <button id="menuBtn" class="menu-btn" aria-label="メニュー" aria-expanded="false" aria-controls="navDrawer">☰</button>
       <h1>BOOTHお買いものレポート</h1>
+      <span class="view-title" id="viewTitle"></span>
     </div>
   </header>
 
+  <div id="navOverlay" class="nav-overlay" hidden></div>
+  <nav id="navDrawer" class="nav-drawer" aria-label="画面の切り替え" hidden>
+    <a class="nav-link" href="#/report" data-view="report">お買いものレポート</a>
+    <a class="nav-link" href="#/export" data-view="export">データ出力</a>
+  </nav>
+
   <main class="page">
+    <!-- 通知は画面をまたいで出るので、切り替える区画の外に置く -->
+    <div id="noticeBox" class="notice" hidden></div>
+    <div id="errorBox" class="error" hidden></div>
+
+   <div class="view" id="view-report">
     <p class="lead">
       <a href="https://accounts.booth.pm/orders" target="_blank" rel="noopener">accounts.booth.pm</a>
       にログインした状態で実行してください。
       取得中もこのタブを開いたまま、他のタブやウィンドウは自由に操作できます。
+      収集の実行中でもメニューから画面を切り替えられます(処理は止まりません)。
     </p>
-
-    <div id="noticeBox" class="notice" hidden></div>
-    <div id="errorBox" class="error" hidden></div>
 
     <section id="summarySection" class="summary" hidden>
       <div class="summary-main">
@@ -157,6 +168,43 @@
         <span class="status" id="clearAmountsStatus"></span>
       </div>
     </details>
+   </div>
+
+   <div class="view" id="view-export" hidden>
+     <section class="step">
+       <h2>データ出力</h2>
+       <p class="hint">
+         収集したデータをCSVで書き出します。Excelでそのまま開けるようUTF-8のBOM付きで保存します。
+         金額の列は集計に使えるよう桁区切りを付けません。
+       </p>
+
+       <div id="exportEmpty" class="empty-note">
+         まだ収集したデータがありません。「お買いものレポート」で収集してください。
+       </div>
+
+       <div id="exportArea" hidden>
+         <div class="index-status">
+           <div class="status" id="exportStats"></div>
+           <div class="status" id="exportGap" hidden></div>
+         </div>
+
+         <div class="step-controls">
+           <button id="exportOrdersBtn" class="primary">注文単位のCSVを保存</button>
+           <button id="exportItemsBtn" class="secondary">商品単位のCSVを保存</button>
+         </div>
+
+         <h3 class="export-preview-title">商品単位の先頭10行</h3>
+         <div class="table-scroll">
+           <table class="data-table">
+             <thead>
+               <tr><th>ショップ名</th><th>商品名</th><th class="num">単価</th><th class="num">BOOST</th><th>ギフト</th></tr>
+             </thead>
+             <tbody id="exportPreviewBody"></tbody>
+           </table>
+         </div>
+       </div>
+     </section>
+   </div>
   </main>
 
   <footer class="app-footer">
@@ -196,6 +244,7 @@
 
 <script src="common.js"></script>
 <script src="purchase-examples.js"></script>
+<script src="csv.js"></script>
 <script src="dashboard-parse.js"></script>
 <script src="dashboard-view.js"></script>
 <script src="dashboard.js"></script>

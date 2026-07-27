@@ -18,6 +18,49 @@ const state = { index: null, cache: {} };
 
 // ---- イベント配線 ------------------------------------------------------
 
+// 画面の切り替え。移動しても同じJSコンテキストのままなので、収集は止まらない
+menuBtn.addEventListener("click", () => setDrawerOpen(!drawerIsOpen()));
+navOverlay.addEventListener("click", () => setDrawerOpen(false));
+navDrawer.addEventListener("click", (event) => {
+  // リンクの既定動作でハッシュが変わり、hashchange 側で描画が切り替わる
+  if (event.target.closest(".nav-link")) setDrawerOpen(false);
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && drawerIsOpen()) setDrawerOpen(false);
+});
+window.addEventListener("hashchange", () => {
+  renderCurrentView();
+  window.scrollTo(0, 0);
+});
+
+// 保存データの読み込みを待たずに画面を決める。待つと、#/export で開き直したときに
+// 一瞬だけレポート画面が見えてしまう
+renderCurrentView();
+
+exportOrdersBtn.addEventListener("click", () =>
+  downloadCsv(buildOrdersCsv(buildResults()), csvFileName("orders"))
+);
+
+exportItemsBtn.addEventListener("click", () =>
+  downloadCsv(buildItemsCsv(buildResults()), csvFileName("items"))
+);
+
+// 拡張の権限を増やさずに保存させるため、Blobへのリンクを自分で作って押す
+// ("downloads" 権限を足すと、権限は storage とBOOTHのドメインだけ、という現状が崩れる)
+function downloadCsv(text, fileName) {
+  const url = URL.createObjectURL(
+    new Blob([text], { type: "text/csv;charset=utf-8" })
+  );
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  // 押した直後に取り消すと保存が始まらないことがあるので、少し置いてから解放する
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
 fetchIndexBtn.addEventListener("click", () =>
   runTask((signal) => fetchIndexTask(signal, forceRefreshIndex.checked))
 );
@@ -211,23 +254,31 @@ function oldestCoveredOrder() {
 
 // 索引と収集済みの金額を突き合わせて表示用の一覧にする
 // amount: 数値=収集済み / null=取得失敗 / undefined=未収集
+// items: 配列=商品明細あり / null=明細を読めていない
 function buildResults() {
   if (state.index) {
-    return targetOrders().map((o) => ({
-      id: o.id,
-      date: o.date,
-      status: o.status,
-      amount: state.cache[o.id] ? state.cache[o.id].amount : undefined,
-      gift: giftAmount(state.cache[o.id]),
-    }));
+    return targetOrders().map((o) => {
+      const entry = state.cache[o.id];
+      return {
+        id: o.id,
+        date: o.date,
+        status: o.status,
+        amount: entry ? entry.amount : undefined,
+        // 未収集の注文を0円のギフトとして書き出さないよう、そのままの値を持たせる
+        // (表示側は giftAmount() を通すので、数値でなければ0として扱われる)
+        gift: entry ? entry.gift : undefined,
+        items: hasItems(entry) ? entry.items : null,
+      };
+    });
   }
-  // 索引が無い場合(旧バージョンからの移行時)はキャッシュだけで表示する
+  // 索引が無い場合はキャッシュだけで表示する
   return Object.entries(state.cache).map(([id, entry]) => ({
     id,
     date: entry.date,
     status: entry.status,
     amount: entry.amount,
-    gift: giftAmount(entry),
+    gift: entry.gift,
+    items: hasItems(entry) ? entry.items : null,
   }));
 }
 
@@ -574,6 +625,7 @@ async function collectAmounts(orders, force, signal) {
         gift: detail.gift,
         status: order.status,
         date: order.date,
+        items: detail.items,
       };
       done++;
       if (done % CACHE_FLUSH_EVERY === 0) await saveCache(state.cache);

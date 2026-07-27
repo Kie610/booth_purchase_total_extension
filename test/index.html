@@ -18,6 +18,26 @@ window.addEventListener("unhandledrejection", (e) => showFailure("ERROR " + ((e.
 <pre id="out">running...</pre>
 
 <!-- dashboard.html と同じ要素構成 -->
+<button id="menuBtn" aria-expanded="false"></button>
+<span id="viewTitle"></span>
+<div id="navOverlay" hidden></div>
+<nav id="navDrawer" hidden>
+  <a class="nav-link" href="#/report" data-view="report">お買いものレポート</a>
+  <a class="nav-link" href="#/export" data-view="export">データ出力</a>
+</nav>
+
+<div class="view" id="view-report"></div>
+<div class="view" id="view-export" hidden>
+  <div id="exportEmpty"></div>
+  <div id="exportArea" hidden>
+    <div id="exportStats"></div>
+    <div id="exportGap" hidden></div>
+    <button id="exportOrdersBtn"></button>
+    <button id="exportItemsBtn"></button>
+    <table><tbody id="exportPreviewBody"></tbody></table>
+  </div>
+</div>
+
 <div id="progress" hidden>
   <span id="progressText"></span>
   <button id="abortBtn"></button>
@@ -76,6 +96,7 @@ window.addEventListener("unhandledrejection", (e) => showFailure("ERROR " + ((e.
 <script src="stub.js"></script>
 <script src="../extension/common.js"></script>
 <script src="../extension/purchase-examples.js"></script>
+<script src="../extension/csv.js"></script>
 <script src="../extension/dashboard-parse.js"></script>
 <script src="../extension/dashboard-view.js"></script>
 <script src="../extension/dashboard.js"></script>

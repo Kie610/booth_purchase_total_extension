@@ -43,33 +43,59 @@ const detailHtml = `<html><body>
 <div class="summary"><div>お支払金額</div><div>¥1,234</div></div>
 </body></html>`;
 // ステータスは索引側で読んだものを使うので、詳細ページからは読まない
-check("parseDetailPage 支払金額", parseDetailPage(parse(detailHtml)), { amount: 1234, gift: null });
-check("parseDetailPage 金額が無い場合", parseDetailPage(parse("<html><body></body></html>")), { amount: null, gift: null });
+check("parseDetailPage 支払金額", parseDetailPage(parse(detailHtml)), { amount: 1234, gift: null, items: null });
+check("parseDetailPage 金額が無い場合", parseDetailPage(parse("<html><body></body></html>")), { amount: null, gift: null, items: null });
 
-// --- 支払額に含まれるギフト分 ---
-// 注文詳細はショップ・商品種別ごとに .sheet-group で区切られ、先頭に見出しが入る
-function itemSheet(price, boost) {
+// --- 商品明細とギフト分 ---
+// 実ページの構造に合わせる。ショップ名は .sheet-group ではなく、その外側の
+// .l-order-detail-by-shop に1つだけ入る(同じショップのダウンロード商品とギフトは
+// 別グループだが同じ区切りの中に並ぶ)。
+// ダウンロードファイル名の行も .u-tpg-caption1 を使っているので、金額のある行だけを拾う
+let itemSeq = 0;
+function itemSheet(price, boost, name) {
+  const id = ++itemSeq;
+  const label = name || `商品${id}`;
   return `<div class="sheet sheet--p400">
-    <div class="u-tpg-caption1 text-[#505c6b]">¥ ${price}</div>
-    <div class="u-tpg-caption1 text-[#505c6b]"><span class="particulars-heading">BOOST<i class="icon-boost"></i></span>¥ ${boost}</div>
+    <div class="flex"><div class="flex-[1]">
+      <div class="text-14 text-[#505c6b]"><b><a class="nav" href="https://sourflavor.booth.pm/items/${id}">${label}</a></b></div>
+      <div class="u-tpg-caption1 text-[#505c6b]">¥ ${price}</div>
+      <div class="u-tpg-caption1 text-[#505c6b]"><span class="particulars-heading">BOOST<i class="icon-boost"></i></span>¥ ${boost}</div>
+    </div></div>
+    <div class="list list--collapse"><div class="legacy-list-item">
+      <div class="legacy-list-item__center u-tpg-caption1"><b>${label}.zip</b></div>
+    </div></div>
   </div>`;
 }
 function sheetGroup(title, items) {
   return `<div class="sheet-group sheet-group--outline0">
     <div class="sheet sheet--p400"><div class="l-row flex-[1]">
       <div class="l-col-pc flex items-center"><b class="u-tpg-title3">${title}</b></div>
-      <div class="l-col-pc-auto"><a class="btn small calm">ショップにメッセージを送る</a></div>
+      <div class="l-col-pc-auto"><a class="btn small calm" href="https://sourflavor.booth.pm/conversations/new">ショップにメッセージを送る</a></div>
     </div></div>
-    ${items.map(([p, b]) => itemSheet(p, b)).join("")}
+    ${items.map(([p, b, n]) => itemSheet(p, b, n)).join("")}
   </div>`;
 }
-function orderHtml(total, groups) {
+function shopSection(shop, groups) {
+  const host = shop === "SOUR FLAVOR" ? "sourflavor" : "other";
+  return `<div class="l-order-detail-by-shop">
+    <div class="l-order-detail-sheet-group-header overflow-hidden">
+      <b><a class="nav u-tpg-title3" href="https://${host}.booth.pm/">${shop}</a></b>
+    </div>
+    ${groups}
+  </div>`;
+}
+// 領収書の枠も同じclassを使い回すが、ショップ名の見出しも商品リンクも持たない
+const receiptSection = `<div class="l-order-detail-by-shop"><div class="sheet-group sheet-group--outline0">
+  <div class="bg-white"><div class="mb-16 font-bold">インボイスとして利用できる領収書</div></div>
+</div></div>`;
+function orderHtml(total, groups, shop) {
   return `<html><body>
     <span class="mx-0 badge order-state completed">発送完了</span>
     <div class="l-row text-14">
       <div class="l-col-pc-3 text-[#505c6b]">お支払金額</div><div class="l-col-pc-9">¥ ${total}</div>
     </div>
-    ${groups}
+    ${shopSection(shop || "SOUR FLAVOR", groups)}
+    ${receiptSection}
   </body></html>`;
 }
 
@@ -78,9 +104,28 @@ check("parseYenAmount 桁区切り", parseYenAmount("¥ 5,100"), 5100);
 check("parseYenAmount 金額が無い", parseYenAmount("ショップにメッセージを送る"), null);
 
 const withGift = orderHtml("5,100",
-  sheetGroup("ダウンロード商品", [[425, 0], [425, 0]]) +
-  sheetGroup("ギフト", [[425, 0], [425, 100]]));
-check("ギフトのグループだけを合計する", parseDetailPage(parse(withGift)), { amount: 5100, gift: 950 });
+  sheetGroup("ダウンロード商品", [[425, 0, "髪型A"], [425, 0, "髪型B"]]) +
+  sheetGroup("ギフト", [[425, 0, "髪型A"], [425, 100, "髪型B"]]));
+const withGiftDetail = parseDetailPage(parse(withGift));
+check("ギフトのグループだけを合計する", [withGiftDetail.amount, withGiftDetail.gift], [5100, 950]);
+
+// 商品明細(ショップ名は外側の区切りから、ギフトかどうかはグループの見出しから決まる)
+check("商品明細の件数", withGiftDetail.items.length, 4);
+check("商品明細の1件目", withGiftDetail.items[0],
+  { shop: "SOUR FLAVOR", shopUrl: "https://sourflavor.booth.pm/", name: "髪型A", price: 425, boost: 0, gift: false });
+check("ギフトのグループの商品には印が付く", withGiftDetail.items.map(i => i.gift), [false, false, true, true]);
+check("BOOSTは単価と分けて持つ", withGiftDetail.items[3], { shop: "SOUR FLAVOR", shopUrl: "https://sourflavor.booth.pm/", name: "髪型B", price: 425, boost: 100, gift: true });
+// ダウンロードファイル名の行も .u-tpg-caption1 だが金額を含まないので単価に混ざらない
+check("ファイル名の行を金額と取り違えない", withGiftDetail.items.every(i => i.price === 425), true);
+// 領収書の枠は商品リンクを持たないので商品として数えない
+check("領収書の枠は商品にしない", withGiftDetail.items.every(i => i.name.startsWith("髪型")), true);
+
+// 商品合計はBOOSTを含む。お支払金額と一致するかはCSVで確認できるようにしてある
+check("商品合計はBOOSTを含む", sumItemAmounts(withGiftDetail.items), 1800);
+check("お支払金額との差", amountGapOf({ amount: 5100, items: withGiftDetail.items }), 3300);
+check("価格を1件でも読めなければ合計は不明", sumItemAmounts([{ price: 100, boost: 0 }, { price: null, boost: 0 }]), null);
+check("明細が無ければ合計も差額も不明",
+  [sumItemAmounts(null), itemsTotalOf({ amount: 100 }), amountGapOf({ amount: 100 })], [null, null, null]);
 
 const noGift = orderHtml("850", sheetGroup("ダウンロード商品", [[425, 0], [425, 0]]));
 check("ギフトが無い注文は0", parseDetailPage(parse(noGift)).gift, 0);
@@ -91,9 +136,21 @@ const multiGift = orderHtml("2,000",
   sheetGroup("ギフト", [[1000, 0]]));
 check("ギフトのグループが複数あれば合算する", parseDetailPage(parse(multiGift)).gift, 1500);
 
-// 構造が変わってグループが見つからない場合は、0と断定せず不明にする
-check("グループが無ければ不明", parseDetailPage(parse(`<html><body>
-  <div>お支払金額</div><div>¥ 100</div></body></html>`)).gift, null);
+// 複数のショップにまたがる注文。ショップ名はそれぞれの区切りから取る
+const multiShop = parseDetailPage(parse(`<html><body>
+  <div class="l-row"><div class="l-col-pc-3">お支払金額</div><div class="l-col-pc-9">¥ 900</div></div>
+  ${shopSection("SOUR FLAVOR", sheetGroup("ダウンロード商品", [[400, 0, "帽子"]]))}
+  ${shopSection("べつのショップ", sheetGroup("ダウンロード商品", [[500, 0, "靴"]]))}
+</body></html>`));
+check("ショップごとに名前が付く", multiShop.items.map(i => [i.shop, i.name]),
+  [["SOUR FLAVOR", "帽子"], ["べつのショップ", "靴"]]);
+
+// 構造が変わって商品を1件も見つけられない場合は、0と断定せず不明にする
+const noItems = parseDetailPage(parse(`<html><body>
+  <div>お支払金額</div><div>¥ 100</div></body></html>`));
+check("商品が見つからなければ不明", [noItems.items, noItems.gift], [null, null]);
+check("領収書の枠しか無くても不明", parseDetailPage(parse(`<html><body>
+  <div>お支払金額</div><div>¥ 100</div>${receiptSection}</body></html>`)).items, null);
 
 // 表示用のギフト表記(0のときは何も出さない)
 check("giftText あり", giftText(1500), "ギフト ¥1,500");
@@ -165,10 +222,24 @@ const INDEX_ORDERS = [
   { id: "e1", status: "completed", date: "日付なし" },
 ];
 state.index = { updatedAt: "2026-07-26T00:00:00.000Z", orders: INDEX_ORDERS };
+const item = (name, price, gift, shop) => ({
+  shop: shop || "SOUR FLAVOR",
+  shopUrl: `https://${shop === "べつのショップ" ? "other" : "sourflavor"}.booth.pm/`,
+  name,
+  price,
+  boost: 0,
+  gift: Boolean(gift),
+});
 state.cache = {
-  a1: { amount: 1000, gift: 400, status: "completed", date: "2026年5月3日 12:34" },
-  c1: { amount: 3000, status: "completed", date: "2025年12月10日 10:00" }, // 旧キャッシュ(ギフト情報なし)
-  c2: { amount: null, status: "unpaid", date: "2025年12月25日 10:00" }, // 取得失敗
+  a1: {
+    amount: 1000, gift: 400, status: "completed", date: "2026年5月3日 12:34",
+    items: [item("髪型A", 600), item("髪型B", 400, true)],
+  },
+  c1: {
+    amount: 3000, gift: 0, status: "completed", date: "2025年12月10日 10:00",
+    items: [item("靴", 3000, false, "べつのショップ")],
+  },
+  c2: { amount: null, gift: null, status: "unpaid", date: "2025年12月25日 10:00", items: null }, // 取得失敗
 };
 
 check("キャンセルは集計対象から外れる", targetOrders().map(o => o.id), ["a1", "a2", "b1", "c1", "c2", "e1"]);
@@ -195,7 +266,11 @@ check("通常は未収集のみが対象", pendingTargets(ordersInRange("2026-05
 check("強制再取得では収集済みも対象", pendingTargets(ordersInRange("2026-05", "2026-05"), true).map(o => o.id), ["a1", "a2"]);
 // 取得失敗をそのままにすると強制再取得でしか直せないので、既定で拾い直す
 check("取得失敗は次の実行で自動的に再取得される", pendingTargets(ordersInRange("2025-12", "2025-12"), false).map(o => o.id), ["c2"]);
-check("needsCollect 未収集と取得失敗だけが対象", [needsCollect(undefined), needsCollect({ amount: null }), needsCollect({ amount: 0 }), needsCollect({ amount: 500 })], [true, true, false, false]);
+// 商品明細を読めなかった注文も、次の実行で拾い直せるよう対象に含める
+const collectedEntry = (amount) => ({ amount, items: [item("何か", amount)] });
+check("needsCollect 未収集・取得失敗・明細なしが対象",
+  [needsCollect(undefined), needsCollect({ amount: null, items: null }), needsCollect({ amount: 500 }), needsCollect(collectedEntry(0)), needsCollect(collectedEntry(500))],
+  [true, true, true, false, false]);
 
 // 表示用の一覧(未収集と取得失敗を区別する)
 const results = buildResults();
@@ -260,7 +335,7 @@ check("再描画で展開状態が保たれる", [...monthTableBody.querySelecto
 
 // すべて収集済みの年は強調しない(c2をいったん収集済みにして確かめ、元へ戻す)
 const failedC2 = state.cache.c2;
-state.cache.c2 = { ...failedC2, amount: 500 };
+state.cache.c2 = { ...failedC2, amount: 500, gift: 0, items: [item("何か", 500)] };
 render();
 check("未収集が無い年は強調しない",
   [...monthTableBody.querySelectorAll("tr.year-row")][1].classList.contains("has-pending"), false);
@@ -307,6 +382,94 @@ check("内訳のギフト併記", orderRows.find(tr => tr.cells[3].textContent =
 check("ギフトが無い注文は金額のみ", orderRows.find(tr => tr.cells[3].textContent === "c1").cells[2].textContent, "¥3,000");
 check("取得失敗の表示", orderRows.find(tr => tr.cells[3].textContent === "c2").cells[2].textContent, "取得失敗");
 check("ステータス日本語化", orderRows.find(tr => tr.cells[3].textContent === "a2").cells[1].textContent, "支払済み");
+
+// 金額は読めたが商品明細を読めなかった注文。月別表では未収集として数えているので、
+// 内訳でも黙って収集済みには見せない
+state.cache.b1 = { amount: 700, gift: 0, status: "completed", date: "2026年3月1日 10:00", items: null };
+render();
+check("明細を読めなかった注文は内訳で分かる",
+  [...orderTableBody.querySelectorAll("tr")].find(tr => tr.cells[3].textContent === "b1").cells[2].textContent,
+  "明細なし¥700");
+check("明細なしは未収集として数える", buildMonthStats(targetOrders(), state.cache).find(s => s.key === "2026-03").pending, 1);
+delete state.cache.b1;
+render();
+
+// --- CSV出力(データ出力の画面) ---
+check("csvField そのまま", csvField("髪型A"), "髪型A");
+check("csvField カンマを含む値は囲む", csvField("帽子, 赤"), '"帽子, 赤"');
+check("csvField 引用符は重ねる", csvField('「"特"」'), '"「""特""」"');
+check("csvField 改行を含む値は囲む", csvField("上\n下"), '"上\n下"');
+check("csvField 値なしは空欄", [csvField(null), csvField(undefined)], ["", ""]);
+// Excelで文字化けしないようBOMを付け、行はCRLFで区切る(RFC 4180)
+check("toCsv はBOM付きのCRLF区切り", toCsv([["a", "b"], ["c", "d"]]), "\uFEFFa,b\r\nc,d");
+
+const ordersLines = buildOrdersCsv(buildResults()).replace(/^\uFEFF/, "").split("\r\n");
+check("注文CSVの見出し", ordersLines[0], "注文番号,注文日時,ステータス,お支払金額,ギフト額,商品合計,差額,商品点数");
+check("注文CSVは1注文1行", ordersLines.length, 1 + 6);
+check("注文CSV 収集済みの行", ordersLines[1], "a1,2026年5月3日 12:34,発送完了,1000,400,1000,0,2");
+// 0円の注文と区別が付かなくなるので、未収集や取得失敗は0ではなく空欄にする
+check("注文CSV 未収集は空欄", ordersLines[2], "a2,2026年5月20日 09:00,支払済み,,,,,");
+check("注文CSV 取得失敗も空欄", ordersLines[5], "c2,2025年12月25日 10:00,未払い,,,,,");
+
+const itemsLines = buildItemsCsv(buildResults()).replace(/^\uFEFF/, "").split("\r\n");
+check("商品CSVの見出し", itemsLines[0], "注文番号,注文日時,ステータス,ショップ名,ショップURL,商品名,単価,BOOST,ギフト");
+check("商品CSVは1商品1行", itemsLines.length, 1 + 2 + 1 + 1 + 1 + 1 + 1);
+check("商品CSV 商品の行", itemsLines[1],
+  "a1,2026年5月3日 12:34,発送完了,SOUR FLAVOR,https://sourflavor.booth.pm/,髪型A,600,0,いいえ");
+check("商品CSV ギフトの印", itemsLines[2].endsWith("髪型B,400,0,はい"), true);
+// 黙って落とすと、その注文を買っていないように見えてしまう
+check("商品CSV 明細の無い注文も行を残す", itemsLines[3], "a2,2026年5月20日 09:00,支払済み,,,(明細なし),,,");
+check("CSVのファイル名に書き出した日を入れる", csvFileName("orders", new Date(2026, 6, 5)), "booth-orders-20260705.csv");
+
+// --- 画面の切り替え ---
+// 別ページにするとJSのコンテキストごと破棄され、数分かかる収集が止まってしまうため、
+// 同じページの中で区画を出し分ける。現在地はハッシュに持たせる
+check("既定の画面", [viewFromHash(""), viewFromHash("#/report")], ["report", "report"]);
+check("ハッシュで画面を決める", viewFromHash("#/export"), "export");
+check("知らないハッシュは既定の画面", viewFromHash("#/nope"), "report");
+
+location.hash = "#/export";
+renderCurrentView();
+check("データ出力へ切り替わる",
+  [document.getElementById("view-report").hidden, document.getElementById("view-export").hidden], [true, false]);
+check("メニューに現在地が出る",
+  [...navDrawer.querySelectorAll(".nav-link")].map(a => a.classList.contains("current")), [false, true]);
+check("画面名を見出しに添える", viewTitle.textContent, "データ出力");
+location.hash = "#/report";
+renderCurrentView();
+check("レポートへ戻る",
+  [document.getElementById("view-report").hidden, document.getElementById("view-export").hidden], [false, true]);
+check("既定の画面では画面名を出さない", viewTitle.textContent, "");
+
+menuBtn.click();
+check("メニューが開く", [navDrawer.hidden, navOverlay.hidden, menuBtn.getAttribute("aria-expanded")], [false, false, "true"]);
+navOverlay.click();
+check("背景を押すと閉じる", [navDrawer.hidden, menuBtn.getAttribute("aria-expanded")], [true, "false"]);
+menuBtn.click();
+document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+check("Escで閉じる", navDrawer.hidden, true);
+menuBtn.click();
+navDrawer.querySelector('.nav-link[data-view="export"]').click();
+check("メニューから移動すると閉じる", navDrawer.hidden, true);
+location.hash = "#/report";
+renderCurrentView();
+
+// データ出力の画面(何件書き出せるのか、金額のずれがあるかを示す)
+render();
+check("出力できる件数",
+  exportStats.textContent,
+  "注文: 6件 / 商品明細のある注文: 2件 / 商品: 3行 (明細を取れていない注文が4件あります)");
+check("プレビューは商品の行だけ", exportPreviewBody.querySelectorAll("tr").length, 3);
+check("ずれが無ければ知らせない", exportGap.hidden, true);
+
+// お支払金額と商品合計がずれる注文(送料・クーポンなど)は見えるようにする
+const savedA1 = state.cache.a1;
+state.cache.a1 = { ...savedA1, amount: 1200 };
+render();
+check("金額のずれを知らせる", exportGap.hidden, false);
+check("ずれた件数を出す", exportGap.textContent.includes("一致しない注文が1件"), true);
+state.cache.a1 = savedA1;
+render();
 
 // 画面下部の固定フッター(収集済みのみを対象にする)
 const nowYear = new Date().getFullYear();

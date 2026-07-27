@@ -3,7 +3,8 @@
 // Chrome / Firefox 両対応のための簡易ラッパー
 const ext = typeof browser !== "undefined" ? browser : chrome;
 
-const CACHE_KEY = "boothOrderCache"; // { [orderId]: { amount, status, date } }
+// { [orderId]: { amount, gift, status, date, items: [{ shop, shopUrl, name, price, boost, gift }] } }
+const CACHE_KEY = "boothOrderCache";
 const INDEX_KEY = "boothOrderIndex"; // { updatedAt, orders: [{ id, status, date }] }
 const SUMMARY_KEY = "boothSummary"; // 最後に完了した集計の要約(ポップアップ表示用)
 const RUN_STATE_KEY = "boothRunState"; // 実行中の進捗(ポップアップから覗くため)
@@ -21,17 +22,58 @@ function formatYen(n) {
   return `¥${Number(n).toLocaleString("ja-JP")}`;
 }
 
-// 支払額に含まれるギフト分。取得できていない注文や旧キャッシュでは0として扱う
+// 支払額に含まれるギフト分。取得できていない注文では0として扱う
 function giftAmount(entry) {
   return entry && typeof entry.gift === "number" ? entry.gift : 0;
 }
 
-// まだ金額を取りに行く必要がある注文かどうか。キャッシュに無いもの(未収集)に加え、
-// 取得はできたが金額を読めなかったもの(amount:null)も対象にする。
-// 対象から外すと強制再取得でしか拾い直せず、内訳に「取得失敗」と出たまま直す手段が
-// 全件再取得しかなくなるため、次の実行で自動的に取り直せるようにしておく
+// ---- 商品明細 ----------------------------------------------------------
+//
+// 注文は「ショップ名・商品名・単価・BOOST・ギフトかどうか」を持つ商品の集まりとして
+// 保存する。合計や年別月別の集計は引き続き注文単位の「お支払金額」から出し、
+// 商品の合計では代用しない(送料やクーポンが絡む注文で一致する保証が無いため)。
+// 両者の差は「データ出力」のCSVで確認できるようにしてある。
+
+function hasItems(entry) {
+  return Boolean(entry) && Array.isArray(entry.items);
+}
+
+// 商品の金額はBOOSTを含めて数える。1件でも価格を読めていなければ、
+// 足りない分を0として扱うと少ない額を正しい合計に見せてしまうので不明(null)にする
+function sumItemAmounts(items) {
+  if (!Array.isArray(items)) return null;
+  let total = 0;
+  for (const item of items) {
+    if (typeof item.price !== "number") return null;
+    total += item.price + (typeof item.boost === "number" ? item.boost : 0);
+  }
+  return total;
+}
+
+// ギフトのグループに置かれていた商品の合計。明細そのものが無ければ不明
+function giftTotalOfItems(items) {
+  if (!Array.isArray(items)) return null;
+  return sumItemAmounts(items.filter((item) => item.gift));
+}
+
+function itemsTotalOf(entry) {
+  return hasItems(entry) ? sumItemAmounts(entry.items) : null;
+}
+
+// お支払金額と商品合計の差。送料・クーポン・ポイントなどが入るとここに出る。
+// どちらかが不明なら差も出さない
+function amountGapOf(entry) {
+  const items = itemsTotalOf(entry);
+  if (items === null || !entry || typeof entry.amount !== "number") return null;
+  return entry.amount - items;
+}
+
+// まだ取りに行く必要がある注文かどうか。キャッシュに無いもの(未収集)に加え、
+// 取得はできたが金額を読めなかったもの(amount:null)、商品明細を読めなかったものも
+// 対象にする。対象から外すと強制再取得でしか拾い直せず、内訳に「取得失敗」と
+// 出たまま直す手段が全件再取得しかなくなるため、次の実行で自動的に取り直せるようにする
 function needsCollect(entry) {
-  return !entry || entry.amount === null;
+  return !entry || entry.amount === null || !hasItems(entry);
 }
 
 // 支払額の左に小さく添えるギフト表記(0のときは何も出さない)
