@@ -855,6 +855,57 @@ span.amount-pending {
 
 /* ---- 推し作者ランキング ---- */
 
+/* 見出しと基準の切り替えを同じ行に置く。狭いときは折り返す */
+.ranking-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.ranking-head h2 {
+  margin: 0;
+}
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid #c9ced6;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+button.segmented-btn {
+  border: 0;
+  border-radius: 0;
+  padding: 5px 14px;
+  font-size: 13px;
+  background: #fff;
+  color: var(--fg-muted);
+}
+
+button.segmented-btn + button.segmented-btn {
+  border-left: 1px solid #c9ced6;
+}
+
+button.segmented-btn:hover:not(.current) {
+  background: #f0f1f4;
+}
+
+/* 選ばれている側。表のどの列で並べているかと色をそろえる */
+button.segmented-btn.current {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+}
+
+.ranking-table th.sorted {
+  color: var(--accent);
+}
+
+.ranking-share-option {
+  margin-top: 12px;
+}
+
 .ranking-table th.rank,
 .ranking-table td.rank {
   width: 64px;

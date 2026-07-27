@@ -79,6 +79,8 @@ const rankingArea = document.getElementById("rankingArea");
 const rankingStats = document.getElementById("rankingStats");
 const rankingUnknown = document.getElementById("rankingUnknown");
 const rankingTableBody = document.getElementById("rankingTableBody");
+const rankingSortToggle = document.getElementById("rankingSortToggle");
+const rankingHideNumbers = document.getElementById("rankingHideNumbers");
 const pendingBanner = document.getElementById("pendingBanner");
 const pendingBannerText = document.getElementById("pendingBannerText");
 const backupStats = document.getElementById("backupStats");
@@ -131,6 +133,9 @@ function renderCurrentView() {
   });
   viewTitle.textContent = VIEW_TITLES[current];
   renderPendingBanner(current);
+  // 画面を移ると共有ボタンの中身が変わる。ハッシュの変化だけでも呼ばれるので、
+  // 全体の描画を待たずにここで合わせる
+  updateShareButton();
   return current;
 }
 
@@ -180,6 +185,7 @@ const expandedTrendPeriodYears = new Set();
 
 // 共有文面に使う集計値(描画のたびに更新する)
 let shareStats = null;
+let rankingShareStats = null;
 
 // ---- 要素の組み立て ----------------------------------------------------
 
@@ -322,6 +328,8 @@ function render() {
   renderRankingArea();
   renderExportArea();
   renderBackupArea();
+  // 共有ボタンの状態は上の描画結果に依るので、最後にまとめて決める
+  updateShareButton();
 }
 
 // ---- 推し作者ランキング ------------------------------------------------
@@ -330,6 +338,19 @@ function render() {
 const RANKING_LIMIT = 10;
 const RANKING_CROWNS = 3;
 const RANKING_BOLD = 5;
+
+// 金額編・購入数編のどちらで並べているか。再描画で作り直す表には残せないので
+// ここで持つ(開いている年の集合と同じ扱い)
+let rankingSort = DEFAULT_SHOP_SORT;
+
+const RANKING_SORT_LABELS = { amount: "金額編", count: "購入数編" };
+
+function setRankingSort(sort) {
+  if (!SHOP_SORTS[sort] || sort === rankingSort) return;
+  rankingSort = sort;
+  renderRankingArea();
+  updateShareButton();
+}
 
 // 数量の左に小さく添えるギフト表記。金額のセルと置き方をそろえる
 function countCell(count, giftCount) {
@@ -366,10 +387,28 @@ function rankCell(rank) {
   return cell;
 }
 
+// 押されている基準のボタンと、その基準で並べている列に印を付ける
+function renderRankingSortToggle() {
+  rankingSortToggle.querySelectorAll(".segmented-btn").forEach((btn) => {
+    const on = btn.dataset.sort === rankingSort;
+    btn.classList.toggle("current", on);
+    btn.setAttribute("aria-pressed", String(on));
+  });
+  rankingTableBody
+    .closest("table")
+    .querySelectorAll("th[data-sort]")
+    .forEach((th) => th.classList.toggle("sorted", th.dataset.sort === rankingSort));
+}
+
 function renderRankingArea() {
-  const shops = aggregateByShop(buildResults());
+  const results = buildResults();
+  const shops = aggregateByShop(results, rankingSort);
+  renderRankingSortToggle();
   rankingEmpty.hidden = shops.length > 0;
   rankingArea.hidden = shops.length === 0;
+  // 共有できるのは画面に出している順位そのもの。取り違えが起きないよう、
+  // 描画に使ったものをそのまま共有側へ渡す
+  rankingShareStats = buildRankingShareStats(results, shops);
   if (shops.length === 0) {
     rankingTableBody.innerHTML = "";
     return;
@@ -913,8 +952,6 @@ function renderFooter(results) {
     yearPendingCount: inThisYear(results).length - ofThisYear.length,
     indexComplete: indexIsComplete(state.index),
   };
-  // 今年分に未収集があるなら、押したあとに収集してから共有できる
-  shareBtn.disabled = valid.length === 0 && shareStats.yearPendingCount === 0;
 }
 
 function renderPeriodTable(results) {
@@ -1022,4 +1059,86 @@ function buildShareText(stats) {
     "",
     SHARE_HASHTAG,
   ].join("\n");
+}
+
+// ---- ランキングの共有 --------------------------------------------------
+
+// 文面に載せる順位。表は10位まで出すが、投稿は長くなると読まれないので絞る
+const RANKING_SHARE_LIMIT = 5;
+const RANKING_MEDALS = ["🥇", "🥈", "🥉"];
+
+// 描画に使った並びをそのまま持ち回る。共有のときに集計し直すと、
+// 画面に出ている順位と違うものを外に出しかねない
+function buildRankingShareStats(results, shops) {
+  return {
+    sort: rankingSort,
+    rows: shops.slice(0, RANKING_SHARE_LIMIT),
+    shopCount: shops.length,
+    // 順位が実際とずれる原因。共有の前に断るために持っておく
+    pending: results.filter((r) => needsCollect(state.cache[r.id])).length,
+    unknown: shops.reduce((sum, row) => sum + row.unknown, 0),
+    indexComplete: indexIsComplete(state.index),
+  };
+}
+
+// 順位がずれうる理由。無ければ空配列で、そのまま共有してよい
+function rankingShareIssues(stats) {
+  const issues = [];
+  if (stats.pending > 0) issues.push(`未収集の注文が${stats.pending}件あります`);
+  if (!stats.indexComplete) issues.push("注文履歴の取得が途中で終わっています");
+  // 金額を読めなかった商品は点数には入っているので、購入数編では順位に響かない
+  if (stats.sort === "amount" && stats.unknown > 0) {
+    issues.push(`金額を読み取れなかった商品が${stats.unknown}点あります`);
+  }
+  return issues;
+}
+
+function rankingShareConfirmMessage(stats) {
+  return (
+    `${rankingShareIssues(stats).join("。")}。\n` +
+    "このまま共有すると、順位や数字が実際とは違うことがあります。\n" +
+    "よろしいですか?"
+  );
+}
+
+function rankingShareValue(row, sort) {
+  return sort === "count" ? `${row.count}点` : formatYen(row.total);
+}
+
+function buildRankingShareText(stats, hideNumbers) {
+  const label = RANKING_SORT_LABELS[stats.sort];
+  return [
+    `BOOTHの推し作者ランキング🛍️（${label}）`,
+    "",
+    ...stats.rows.map((row, index) => {
+      const rank = RANKING_MEDALS[index] || `${index + 1}.`;
+      return hideNumbers
+        ? `${rank} ${row.name}`
+        : `${rank} ${row.name} ${rankingShareValue(row, stats.sort)}`;
+    }),
+    // 画面では断り書きを出している。数字を外に出すときは文面にも同じ断りを付ける
+    ...(hideNumbers || stats.sort !== "amount"
+      ? []
+      : ["", "※金額は商品の合計（送料・クーポンを除く）"]),
+    "",
+    SHARE_HASHTAG,
+  ].join("\n");
+}
+
+// フッターの共有ボタンは開いている画面によって共有するものが変わる。
+// ボタンの文言も変えないと、何が投稿されるのか押すまで分からない
+function shareMode() {
+  return viewFromHash(location.hash) === "ranking" ? "ranking" : "total";
+}
+
+function updateShareButton() {
+  if (shareMode() === "ranking") {
+    shareBtn.textContent = "𝕏でランキングを共有";
+    shareBtn.disabled = !rankingShareStats || rankingShareStats.rows.length === 0;
+    return;
+  }
+  shareBtn.textContent = "𝕏で共有";
+  // 今年分に未収集があるなら、押したあとに収集してから共有できる
+  shareBtn.disabled =
+    !shareStats || (shareStats.count === 0 && shareStats.yearPendingCount === 0);
 }

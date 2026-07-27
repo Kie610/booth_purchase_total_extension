@@ -48,7 +48,15 @@ window.addEventListener("unhandledrejection", (e) => showFailure("ERROR " + ((e.
   <div id="rankingArea" hidden>
     <div id="rankingStats"></div>
     <div id="rankingUnknown" hidden></div>
-    <table><tbody id="rankingTableBody"></tbody></table>
+    <div id="rankingSortToggle">
+      <button class="segmented-btn" data-sort="amount" aria-pressed="true">金額編</button>
+      <button class="segmented-btn" data-sort="count" aria-pressed="false">購入数編</button>
+    </div>
+    <label><input type="checkbox" id="rankingHideNumbers">金額や購入数を含めない</label>
+    <table>
+      <thead><tr><th data-sort="count">購入商品数</th><th data-sort="amount">合計金額</th></tr></thead>
+      <tbody id="rankingTableBody"></tbody>
+    </table>
   </div>
 </div>
 <div class="view" id="view-export" hidden>

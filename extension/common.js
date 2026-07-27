@@ -360,6 +360,17 @@ function buildSpendingTrend(
 }
 
 // ---- ショップ(作者)ごとのまとめ ----------------------------------------
+
+// ランキングの並べ替えの基準。金額と点数では1位が入れ替わるので、
+// どちらで並べたのかを画面と共有文面の両方に出せるよう名前で持つ
+const SHOP_SORTS = {
+  // 同額(同点数)のときはもう一方を第2の基準にする。両方同じなら名前順で固定し、
+  // 再描画のたびに順位が入れ替わらないようにする
+  amount: (a, b) => b.total - a.total || b.count - a.count,
+  count: (a, b) => b.count - a.count || b.total - a.total,
+};
+const DEFAULT_SHOP_SORT = "amount";
+
 //
 // **ここだけは注文単位のお支払金額を使えない。**お支払金額は注文に1つしかなく、
 // 1つの注文が複数のショップにまたがるため、ショップへ割り振れない。
@@ -368,7 +379,7 @@ function buildSpendingTrend(
 // 画面にその旨を出すこと。
 //
 // 表示名は変わりうるので、同じショップかどうかはURLで判断する。
-function aggregateByShop(results) {
+function aggregateByShop(results, sortBy) {
   const shops = new Map();
   for (const result of results) {
     if (!Array.isArray(result.items)) continue;
@@ -405,12 +416,10 @@ function aggregateByShop(results) {
       if (item.gift) row.gift += amount;
     }
   }
+  const compare = SHOP_SORTS[sortBy] || SHOP_SORTS[DEFAULT_SHOP_SORT];
   return Array.from(shops.values())
     .map(({ orderIds, ...row }) => ({ ...row, orders: orderIds.size }))
-    .sort(
-      (a, b) =>
-        b.total - a.total || b.count - a.count || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)
-    );
+    .sort((a, b) => compare(a, b) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 }
 
 async function readStored(key, fallback) {

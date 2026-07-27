@@ -588,6 +588,64 @@ state.cache = savedRankCache;
 render();
 check("全部表示できるときは件数だけ出す", rankingStats.textContent, "ショップ: 2件");
 
+// --- ランキングの基準の切り替え(金額編・購入数編) ---
+// 少額をたくさん買ったショップと、高額を1点だけのショップでは1位が入れ替わる
+check("購入数編は点数の多い順", aggregateByShop(buildResults(), "count").map(s => s.name), ["SOUR FLAVOR", "べつのショップ"]);
+check("金額編は点数によらず金額の多い順", aggregateByShop(buildResults(), "amount").map(s => s.name), ["べつのショップ", "SOUR FLAVOR"]);
+check("基準を渡さなければ金額編", aggregateByShop(buildResults()).map(s => s.name), aggregateByShop(buildResults(), "amount").map(s => s.name));
+check("知らない基準でも金額編に落とす", aggregateByShop(buildResults(), "unknown").map(s => s.name), ["べつのショップ", "SOUR FLAVOR"]);
+// 同点のときにもう一方で決めないと、再描画のたびに順位が入れ替わって見える
+const tiedRows = [{ id: "t1", items: [item("A", 100), item("B", 100), item("C", 500, false, "べつのショップ"), item("D", 100, false, "べつのショップ")] }];
+check("購入数編の同点は金額の多い順", aggregateByShop(tiedRows, "count").map(s => s.name), ["べつのショップ", "SOUR FLAVOR"]);
+
+// 切り替えは表の並びと、押されているボタン・並べ替えに使っている列の印に効く
+setRankingSort("count");
+check("購入数編に切り替えると表も入れ替わる",
+  [...rankingTableBody.querySelectorAll("tr")].map(tr => tr.cells[1].textContent),
+  ["SOUR FLAVOR", "べつのショップ"]);
+check("押されている基準が分かる",
+  [...rankingSortToggle.querySelectorAll(".segmented-btn")].map(b => b.getAttribute("aria-pressed")),
+  ["false", "true"]);
+check("並べ替えに使っている列に印を付ける",
+  [...rankingTableBody.closest("table").querySelectorAll("th.sorted")].map(th => th.dataset.sort),
+  ["count"]);
+
+// --- ランキングの共有 ---
+// 共有するのは画面に出ている並びそのもの。文面のために集計し直さない
+check("共有は購入数編の並びと点数を出す", buildRankingShareText(rankingShareStats, false),
+  "BOOTHの推し作者ランキング🛍️（購入数編）\n\n🥇 SOUR FLAVOR 2点\n🥈 べつのショップ 1点\n\n#BOOTHお買いものレポート");
+check("購入数編の共有はチェックで点数を落とす", buildRankingShareText(rankingShareStats, true),
+  "BOOTHの推し作者ランキング🛍️（購入数編）\n\n🥇 SOUR FLAVOR\n🥈 べつのショップ\n\n#BOOTHお買いものレポート");
+setRankingSort("amount");
+// 金額編の金額は商品の合計で、送料やクーポンが入らない。画面と同じ断りを文面にも付ける
+check("金額編の共有は金額と断り書きを出す", buildRankingShareText(rankingShareStats, false),
+  "BOOTHの推し作者ランキング🛍️（金額編）\n\n🥇 べつのショップ ¥3,000\n🥈 SOUR FLAVOR ¥1,000\n\n※金額は商品の合計（送料・クーポンを除く）\n\n#BOOTHお買いものレポート");
+// 金額を出さないなら、その金額についての断り書きも要らない
+check("金額を落とせば断り書きも出さない", buildRankingShareText(rankingShareStats, true),
+  "BOOTHの推し作者ランキング🛍️（金額編）\n\n🥇 べつのショップ\n🥈 SOUR FLAVOR\n\n#BOOTHお買いものレポート");
+check("共有は上位5件までにする",
+  buildRankingShareText({ sort: "count", rows: Array.from({ length: 5 }, (_, i) => ({ name: `S${i}`, count: 1, total: 0 })) }, true).split("\n").slice(2, 7),
+  ["🥇 S0", "🥈 S1", "🥉 S2", "4. S3", "5. S4"]);
+
+// 順位がずれうる理由。1つでもあれば共有の前に確認する
+const rankShareBase = { sort: "amount", rows: [{ name: "A", count: 1, total: 100 }], pending: 0, unknown: 0, indexComplete: true };
+check("共有 揃っていれば確認しない", rankingShareIssues(rankShareBase), []);
+check("共有 未収集があれば断る", rankingShareIssues({ ...rankShareBase, pending: 3 }), ["未収集の注文が3件あります"]);
+check("共有 索引が未完了なら断る", rankingShareIssues({ ...rankShareBase, indexComplete: false }), ["注文履歴の取得が途中で終わっています"]);
+check("共有 金額を読めない商品があれば断る", rankingShareIssues({ ...rankShareBase, unknown: 2 }), ["金額を読み取れなかった商品が2点あります"]);
+// 読めなかった商品も点数には入っているので、購入数編の順位はずれない
+check("共有 購入数編は金額不明を理由にしない", rankingShareIssues({ ...rankShareBase, sort: "count", unknown: 2 }), []);
+check("共有の確認文面", rankingShareConfirmMessage({ ...rankShareBase, pending: 1, indexComplete: false }),
+  "未収集の注文が1件あります。注文履歴の取得が途中で終わっています。\nこのまま共有すると、順位や数字が実際とは違うことがあります。\nよろしいですか?");
+
+// 共有ボタンはランキングを開いている間だけランキングを共有する
+location.hash = "#/ranking";
+renderCurrentView();
+check("ランキングでは共有の対象が変わる", [shareBtn.textContent, shareBtn.disabled], ["𝕏でランキングを共有", false]);
+location.hash = "#/report";
+renderCurrentView();
+check("他の画面では合計の共有に戻る", shareBtn.textContent, "𝕏で共有");
+
 // --- CSV出力(データ出力の画面) ---
 check("csvField そのまま", csvField("髪型A"), "髪型A");
 check("csvField カンマを含む値は囲む", csvField("帽子, 赤"), '"帽子, 赤"');

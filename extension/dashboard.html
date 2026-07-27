@@ -232,9 +232,18 @@
 
    <div class="view" id="view-ranking" hidden>
      <section class="step">
-       <h2>推し作者ランキング</h2>
+       <!-- 金額と点数では1位が入れ替わるため、どちらで並べているかを見出しの
+            すぐ横に置いて、表だけを見ても取り違えないようにする -->
+       <div class="ranking-head">
+         <h2>推し作者ランキング</h2>
+         <div class="segmented" id="rankingSortToggle" role="group" aria-label="ランキングの基準">
+           <button type="button" class="segmented-btn" data-sort="amount" aria-pressed="true">金額編</button>
+           <button type="button" class="segmented-btn" data-sort="count" aria-pressed="false">購入数編</button>
+         </div>
+       </div>
        <p class="hint">
-         ショップごとに買った商品の点数と金額を、多い順に並べます。上位10ショップまで表示します。
+         ショップごとに買った商品の点数と金額を集計します。金額編と購入数編を切り替えられます。
+         上位10ショップまで表示します。
        </p>
 
        <div id="rankingEmpty" class="empty-note">
@@ -251,9 +260,22 @@
            <div class="status warn" id="rankingUnknown" hidden></div>
          </div>
 
+         <!-- 共有はフッターの「𝕏で共有」から行う。金額や点数を外に出したくない
+              ときのために、順位とショップ名だけの文面も選べるようにしておく -->
+         <label class="checkbox ranking-share-option">
+           <input type="checkbox" id="rankingHideNumbers">
+           共有する文面に金額や購入数を含めない（順位とショップ名だけにする）
+         </label>
+
          <table class="data-table ranking-table">
            <thead>
-             <tr><th class="rank">順位</th><th>ショップ名</th><th class="num">購入商品数</th><th class="num">合計金額</th></tr>
+             <tr>
+               <th class="rank">順位</th>
+               <th>ショップ名</th>
+               <!-- 並べ替えに使っている側の列に印を付ける -->
+               <th class="num" data-sort="count">購入商品数</th>
+               <th class="num" data-sort="amount">合計金額</th>
+             </tr>
            </thead>
            <tbody id="rankingTableBody"></tbody>
          </table>

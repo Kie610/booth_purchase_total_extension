@@ -136,7 +136,12 @@ function onRangeChanged() {
 // 未収集が残ったまま「合計」を名乗ると実際より少ない額が外に出てしまうため、
 // その場合は今年分だけを収集し、今年の金額だけを共有する
 shareBtn.addEventListener("click", async () => {
-  if (!shareStats || running) return;
+  if (running) return;
+  if (shareMode() === "ranking") {
+    shareRanking();
+    return;
+  }
+  if (!shareStats) return;
 
   if (!canShareTotal(shareStats)) {
     if (!confirm(shareConfirmMessage(shareStats))) return;
@@ -158,12 +163,28 @@ shareBtn.addEventListener("click", async () => {
       );
     }
   }
-  openShareWindow();
+  openShareWindow(buildShareText(shareStats));
 });
 
-function openShareWindow() {
+// ランキングは全期間が対象なので、合計のように「今年の分だけ」へ逃がせない。
+// 順位がずれうるときは、そのまま出すかどうかを本人に決めてもらう
+function shareRanking() {
+  if (!rankingShareStats || rankingShareStats.rows.length === 0) return;
+  if (rankingShareIssues(rankingShareStats).length > 0) {
+    if (!confirm(rankingShareConfirmMessage(rankingShareStats))) return;
+  }
+  openShareWindow(buildRankingShareText(rankingShareStats, rankingHideNumbers.checked));
+}
+
+// 金額編と購入数編の切り替え
+rankingSortToggle.addEventListener("click", (event) => {
+  const btn = event.target.closest(".segmented-btn");
+  if (btn) setRankingSort(btn.dataset.sort);
+});
+
+function openShareWindow(text) {
   const url = new URL("https://x.com/intent/post");
-  url.searchParams.set("text", buildShareText(shareStats));
+  url.searchParams.set("text", text);
   // 収集を挟むとクリックから時間が空くため、ブラウザに止められることがある。
   // 収集は済んでいるので、押し直せば今度はその場で開ける
   if (!window.open(url.toString(), "_blank", "noopener")) {
