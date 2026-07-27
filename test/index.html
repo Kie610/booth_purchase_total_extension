@@ -24,6 +24,7 @@ window.addEventListener("unhandledrejection", (e) => showFailure("ERROR " + ((e.
 <nav id="navDrawer" hidden>
   <a class="nav-link" href="#/report" data-view="report">お買いものレポート</a>
   <a class="nav-link" href="#/trends" data-view="trends">支出推移・前年比較</a>
+  <a class="nav-link" href="#/ranking" data-view="ranking">推し作者ランキング</a>
   <a class="nav-link" href="#/export" data-view="export">データ出力</a>
   <a class="nav-link" href="#/backup" data-view="backup">データの引っ越し</a>
 </nav>
@@ -40,6 +41,14 @@ window.addEventListener("unhandledrejection", (e) => showFailure("ERROR " + ((e.
     <div id="monthlyTrendChart" class="trend-bars"></div>
     <svg id="cumulativeTrendChart" class="cumulative-chart" viewBox="0 0 720 250"></svg>
     <table class="period-table"><tbody id="trendPeriodTableBody"></tbody></table>
+  </div>
+</div>
+<div class="view" id="view-ranking" hidden>
+  <div id="rankingEmpty"></div>
+  <div id="rankingArea" hidden>
+    <div id="rankingStats"></div>
+    <div id="rankingUnknown" hidden></div>
+    <table><tbody id="rankingTableBody"></tbody></table>
   </div>
 </div>
 <div class="view" id="view-export" hidden>

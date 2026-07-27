@@ -18,6 +18,7 @@
   <nav id="navDrawer" class="nav-drawer" aria-label="画面の切り替え" hidden>
     <a class="nav-link" href="#/report" data-view="report">お買いものレポート</a>
     <a class="nav-link" href="#/trends" data-view="trends">支出推移・前年比較</a>
+    <a class="nav-link" href="#/ranking" data-view="ranking">推し作者ランキング</a>
     <a class="nav-link" href="#/export" data-view="export">データ出力</a>
     <a class="nav-link" href="#/backup" data-view="backup">データの引っ越し</a>
   </nav>
@@ -225,6 +226,37 @@
              <tbody id="trendPeriodTableBody"></tbody>
            </table>
          </section>
+       </div>
+     </section>
+   </div>
+
+   <div class="view" id="view-ranking" hidden>
+     <section class="step">
+       <h2>推し作者ランキング</h2>
+       <p class="hint">
+         ショップごとに買った商品の点数と金額を、多い順に並べます。上位10ショップまで表示します。
+       </p>
+
+       <div id="rankingEmpty" class="empty-note">
+         まだ商品の明細がありません。「お買いものレポート」で金額を収集してください。
+       </div>
+
+       <div id="rankingArea" hidden>
+         <div class="index-status">
+           <div class="status" id="rankingStats"></div>
+           <!-- ショップ別の金額だけは注文単位のお支払金額を使えないので、そのことを断る -->
+           <div class="status" id="rankingBasis">
+             金額は商品の合計です。送料やクーポンは含まないため、全体の合計支払額とは一致しません。
+           </div>
+           <div class="status warn" id="rankingUnknown" hidden></div>
+         </div>
+
+         <table class="data-table ranking-table">
+           <thead>
+             <tr><th class="rank">順位</th><th>ショップ名</th><th class="num">購入商品数</th><th class="num">合計金額</th></tr>
+           </thead>
+           <tbody id="rankingTableBody"></tbody>
+         </table>
        </div>
      </section>
    </div>

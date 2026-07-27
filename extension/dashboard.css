@@ -853,6 +853,47 @@ span.amount-pending {
   font-size: 11px;
 }
 
+/* ---- 推し作者ランキング ---- */
+
+.ranking-table th.rank,
+.ranking-table td.rank {
+  width: 64px;
+  text-align: center;
+}
+
+/* 順位の数字。1〜3位はこの後ろに王冠を敷く */
+.rank-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  /* 王冠の中央より少し下に数字が来るよう、上に余白を足す */
+  padding-top: 6px;
+  font-variant-numeric: tabular-nums;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 36px 36px;
+}
+
+/* 王冠はMV3のリモートコード禁止に触れないよう、外部を読まずCSSの中で描く */
+.rank-crown-1 {
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%3E%3Cpath%20d='M1,7L7,11L12,4L17,11L23,7L21,20L3,20Z'%20fill='%23e8c44a'/%3E%3C/svg%3E");
+}
+
+.rank-crown-2 {
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%3E%3Cpath%20d='M1,7L7,11L12,4L17,11L23,7L21,20L3,20Z'%20fill='%23c4c7cc'/%3E%3C/svg%3E");
+}
+
+.rank-crown-3 {
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%3E%3Cpath%20d='M1,7L7,11L12,4L17,11L23,7L21,20L3,20Z'%20fill='%23d09a63'/%3E%3C/svg%3E");
+}
+
+/* 上位5位までは太字。王冠の付かない4〜5位もここで目立たせる */
+.ranking-table tr.rank-top {
+  font-weight: 700;
+}
+
 /* ---- データ出力 ---- */
 
 .export-preview-title {

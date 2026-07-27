@@ -533,6 +533,61 @@ delete state.cache.b1;
 render();
 check("現行版だけなら案内を出さない", outdatedArea.hidden, true);
 
+// --- 推し作者ランキング ---
+// ショップ別の金額だけは注文単位のお支払金額を使えない。1つの注文が複数ショップに
+// またがると割り振れないため、商品の合計で集計する(送料やクーポンは入らない)
+const shopRows = aggregateByShop(buildResults());
+check("ショップ別は金額の多い順", shopRows.map(s => s.name), ["べつのショップ", "SOUR FLAVOR"]);
+check("ショップ別の商品数と金額", [shopRows[1].count, shopRows[1].total], [2, 1000]);
+check("ギフトを分けて数える", [shopRows[1].giftCount, shopRows[1].gift], [1, 400]);
+// 表示名は変わりうるので、同じショップかどうかはURLで判断する
+check("同じショップはURLでまとめる", shopRows[1].key, "https://sourflavor.booth.pm/");
+check("明細の無い注文は入らない", shopRows.reduce((n, s) => n + s.orders, 0), 2);
+check("同じショップは複数の注文をまとめる",
+  aggregateByShop([{ id: "o1", items: [item("A", 100)] }, { id: "o2", items: [item("B", 200)] }])[0],
+  { key: "https://sourflavor.booth.pm/", name: "SOUR FLAVOR", url: "https://sourflavor.booth.pm/", count: 2, giftCount: 0, total: 300, gift: 0, unknown: 0, orders: 2 });
+check("数量ぶん商品数と金額を数える",
+  aggregateByShop([{ id: "o1", items: [{ ...item("A", 890), quantity: 4 }] }]).map(s => [s.count, s.total])[0], [4, 3560]);
+// 読めなかった分を0として足すと、少ない額を正しい合計に見せてしまう
+const unknownShop = aggregateByShop([{ id: "o1", items: [item("A", 100), { ...item("B", 0), price: null }] }])[0];
+check("金額を読めない商品は合計に足さない", [unknownShop.total, unknownShop.unknown, unknownShop.count], [100, 1, 2]);
+
+// 表示(ギフトは金額・商品数のどちらも左に小さく添える)
+render();
+const shopRowEls = [...rankingTableBody.querySelectorAll("tr")];
+check("ランキングの行数", shopRowEls.length, 2);
+check("ショップ名はリンクにする", shopRowEls[1].cells[1].querySelector("a").getAttribute("href"), "https://sourflavor.booth.pm/");
+check("商品数のギフト併記", shopRowEls[1].cells[2].textContent, "ギフト 1点2点");
+check("金額のギフト併記", shopRowEls[1].cells[3].textContent, "ギフト ¥400¥1,000");
+check("ギフトが無い行は併記しない", shopRowEls[0].cells[2].textContent, "1点");
+
+// 順位の装飾と表示件数
+const savedRankIndex = state.index;
+const savedRankCache = state.cache;
+state.index = {
+  updatedAt: "x", complete: true,
+  orders: Array.from({ length: 12 }, (_, i) => ({ id: `r${i}`, status: "completed", date: "2026年5月1日 00:00" })),
+};
+state.cache = Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`r${i}`, {
+  v: CACHE_SCHEMA_VERSION, amount: (12 - i) * 100, gift: 0, shipping: 0,
+  status: "completed", date: "2026年5月1日 00:00",
+  items: [{ shop: `ショップ${i}`, shopUrl: `https://shop${i}.booth.pm/`, name: "商品", price: (12 - i) * 100, quantity: 1, boost: 0, gift: false }],
+}]));
+render();
+const rankRows = [...rankingTableBody.querySelectorAll("tr")];
+check("上位10位まで表示する", rankRows.length, 10);
+check("順位は金額の多い順", rankRows.map(tr => tr.cells[0].textContent), ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]);
+check("1〜3位に金・銀・銅の王冠を敷く",
+  rankRows.slice(0, 4).map(tr => tr.cells[0].querySelector(".rank-badge").className),
+  ["rank-badge rank-crown-1", "rank-badge rank-crown-2", "rank-badge rank-crown-3", "rank-badge"]);
+check("5位までを太字にする", rankRows.map(tr => tr.classList.contains("rank-top")),
+  [true, true, true, true, true, false, false, false, false, false]);
+check("表示しきれない件数を知らせる", rankingStats.textContent, "ショップ: 12件 (上位10件を表示)");
+state.index = savedRankIndex;
+state.cache = savedRankCache;
+render();
+check("全部表示できるときは件数だけ出す", rankingStats.textContent, "ショップ: 2件");
+
 // --- CSV出力(データ出力の画面) ---
 check("csvField そのまま", csvField("髪型A"), "髪型A");
 check("csvField カンマを含む値は囲む", csvField("帽子, 赤"), '"帽子, 赤"');
@@ -580,7 +635,7 @@ renderCurrentView();
 check("データ出力へ切り替わる",
   [document.getElementById("view-report").hidden, document.getElementById("view-export").hidden], [true, false]);
 check("メニューに現在地が出る",
-  [...navDrawer.querySelectorAll(".nav-link")].map(a => a.classList.contains("current")), [false, false, true, false]);
+  [...navDrawer.querySelectorAll(".nav-link")].map(a => a.classList.contains("current")), [false, false, false, true, false]);
 check("画面名を見出しに添える", viewTitle.textContent, "データ出力");
 location.hash = "#/trends";
 renderCurrentView();
@@ -1097,6 +1152,16 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
     dashboardDoc.querySelector('.nav-link[data-view="trends"]').getAttribute("href"), "#/trends");
   check("支出推移画面に共用の年別月別表がある",
     Boolean(dashboardDoc.getElementById("trendPeriodTableBody")), true);
+
+  // ショップ別の金額は商品の合計なので、全体の合計支払額とは一致しない。
+  // 断りを外すと、送料やクーポンの分だけ少ない額を「そのショップに使った額」として見せることになる
+  check("ランキングに合計と一致しない旨の断りがある",
+    dashboardHtml.includes("全体の合計支払額とは一致しません"), true);
+  check("ランキング画面をメニューから開ける",
+    dashboardDoc.querySelector('.nav-link[data-view="ranking"]').getAttribute("href"), "#/ranking");
+  check("メニューに追加した画面が並んでいる",
+    [...dashboardDoc.querySelectorAll(".nav-link")].map((a) => a.getAttribute("href")),
+    ["#/report", "#/trends", "#/ranking", "#/export", "#/backup"]);
 
   const dashboardCss = await (await fetch("../extension/dashboard.css")).text();
   const dashboardStyle = document.createElement("style");

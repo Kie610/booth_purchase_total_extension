@@ -71,18 +71,25 @@ function itemQuantity(item) {
   return item.quantity === undefined ? 1 : item.quantity;
 }
 
-// 商品の金額は「単価×数量」にBOOSTを足したもの。BOOSTは行に1つ付くものとして
+// 商品1件分の金額は「単価×数量」にBOOSTを足したもの。BOOSTは行に1つ付くものとして
 // 数量を掛けない(数量が2以上でBOOSTのある注文をまだ実測できていない。
 // 掛け方を誤っていればお支払金額との差額に出る)。
-// 1件でも価格や数量を読めていなければ、足りない分を0として扱うと
+// 価格や数量を読めていなければ0と断定せず不明(null)にする
+function itemAmount(item) {
+  const quantity = itemQuantity(item);
+  if (typeof item.price !== "number" || typeof quantity !== "number") return null;
+  return item.price * quantity + (typeof item.boost === "number" ? item.boost : 0);
+}
+
+// 1件でも読めていなければ、足りない分を0として扱うと
 // 少ない額を正しい合計に見せてしまうので不明(null)にする
 function sumItemAmounts(items) {
   if (!Array.isArray(items)) return null;
   let total = 0;
   for (const item of items) {
-    const quantity = itemQuantity(item);
-    if (typeof item.price !== "number" || typeof quantity !== "number") return null;
-    total += item.price * quantity + (typeof item.boost === "number" ? item.boost : 0);
+    const amount = itemAmount(item);
+    if (amount === null) return null;
+    total += amount;
   }
   return total;
 }
@@ -135,6 +142,11 @@ function indexIsComplete(index) {
 // 支払額の左に小さく添えるギフト表記(0のときは何も出さない)
 function giftText(total) {
   return total > 0 ? `ギフト ${formatYen(total)}` : "";
+}
+
+// 件数の左に添えるギフト表記。金額と同じ置き方にそろえる
+function giftCountText(count) {
+  return count > 0 ? `ギフト ${count}点` : "";
 }
 
 // ポップアップの件数行。取得失敗だけは要対処なので色を分けて出したく、
@@ -345,6 +357,60 @@ function buildSpendingTrend(
       ...months.flatMap((month) => [month.currentCumulative, month.previousCumulative])
     ),
   };
+}
+
+// ---- ショップ(作者)ごとのまとめ ----------------------------------------
+//
+// **ここだけは注文単位のお支払金額を使えない。**お支払金額は注文に1つしかなく、
+// 1つの注文が複数のショップにまたがるため、ショップへ割り振れない。
+// そのため商品の合計(単価×数量+BOOST)で集計する。送料やクーポンは入らないので、
+// ショップ別の合計をすべて足しても全体の合計支払額とは一致しない。
+// 画面にその旨を出すこと。
+//
+// 表示名は変わりうるので、同じショップかどうかはURLで判断する。
+function aggregateByShop(results) {
+  const shops = new Map();
+  for (const result of results) {
+    if (!Array.isArray(result.items)) continue;
+    for (const item of result.items) {
+      const key = item.shopUrl || item.shop;
+      if (!shops.has(key)) {
+        shops.set(key, {
+          key,
+          name: item.shop,
+          url: item.shopUrl || "",
+          count: 0,
+          giftCount: 0,
+          total: 0,
+          gift: 0,
+          // 金額を読めなかった商品。0として足すと少ない額を正しい合計に見せてしまう
+          unknown: 0,
+          orderIds: new Set(),
+        });
+      }
+      const row = shops.get(key);
+      row.orderIds.add(result.id);
+
+      const quantity = itemQuantity(item);
+      const count = typeof quantity === "number" ? quantity : 0;
+      row.count += count;
+      if (item.gift) row.giftCount += count;
+
+      const amount = itemAmount(item);
+      if (amount === null) {
+        row.unknown++;
+        continue;
+      }
+      row.total += amount;
+      if (item.gift) row.gift += amount;
+    }
+  }
+  return Array.from(shops.values())
+    .map(({ orderIds, ...row }) => ({ ...row, orders: orderIds.size }))
+    .sort(
+      (a, b) =>
+        b.total - a.total || b.count - a.count || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)
+    );
 }
 
 async function readStored(key, fallback) {

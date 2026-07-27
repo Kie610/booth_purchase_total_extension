@@ -74,6 +74,11 @@ const exportGap = document.getElementById("exportGap");
 const exportOrdersBtn = document.getElementById("exportOrdersBtn");
 const exportItemsBtn = document.getElementById("exportItemsBtn");
 const exportPreviewBody = document.getElementById("exportPreviewBody");
+const rankingEmpty = document.getElementById("rankingEmpty");
+const rankingArea = document.getElementById("rankingArea");
+const rankingStats = document.getElementById("rankingStats");
+const rankingUnknown = document.getElementById("rankingUnknown");
+const rankingTableBody = document.getElementById("rankingTableBody");
 const pendingBanner = document.getElementById("pendingBanner");
 const pendingBannerText = document.getElementById("pendingBannerText");
 const backupStats = document.getElementById("backupStats");
@@ -100,12 +105,13 @@ const ACTION_BUTTONS = [
 // (ポップアップではなく専用タブで処理しているのと同じ理由)。
 // 現在の画面はURLのハッシュに持たせるので、再読み込みしても同じ画面に戻る。
 
-const VIEW_NAMES = ["report", "trends", "export", "backup"];
+const VIEW_NAMES = ["report", "trends", "ranking", "export", "backup"];
 const DEFAULT_VIEW = "report";
 // 見出しの右に添える画面名。既定の画面では何も足さない
 const VIEW_TITLES = {
   report: "",
   trends: "支出推移・前年比較",
+  ranking: "推し作者ランキング",
   export: "データ出力",
   backup: "データの引っ越し",
 };
@@ -313,8 +319,86 @@ function render() {
   renderSpendingTrends();
   updatePlannedCount();
   renderClearArea();
+  renderRankingArea();
   renderExportArea();
   renderBackupArea();
+}
+
+// ---- 推し作者ランキング ------------------------------------------------
+
+// 上位何位まで出すか。王冠を付ける順位と、太字にする順位
+const RANKING_LIMIT = 10;
+const RANKING_CROWNS = 3;
+const RANKING_BOLD = 5;
+
+// 数量の左に小さく添えるギフト表記。金額のセルと置き方をそろえる
+function countCell(count, giftCount) {
+  const cell = td("", "num");
+  if (giftCount > 0) cell.appendChild(el("span", "gift", giftCountText(giftCount)));
+  cell.appendChild(document.createTextNode(`${count}点`));
+  return cell;
+}
+
+// ショップ名。BOOTHのショップURLが取れていればリンクにする
+// (URLは取得したHTML由来なので、booth.pm のものだけを通す)
+const SHOP_URL_PATTERN = /^https:\/\/[\w-]+\.booth\.pm\/?$/;
+
+function shopNameCell(row) {
+  const cell = td("");
+  if (SHOP_URL_PATTERN.test(row.url)) {
+    const link = el("a", null, row.name);
+    link.href = row.url;
+    link.target = "_blank";
+    link.rel = "noopener";
+    cell.appendChild(link);
+  } else {
+    cell.textContent = row.name;
+  }
+  return cell;
+}
+
+function rankCell(rank) {
+  const cell = td("", "rank");
+  const badge = el("span", "rank-badge", String(rank));
+  // 1〜3位は王冠を背景に敷く(金・銀・銅)
+  if (rank <= RANKING_CROWNS) badge.classList.add(`rank-crown-${rank}`);
+  cell.appendChild(badge);
+  return cell;
+}
+
+function renderRankingArea() {
+  const shops = aggregateByShop(buildResults());
+  rankingEmpty.hidden = shops.length > 0;
+  rankingArea.hidden = shops.length === 0;
+  if (shops.length === 0) {
+    rankingTableBody.innerHTML = "";
+    return;
+  }
+
+  const shown = shops.slice(0, RANKING_LIMIT);
+  rankingStats.textContent =
+    `ショップ: ${shops.length}件` +
+    (shops.length > shown.length ? ` (上位${shown.length}件を表示)` : "");
+
+  // 金額を読めなかった商品を0として足すと、少ない額を正しい合計に見せてしまう
+  const unknown = shops.reduce((sum, row) => sum + row.unknown, 0);
+  rankingUnknown.hidden = unknown === 0;
+  if (unknown > 0) {
+    rankingUnknown.textContent =
+      `金額を読み取れなかった商品が${unknown}点あります。その分は合計金額に入っていません。`;
+  }
+
+  rankingTableBody.innerHTML = "";
+  shown.forEach((row, index) => {
+    const rank = index + 1;
+    const tr = el("tr");
+    if (rank <= RANKING_BOLD) tr.classList.add("rank-top");
+    tr.appendChild(rankCell(rank));
+    tr.appendChild(shopNameCell(row));
+    tr.appendChild(countCell(row.count, row.giftCount));
+    tr.appendChild(amountCell(row.total, row.gift));
+    rankingTableBody.appendChild(tr);
+  });
 }
 
 function trendSummaryCard(label, value, note, className) {
