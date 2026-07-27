@@ -18,6 +18,7 @@ web-ext-artifacts/
 
 # 依存関係(将来ツールを入れた場合)
 node_modules/
+__pycache__/
 
 # 購入履歴などの個人データを誤ってコミットしないための保険
 *.csv
