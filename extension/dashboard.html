@@ -278,13 +278,17 @@
            <svg id="cumulativeTrendChart" class="cumulative-chart" viewBox="0 0 720 250" role="img"></svg>
          </section>
 
-         <!-- 買った時間帯は、上の年比較とは対象期間が違う(全期間で見たい)ので
-              この区画だけの範囲指定を持たせる -->
+         <!-- 対象期間は上で選んだ年に合わせる。上のグラフと違う期間のものを
+              並べると、同じ画面の中で食い違ったものを見比べることになる。
+              全期間や別の範囲で見たいときのために、範囲指定も残してある -->
          <section class="block-section" aria-labelledby="heatmapTitle">
            <div class="block-head">
              <h3 id="heatmapTitle">買った曜日と時間帯</h3>
              <span class="hint block-caption">注文の件数。金額ではありません</span>
            </div>
+           <p class="hint">
+             上で選んだ年に合わせて表示します。範囲を選び直すと、そちらが優先されます。
+           </p>
            <div class="range-controls heatmap-range">
              <label class="range-field">開始
                <select id="heatmapFrom"></select>

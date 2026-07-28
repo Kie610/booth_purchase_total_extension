@@ -815,6 +815,8 @@ function renderSpendingTrends(now = new Date()) {
   }
 
   renderCumulativeChart(trend);
+  // 上のグラフと同じ期間へ合わせてから描く
+  syncHeatmapToYear(trend.year, trend.throughMonth);
   renderHeatmap();
   renderPeriodTableInto(
     trendPeriodTableBody,
@@ -828,6 +830,21 @@ function renderSpendingTrends(now = new Date()) {
 // 選んでいる範囲。null は「全期間」
 let heatmapFromKey = null;
 let heatmapToKey = null;
+
+// **比較する年を切り替えたら、この区画も同じ期間へ合わせる。**
+// 別々に動くと、上のグラフが2025年なのに下は全期間、という食い違ったものを
+// 並べて見比べることになる。合わせたあとに範囲や「全期間」を選び直せば
+// そちらが残るので、年を切り替えたときだけ上書きする(同じ年での再描画では
+// 触らない。収集が進むたびに手で選んだ範囲が戻ってしまう)
+let heatmapSyncedYear = null;
+
+function syncHeatmapToYear(year, throughMonth) {
+  if (heatmapSyncedYear === year) return;
+  heatmapSyncedYear = year;
+  // 今年は今月までしか買っていないので、上のグラフと同じところで切る
+  heatmapFromKey = `${year}-01`;
+  heatmapToKey = `${year}-${String(throughMonth).padStart(2, "0")}`;
+}
 
 function setHeatmapRange(from, to) {
   // 逆に選んでも同じ範囲として扱う(範囲指定の他の場所と同じ)
@@ -845,10 +862,25 @@ function heatmapMonthKeys(results) {
   return Array.from(keys).sort();
 }
 
+// 選択肢には**注文のある月しか無い**。年に合わせて 1月〜12月 を指定しても
+// その月の注文が無ければ選べないので、範囲に入る最も近い月へ寄せる。
+// 寄せずに渡すと select の値が空になり、件数が0件として出てしまう
+function clampMonthKey(key, keys, edge) {
+  if (!key) return edge === "from" ? keys[0] : keys[keys.length - 1];
+  if (keys.includes(key)) return key;
+  const inside =
+    edge === "from"
+      ? keys.find((candidate) => candidate >= key)
+      : keys.filter((candidate) => candidate <= key).pop();
+  // 範囲の中に1か月も無いときは端へ倒す(年の選択肢は注文のある年だけなので
+  // 通常は起きないが、寄せ先が無いまま空を渡すよりは全期間の端が分かりやすい)
+  return inside || (edge === "from" ? keys[0] : keys[keys.length - 1]);
+}
+
 function renderHeatmapRangeOptions(keys) {
   for (const [select, selected] of [
-    [heatmapFrom, heatmapFromKey || keys[0]],
-    [heatmapTo, heatmapToKey || keys[keys.length - 1]],
+    [heatmapFrom, clampMonthKey(heatmapFromKey, keys, "from")],
+    [heatmapTo, clampMonthKey(heatmapToKey, keys, "to")],
   ]) {
     const same =
       select.options.length === keys.length &&

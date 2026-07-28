@@ -534,6 +534,43 @@ check("0件のマスは塗らない", heatmapCellAlpha(0, 4), 0);
 check("1件でも薄く塗る", heatmapCellAlpha(1, 4) > 0.1, true);
 check("最も多いマスは最も濃い", heatmapCellAlpha(4, 4), 1);
 
+// 上のグラフと違う期間のものを並べると、同じ画面で食い違ったものを見比べることになる。
+// 比較する年を切り替えたら、買った曜日と時間帯も同じ期間へ合わせる
+setTrendYears(2026, 2025);
+check("年に合わせた範囲になる",
+  [heatmapFrom.value.slice(0, 4), heatmapTo.value.slice(0, 4)], ["2026", "2026"]);
+setTrendYears(2025, 2026);
+check("年を切り替えると範囲も付いてくる",
+  [heatmapFrom.value.slice(0, 4), heatmapTo.value.slice(0, 4)], ["2025", "2025"]);
+
+// 手で選び直したら、そちらが優先される(収集が進むたびに戻ると選び直せない)
+const heatKeys = heatmapMonthKeys(buildResults());
+setHeatmapRange(heatKeys[0], heatKeys[heatKeys.length - 1]);
+renderSpendingTrends(new Date(2026, 11, 1));
+check("同じ年で描き直しても手で選んだ範囲は残る",
+  [heatmapFrom.value, heatmapTo.value], [heatKeys[0], heatKeys[heatKeys.length - 1]]);
+setTrendYears(2026, 2025);
+check("年を切り替えたときだけ上書きする", heatmapFrom.value.slice(0, 4), "2026");
+
+// 今年は今月までしか買っていないので、上のグラフと同じところで切る
+heatmapSyncedYear = null;
+syncHeatmapToYear(2026, 3);
+check("今年は上のグラフと同じ月で切る", [heatmapFromKey, heatmapToKey], ["2026-01", "2026-03"]);
+heatmapFromKey = "2026-02";
+syncHeatmapToYear(2026, 3);
+check("同じ年をもう一度渡しても上書きしない", heatmapFromKey, "2026-02");
+
+// 選択肢には注文のある月しか無い。1月や12月が無くても選べるよう、近い月へ寄せる
+const clampKeys = ["2025-12", "2026-05"];
+check("始まりは後ろの月へ寄せる", clampMonthKey("2026-01", clampKeys, "from"), "2026-05");
+check("終わりは手前の月へ寄せる", clampMonthKey("2026-03", clampKeys, "to"), "2025-12");
+check("実在する月はそのまま", clampMonthKey("2025-12", clampKeys, "from"), "2025-12");
+check("全期間は両端になる",
+  [clampMonthKey(null, clampKeys, "from"), clampMonthKey(null, clampKeys, "to")], clampKeys);
+
+heatmapSyncedYear = null;
+setTrendYears(2026, 2025);
+
 // 集計そのものも任意の年を比べられる
 check("比較年を渡せる", buildSpendingTrend([
   { id: "x", date: "2026年1月1日 00:00", amount: 100 },
