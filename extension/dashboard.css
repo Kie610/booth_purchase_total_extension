@@ -211,6 +211,13 @@ body {
   background: var(--bg-hover);
 }
 
+.author-disclaimer {
+  margin: 16px 0 0;
+  color: var(--fg-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
 /* 見出しはヘッダーの縦幅いっぱいの帯にし、画面左端まで届かせる */
 .app-header h1 {
   position: relative;
@@ -1404,6 +1411,10 @@ button.share-template.current {
 
 .share-note {
   margin: 16px 0 0;
+}
+
+.share-legal-note {
+  margin: 8px 0 0;
 }
 
 .share-panel-foot {

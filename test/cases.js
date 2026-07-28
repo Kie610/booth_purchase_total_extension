@@ -489,7 +489,7 @@ check("取得失敗の残る月は予定に入る", plannedCount.textContent, "�
 selectPendingBtn.click();
 check("未収集のある範囲を選択", [rangeFrom.value, rangeTo.value], ["2025-12", "2026-05"]);
 check("範囲選択で予定件数も更新される", plannedCount.textContent, "取得予定: 3件 / 目安: 約1秒以上");
-check("収集時間の目安を分表示できる", collectionTimeEstimate(1000), "約4分以上");
+check("収集時間の目安を分表示できる", collectionTimeEstimate(1000), "約5分以上");
 check("一括集計にも時間の目安を出す", allPlannedCountEl.textContent.includes("目安:"), true);
 
 // 年別・月別の集計(収集済みのみ)
@@ -1289,7 +1289,7 @@ menuBtn.click();
 navDrawer.querySelector('.nav-link[data-view="export"]').click();
 check("メニューから移動すると閉じる", navDrawer.hidden, true);
 check("ヘッダーにコピーライトを表示する",
-  document.querySelector(".copyright").textContent, "©2026 Kie工房");
+  document.querySelector(".copyright").textContent, "©2026 Kie (Kie工房)");
 menuBtn.click();
 authorBtn.click();
 check("メニュー末尾から作者情報を開く",
@@ -1647,10 +1647,35 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   check("時刻を持たない旧形式の進捗も無視する", await loadRunState(), null);
   await clearRunState();
 
+  // --- 複数タブの同時実行を防ぐ期限付きロック ---
+  await removeStored(RUN_LOCK_KEY);
+  check("実行ロックを取得できる", await acquireRunLock("owner-a", 1000), true);
+  check("期限内の実行ロックは別タブが奪えない", await acquireRunLock("owner-b", 1001), false);
+  const firstLock = await readStored(RUN_LOCK_KEY, null);
+  check("実行ロックに有効期限を持つ", firstLock.expiresAt, 1000 + RUN_LOCK_TTL_MS);
+  check("所有者は実行ロックを延長できる", await refreshRunLock("owner-a", 2000), true);
+  check("別の所有者は実行ロックを解除できない", await releaseRunLock("owner-b"), undefined);
+  check("誤った所有者の解除後もロックが残る",
+    (await readStored(RUN_LOCK_KEY, null)).ownerId, "owner-a");
+  await writeStored(RUN_LOCK_KEY, { ownerId: "owner-a", expiresAt: 999 });
+  check("期限切れの実行ロックは取得し直せる", await acquireRunLock("owner-b", 1000), true);
+  await releaseRunLock("owner-b");
+  check("所有者が解除すると実行ロックを消す", await readStored(RUN_LOCK_KEY, null), null);
+
+  check("通常リクエストの待機時間は250msから始まる", requestIntervalMs(() => 0), 250);
+  check("通常リクエストの待機時間は350msを超えない", requestIntervalMs(() => 0.999999), 350);
+
   // --- ①注文履歴の取得を、BOOTHへのアクセスを差し替えて実際に動かす ---
   // BOOTH以外(manifestやアイコン)への fetch は本物のまま通す
   const realFetch = window.fetch;
   const okResponse = (path, html) => ({ ok: true, status: 200, url: path, text: () => Promise.resolve(html) });
+  const errorResponse = (path, status, retryAfter) => ({
+    ok: false,
+    status,
+    url: path,
+    headers: { get: (name) => name === "Retry-After" ? retryAfter : null },
+    text: () => Promise.resolve(""),
+  });
   let routes = {};
   // ルートは HTML文字列(そのまま200で返す)か、応答を組み立てる関数で指定する
   window.fetch = (url, init) => {
@@ -1795,8 +1820,13 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   });
   // 未収集のときに落ちず FAIL として出るよう、取り出しは防御的にする
   const cachedAmount = (id) => (state.cache[id] ? state.cache[id].amount : undefined);
-  const savedRetryWait = fetchRetryWaitMs;
-  fetchRetryWaitMs = 1; // 待ち時間はテストでは詰める
+  check("再試行は指数バックオフする",
+    [fetchRetryWaitMs({ status: 500 }, 0), fetchRetryWaitMs({ status: 500 }, 1)], [2000, 4000]);
+  check("再試行するHTTP状態を限定する",
+    [408, 429, 500, 503, 404].map((status) => isRetryableFetchError({ status, name: "HttpError" })),
+    [true, true, true, true, false]);
+  const savedRetryWait = fetchRetryBaseWaitMs;
+  fetchRetryBaseWaitMs = 1; // 待ち時間はテストでは詰める
 
   // 1回失敗しても試し直して拾える
   state.index = indexOf2("ok1", "flaky");
@@ -1817,6 +1847,36 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   // 版数を書き忘れると、収集した直後から未収集に戻り、毎回の実行で取り直し続ける
   check("収集したエントリに版数が入る", state.cache.ok1.v, CACHE_SCHEMA_VERSION);
   check("収集した直後は取り直しの対象にならない", needsCollect(state.cache.ok1), false);
+
+  // 429はサーバー指定のRetry-Afterを優先する
+  state.index = indexOf2("rate", "rate-ok");
+  state.cache = { "rate-ok": { v: CACHE_SCHEMA_VERSION, amount: 1, items: [] } };
+  let rateLimitTries = 0;
+  routes = {
+    [detailUrl("rate")]: (path) => {
+      rateLimitTries++;
+      return rateLimitTries === 1
+        ? errorResponse(path, 429, "0")
+        : okResponse(path, detailHtml(2100));
+    },
+  };
+  await runTask((signal) => collectAmounts(targetOrders(), false, signal));
+  check("HTTP 429はRetry-After後に試し直す", rateLimitTries, 2);
+  check("HTTP 429の再試行で収集できる", cachedAmount("rate"), 2100);
+
+  // 404は繰り返しても変わらないため再試行しない
+  state.index = indexOf2("missing-detail", "missing-ok");
+  state.cache = { "missing-ok": { v: CACHE_SCHEMA_VERSION, amount: 1, items: [] } };
+  let notFoundTries = 0;
+  routes = {
+    [detailUrl("missing-detail")]: (path) => {
+      notFoundTries++;
+      return errorResponse(path, 404, null);
+    },
+  };
+  await runTask((signal) => collectAmounts(targetOrders(), false, signal));
+  check("HTTP 404は再試行しない", notFoundTries, 1);
+  check("HTTP 404の注文は未収集のまま残す", cachedAmount("missing-detail"), undefined);
 
   // 試し直しても駄目な注文は飛ばして、残りの収集を続ける
   state.index = indexOf2("ok2", "broken");
@@ -1852,7 +1912,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   check("ログイン切れはその場で止める", state.cache.s2, undefined);
   check("ログイン切れは理由を出す", errorBox.textContent.includes("ログインが必要です"), true);
 
-  fetchRetryWaitMs = savedRetryWait;
+  fetchRetryBaseWaitMs = savedRetryWait;
   window.fetch = realFetch;
   resetIndex();
 
@@ -1879,7 +1939,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   check("作者情報はメニューの最後に置く",
     dashboardDoc.getElementById("navDrawer").lastElementChild.id, "authorBtn");
   check("ヘッダー右端にコピーライトを置く",
-    dashboardDoc.querySelector(".copyright").textContent, "©2026 Kie工房");
+    dashboardDoc.querySelector(".copyright").textContent, "©2026 Kie (Kie工房)");
   check("作者情報を正式なモーダルとして宣言",
     [dashboardDoc.getElementById("authorPanel").getAttribute("role"),
      dashboardDoc.getElementById("authorPanel").getAttribute("aria-modal")], ["dialog", "true"]);
@@ -1888,6 +1948,11 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
     ["https://github.com/Kie610", "https://x.com/niconicokito", "https://x.com/NicoNicoKieVRC"]);
   check("著者近影は外部通信せず同梱画像を使う",
     dashboardDoc.getElementById("authorPortrait").getAttribute("src"), "icons/author-kie.png");
+  check("作者情報に非公式の断りを載せる",
+    dashboardDoc.querySelector(".author-disclaimer").textContent.includes("ピクシブ株式会社およびBOOTHとは関係ありません"), true);
+  check("共有画面に非公式と比較価格の断りを載せる",
+    [dashboardDoc.querySelector(".share-legal-note").textContent.includes("非公式"),
+     dashboardDoc.querySelector(".share-legal-note").textContent.includes("2026年7月時点の概算")], [true, true]);
   // まとめの作者別金額もランキングと同じ商品合計なので、同じ断りを画面に出す
   check("まとめに合計と一致しない旨の断りがある",
     dashboardHtml.includes("足しても上の合計額とは一致しません"), true);
@@ -2001,7 +2066,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
 
   // 未リリースのうちは 0.x に留める。1.0.0 に上げるのはリリースを宣言するときだけ
   check("バージョンは 0.x(未リリース)", /^0\.\d+\.\d+$/.test(manifest.version), true);
-  check("今回の機能追加版", manifest.version, "0.30.0");
+  check("今回の機能追加版", manifest.version, "0.31.0");
 
   check("manifestのiconsに4サイズを宣言", manifest.icons, expectedIcons);
   check("ツールバー用のdefault_iconも同じ4サイズ", manifest.action.default_icon, expectedIcons);
@@ -2015,6 +2080,16 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   const releaseScript = await (await fetch("../tools/release.ps1")).text();
   check("リリーススクリプトはZIPとSHA-256を作る",
     [releaseScript.includes("Compress-Archive"), releaseScript.includes("Get-FileHash")], [true, true]);
+  check("リリースZIPは拡張本体と法務文書を同梱する",
+    ["packageExtensionPath", "LICENSE", "CREDIT.md", "PRIVACY.md"].every((text) => releaseScript.includes(text)), true);
+
+  const privacyText = await (await fetch("../PRIVACY.md")).text();
+  const creditText = await (await fetch("../CREDIT.md")).text();
+  check("プライバシー文書に保存先とX共有の例外を明記",
+    [privacyText.includes("storage.local"), privacyText.includes("x.com/intent/post")], [true, true]);
+  check("著者近影の3アセットと撮影ワールドをクレジット",
+    ["6571299", "6727248", "8036193", "wrld_6b3d1145-7c3d-42b2-b822-bc4ba30b402e"]
+      .every((id) => creditText.includes(id)), true);
 
   const iconSizes = [];
   for (const size of ICON_SIZES) {

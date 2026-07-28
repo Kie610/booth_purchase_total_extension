@@ -27,8 +27,17 @@ if ([IO.Path]::IsPathRooted($OutputDirectory)) {
 }
 
 $releaseName = "booth-purchase-total-extension-v$version"
+$packageDirectoryName = "$($manifest.name)-v$version"
 $zipPath = Join-Path $outputPath "$releaseName.zip"
 $checksumPath = "$zipPath.sha256"
+$documentNames = @("LICENSE", "CREDIT.md", "PRIVACY.md")
+
+foreach ($documentName in $documentNames) {
+  $documentPath = Join-Path $repoRoot $documentName
+  if (-not (Test-Path -LiteralPath $documentPath -PathType Leaf)) {
+    throw "配布物へ同梱する $documentName が見つかりません。"
+  }
+}
 
 New-Item -ItemType Directory -Path $outputPath -Force | Out-Null
 foreach ($path in @($zipPath, $checksumPath)) {
@@ -47,18 +56,24 @@ if ($Force) {
 
 $tempBase = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
 $stagingPath = Join-Path $tempBase ("booth-release-" + [Guid]::NewGuid().ToString("N"))
-New-Item -ItemType Directory -Path $stagingPath | Out-Null
+$packagePath = Join-Path $stagingPath $packageDirectoryName
+$packageExtensionPath = Join-Path $packagePath "extension"
+New-Item -ItemType Directory -Path $packageExtensionPath -Force | Out-Null
 
 try {
   Get-ChildItem -LiteralPath $extensionDirectory -Force |
-    Copy-Item -Destination $stagingPath -Recurse -Force
+    Copy-Item -Destination $packageExtensionPath -Recurse -Force
 
-  $stagedManifest = Join-Path $stagingPath "manifest.json"
-  if (-not (Test-Path -LiteralPath $stagedManifest -PathType Leaf)) {
-    throw "配布物のルートに manifest.json を配置できませんでした。"
+  foreach ($documentName in $documentNames) {
+    Copy-Item -LiteralPath (Join-Path $repoRoot $documentName) -Destination $packagePath -Force
   }
 
-  Compress-Archive -Path (Join-Path $stagingPath "*") -DestinationPath $zipPath -CompressionLevel Optimal
+  $stagedManifest = Join-Path $packageExtensionPath "manifest.json"
+  if (-not (Test-Path -LiteralPath $stagedManifest -PathType Leaf)) {
+    throw "配布物の extension/ に manifest.json を配置できませんでした。"
+  }
+
+  Compress-Archive -Path $packagePath -DestinationPath $zipPath -CompressionLevel Optimal
   $hash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
   "$hash  $([IO.Path]::GetFileName($zipPath))" |
     Set-Content -LiteralPath $checksumPath -Encoding ascii

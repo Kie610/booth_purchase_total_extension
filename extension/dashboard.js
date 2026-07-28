@@ -6,14 +6,24 @@
 
 const ORDERS_INDEX_URL = "https://accounts.booth.pm/orders";
 const ORDER_DETAIL_URL = "https://accounts.booth.pm/orders/";
-const REQUEST_INTERVAL_MS = 250; // サーバーへの負荷を抑えるための待機時間
+const REQUEST_INTERVAL_MIN_MS = 250;
+const REQUEST_INTERVAL_MAX_MS = 350;
+const REQUEST_INTERVAL_AVERAGE_MS =
+  (REQUEST_INTERVAL_MIN_MS + REQUEST_INTERVAL_MAX_MS) / 2;
 const CACHE_FLUSH_EVERY = 5; // 取得途中で中断されても失わないよう小まめに保存する
 const RUN_STATE_INTERVAL_MS = 400; // ポップアップへ進捗を渡す書き込みの間引き
+const RUN_LOCK_HEARTBEAT_MS = 10_000;
+const RUN_LOCK_WEB_NAME = "booth-purchase-total-collector";
 const EXCLUDED_STATUSES = new Set(["cancelled"]);
+const RUN_LOCK_OWNER_ID =
+  globalThis.crypto && typeof globalThis.crypto.randomUUID === "function"
+    ? globalThis.crypto.randomUUID()
+    : `${Date.now()}-${Math.random()}`;
 
 let running = false;
 let abortController = null;
 let lastRunStateWrite = 0;
+let runLockHeartbeatTimer = null;
 const state = { index: null, cache: {} };
 
 // ---- イベント配線 ------------------------------------------------------
@@ -644,10 +654,47 @@ function buildSummary(partial) {
 // (共有は、中断や失敗のあとに投稿画面を開かないようにするために使う)
 async function runTask(task) {
   if (running) return { aborted: false, failed: true };
+
+  const execute = () => runTaskWithLease(task);
+  if (
+    globalThis.navigator &&
+    globalThis.navigator.locks &&
+    typeof globalThis.navigator.locks.request === "function"
+  ) {
+    let result;
+    await globalThis.navigator.locks.request(
+      RUN_LOCK_WEB_NAME,
+      { mode: "exclusive", ifAvailable: true },
+      async (lock) => {
+        if (lock) result = await execute();
+      }
+    );
+    return result === undefined ? lockedRunResult() : result;
+  }
+  return execute();
+}
+
+function lockedRunResult() {
+  clearError();
+  showNotice(
+    "別の集計ページで収集を実行中です。完了するか、期限切れになるまでお待ちください。"
+  );
+  return { aborted: false, failed: true, locked: true };
+}
+
+async function runTaskWithLease(task) {
+  if (!(await acquireRunLock(RUN_LOCK_OWNER_ID))) return lockedRunResult();
   setRunning(true);
   clearError();
   clearNotice();
   abortController = new AbortController();
+  runLockHeartbeatTimer = setInterval(async () => {
+    try {
+      if (!(await refreshRunLock(RUN_LOCK_OWNER_ID))) abortController?.abort();
+    } catch (err) {
+      abortController?.abort();
+    }
+  }, RUN_LOCK_HEARTBEAT_MS);
   let aborted = false;
   let failed = false;
 
@@ -661,10 +708,18 @@ async function runTask(task) {
       showError(err.message || String(err));
     }
   } finally {
-    await saveCache(state.cache);
-    await clearRunState();
-    abortController = null;
-    setRunning(false);
+    try {
+      await saveCache(state.cache);
+    } finally {
+      if (runLockHeartbeatTimer !== null) clearInterval(runLockHeartbeatTimer);
+      runLockHeartbeatTimer = null;
+      await Promise.allSettled([
+        clearRunState(RUN_LOCK_OWNER_ID),
+        releaseRunLock(RUN_LOCK_OWNER_ID),
+      ]);
+      abortController = null;
+      setRunning(false);
+    }
   }
 
   render();
@@ -708,12 +763,18 @@ function sleep(ms, signal) {
   });
 }
 
+function requestIntervalMs(random = Math.random) {
+  return Math.floor(
+    REQUEST_INTERVAL_MIN_MS + random() * (REQUEST_INTERVAL_MAX_MS - REQUEST_INTERVAL_MIN_MS + 1)
+  );
+}
+
 // ポップアップ側で進捗を表示できるようにストレージへ書き出す(書き込み過多を避けて間引く)
 async function publishRunState(runState, force) {
   const now = Date.now();
   if (!force && now - lastRunStateWrite < RUN_STATE_INTERVAL_MS) return;
   lastRunStateWrite = now;
-  await saveRunState(runState);
+  await saveRunState({ ...runState, ownerId: RUN_LOCK_OWNER_ID });
 }
 
 // ---- 取得処理 ----------------------------------------------------------
@@ -728,9 +789,39 @@ function loginRequiredError() {
   return err;
 }
 
-// 繰り返しても結果が変わらない失敗(中断・ログイン切れ)かどうか
+// 繰り返しても結果が変わらない失敗か、同じセッションでは以降も失敗する
+// 認証・アクセス拒否かどうか。401/403で全注文を回り続けないよう、その場で止める。
 function isFatalFetchError(err) {
-  return err.name === "AbortError" || err.name === "LoginRequiredError";
+  return (
+    err.name === "AbortError" ||
+    err.name === "LoginRequiredError" ||
+    err.status === 401 ||
+    err.status === 403
+  );
+}
+
+function retryAfterMs(headers, now = Date.now()) {
+  if (!headers || typeof headers.get !== "function") return null;
+  const value = headers.get("Retry-After");
+  if (!value) return null;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;
+  const at = Date.parse(value);
+  return Number.isFinite(at) ? Math.max(0, at - now) : null;
+}
+
+function httpFetchError(res, url) {
+  const err = new Error(`ページの取得に失敗しました (HTTP ${res.status}): ${url}`);
+  err.name = "HttpError";
+  err.status = res.status;
+  err.retryAfterMs = retryAfterMs(res.headers);
+  return err;
+}
+
+function isRetryableFetchError(err) {
+  if (isFatalFetchError(err)) return false;
+  if (err instanceof TypeError || err.name === "TypeError") return true;
+  return err.status === 408 || err.status === 429 || (err.status >= 500 && err.status <= 599);
 }
 
 // 注意: 集計中、取得1件につき以下のCSP違反がコンソールに記録される。
@@ -751,7 +842,7 @@ async function fetchDoc(url, signal) {
     throw loginRequiredError();
   }
   if (!res.ok) {
-    throw new Error(`ページの取得に失敗しました (HTTP ${res.status}): ${url}`);
+    throw httpFetchError(res, url);
   }
   const html = await res.text();
   // DOMParserが生成する文書は不活性で、スクリプトは実行されず
@@ -851,7 +942,7 @@ async function fetchIndexTask(signal, force) {
     setProgress("購入履歴の1ページ目を取得中...", 0);
     await publishRunState({ phase: "注文履歴の取得", current: 0, total: 0 }, true);
 
-    const firstDoc = await fetchDoc(ORDERS_INDEX_URL, signal);
+    const firstDoc = await fetchDocWithRetry(ORDERS_INDEX_URL, signal);
     const firstPage = parseListPage(firstDoc);
     const { orders: firstOrders, maxPage } = firstPage;
     emptyHistory = firstOrders.length === 0 && firstPage.emptyFound;
@@ -868,8 +959,8 @@ async function fetchIndexTask(signal, force) {
         current: page,
         total: maxPage,
       });
-      await sleep(REQUEST_INTERVAL_MS, signal);
-      const doc = await fetchDoc(`${ORDERS_INDEX_URL}?page=${page}`, signal);
+      await sleep(requestIntervalMs(), signal);
+      const doc = await fetchDocWithRetry(`${ORDERS_INDEX_URL}?page=${page}`, signal);
       const parsed = parseListPage(doc);
       // 途中のページだけログイン画面や想定外のHTMLが返ることもある。
       // 空のページを「最古まで取得できた」と扱うと、少ない合計を完全な結果として
@@ -947,15 +1038,20 @@ function ordersInYear(year) {
 // 混雑している可能性があるので、通常の間隔より長めに待ってから試し直す。
 // テストから待ち時間を詰められるよう変数にしてある
 let fetchRetryCount = 2;
-let fetchRetryWaitMs = 2000;
+let fetchRetryBaseWaitMs = 2000;
+
+function fetchRetryWaitMs(err, attempt) {
+  if (err.status === 429 && typeof err.retryAfterMs === "number") return err.retryAfterMs;
+  return fetchRetryBaseWaitMs * 2 ** attempt;
+}
 
 async function fetchDocWithRetry(url, signal) {
   for (let attempt = 0; ; attempt++) {
     try {
       return await fetchDoc(url, signal);
     } catch (err) {
-      if (isFatalFetchError(err) || attempt >= fetchRetryCount) throw err;
-      await sleep(fetchRetryWaitMs, signal);
+      if (!isRetryableFetchError(err) || attempt >= fetchRetryCount) throw err;
+      await sleep(fetchRetryWaitMs(err, attempt), signal);
     }
   }
 }
@@ -1004,7 +1100,7 @@ async function collectAmounts(orders, force, signal) {
       failed++;
     }
 
-    if (index + 1 < targets.length) await sleep(REQUEST_INTERVAL_MS, signal);
+    if (index + 1 < targets.length) await sleep(requestIntervalMs(), signal);
   }
 
   if (failed > 0) {

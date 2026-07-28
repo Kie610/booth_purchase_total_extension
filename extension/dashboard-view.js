@@ -657,7 +657,7 @@ function setRange(from, to) {
 function collectionTimeEstimate(count) {
   if (count <= 0) return "";
   // リクエスト間隔だけから出す最低目安。実際は通信時間も加わるため「以上」とする。
-  const seconds = Math.max(1, Math.ceil((count * REQUEST_INTERVAL_MS) / 1000));
+  const seconds = Math.max(1, Math.ceil((count * REQUEST_INTERVAL_AVERAGE_MS) / 1000));
   if (seconds < 60) return `約${seconds}秒以上`;
   const minutes = Math.max(1, Math.round(seconds / 60));
   return `約${minutes}分以上`;
