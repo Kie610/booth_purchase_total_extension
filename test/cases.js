@@ -1950,6 +1950,8 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
     dashboardDoc.getElementById("authorPortrait").getAttribute("src"), "icons/author-kie.png");
   check("作者情報に非公式の断りを載せる",
     dashboardDoc.querySelector(".author-disclaimer").textContent.includes("ピクシブ株式会社およびBOOTHとは関係ありません"), true);
+  check("作者情報に無料版と支援版の関係を載せる",
+    dashboardDoc.querySelector(".author-support-note").textContent.includes("支援版に含まれる拡張機能は無料版と同一です"), true);
   check("共有画面に非公式と比較価格の断りを載せる",
     [dashboardDoc.querySelector(".share-legal-note").textContent.includes("非公式"),
      dashboardDoc.querySelector(".share-legal-note").textContent.includes("2026年7月時点の概算")], [true, true]);
@@ -2072,6 +2074,12 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   check("ツールバー用のdefault_iconも同じ4サイズ", manifest.action.default_icon, expectedIcons);
 
   const readmeText = await (await fetch("../README.md")).text();
+  const handoffText = await (await fetch("../HANDOFF.md")).text();
+  const supportDistributionNotice = "本拡張機能は無料でダウンロード・利用できます。BOOTHには任意の支援版も用意しますが、支援版に含まれる拡張機能は無料版と同一です。支援版の購入およびBOOSTは作者への任意の支援であり、支援の有無や金額による機能・利用条件・サポート内容の違いはありません。";
+  check("無料版と支援版の説明をREADME・作者情報・HANDOFFで統一",
+    [readmeText.includes(supportDistributionNotice),
+     dashboardDoc.querySelector(".author-support-note").textContent.trim() === supportDistributionNotice,
+     handoffText.includes(supportDistributionNotice)], [true, true, true]);
   check("Firefoxは一時読み込みのみ確認済みと明記",
     readmeText.includes("Firefoxは**開発時の一時読み込みのみ確認済み**です"), true);
   check("Chromeウェブストアへ公開しない方針を明記",
@@ -2087,8 +2095,8 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   const creditText = await (await fetch("../CREDIT.md")).text();
   check("プライバシー文書に保存先とX共有の例外を明記",
     [privacyText.includes("storage.local"), privacyText.includes("x.com/intent/post")], [true, true]);
-  check("著者近影の3アセットと撮影ワールドをクレジット",
-    ["6571299", "6727248", "8036193", "wrld_6b3d1145-7c3d-42b2-b822-bc4ba30b402e"]
+  check("著者近影の4アセットと撮影ワールドをクレジット",
+    ["6571299", "6727248", "8036193", "8052440", "wrld_6b3d1145-7c3d-42b2-b822-bc4ba30b402e"]
       .every((id) => creditText.includes(id)), true);
 
   const iconSizes = [];
