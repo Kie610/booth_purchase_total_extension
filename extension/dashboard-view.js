@@ -582,6 +582,9 @@ function renderYearSummary() {
   const totalNote = [`注文${stats.orderCount}件`];
   if (stats.gift > 0) totalNote.push(`ギフト ${formatYen(stats.gift)}`);
   if (stats.pendingCount > 0) totalNote.push(`未収集${stats.pendingCount}件`);
+  if (stats.detailPendingCount > 0) {
+    totalNote.push(`商品明細未収集${stats.detailPendingCount}件`);
+  }
 
   const cards = [
     [`${stats.year}年の合計額`, formatYen(stats.total), totalNote.join(" / ")],
@@ -604,13 +607,23 @@ function renderYearSummary() {
     summaryCards.appendChild(statCard(label, value, note));
   }
 
-  // 過去の注文が未収集だと明細が無く、その作者を「はじめて」に数えてしまう
-  summaryNewShopWarn.hidden = stats.beforePending === 0;
-  if (stats.beforePending > 0) {
-    summaryNewShopWarn.textContent =
-      `${stats.year}年より前の注文に未収集が${stats.beforePending}件あります。` +
-      "その注文で買った作者は「はじめて」に数えてしまうことがあります。";
+  // 現在年の明細不足は点数・作者数・順位を少なくし、過去の明細不足は
+  // 以前から買っていた作者を「はじめて」と数える。どちらも数字の近くで断る。
+  const summaryWarnings = [];
+  if (stats.detailPendingCount > 0) {
+    summaryWarnings.push(
+      `${stats.year}年の注文に商品明細の未収集が${stats.detailPendingCount}件あります。` +
+        "点数・作者数・推し作者は実際より少なくなることがあります。"
+    );
   }
+  if (stats.beforePending > 0) {
+    summaryWarnings.push(
+      `${stats.year}年より前の注文に未収集が${stats.beforePending}件あります。` +
+        "その注文で買った作者は「はじめて」に数えてしまうことがあります。"
+    );
+  }
+  summaryNewShopWarn.hidden = summaryWarnings.length === 0;
+  summaryNewShopWarn.textContent = summaryWarnings.join(" ");
 
   renderShopRows(summaryTopShopsBody, stats.topShops, stats.topShops.length);
 }

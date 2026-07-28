@@ -140,6 +140,9 @@ function summaryShareIssues(stats) {
   if (stats.pendingCount > 0) {
     issues.push(`${stats.year}年に未収集の注文が${stats.pendingCount}件あります`);
   }
+  if (stats.detailPendingCount > 0) {
+    issues.push(`${stats.year}年に商品明細を未収集の注文が${stats.detailPendingCount}件あります`);
+  }
   // 過去が未収集だと、前から買っていた作者を「はじめて」に数えてしまう
   if (stats.beforePending > 0 && stats.newShopCount > 0) {
     issues.push(`それ以前の未収集が${stats.beforePending}件あり、「はじめて」を多く数えることがあります`);

@@ -733,6 +733,19 @@ async function commitIndex(fetched, context) {
   return orders.filter((o) => !before.has(o.id)).length;
 }
 
+// 全件再取得を最後まで完了したときだけ、現在の集計対象に存在しないキャッシュを消す。
+// キャンセルになった注文や履歴から消えた注文の詳細を残すと、索引だけ削除した際に
+// 古いキャッシュから合計へ戻るため。増分取得や途中終了では既存データを守る。
+async function pruneCacheAfterFullIndexRefresh() {
+  const activeIds = new Set(targetOrders().map((order) => order.id));
+  const kept = Object.fromEntries(
+    Object.entries(state.cache).filter(([id]) => activeIds.has(id))
+  );
+  if (Object.keys(kept).length === Object.keys(state.cache).length) return;
+  state.cache = kept;
+  await saveCache(state.cache);
+}
+
 // ① 一覧ページを新しい順に巡回して注文の索引を作る
 async function fetchIndexTask(signal, force) {
   const known = new Set(
@@ -772,9 +785,17 @@ async function fetchIndexTask(signal, force) {
       });
       await sleep(REQUEST_INTERVAL_MS, signal);
       const doc = await fetchDoc(`${ORDERS_INDEX_URL}?page=${page}`, signal);
+      const parsed = parseListPage(doc);
+      // 途中のページだけログイン画面や想定外のHTMLが返ることもある。
+      // 空のページを「最古まで取得できた」と扱うと、少ない合計を完全な結果として
+      // 保存してしまうため、1ページ目と同じ条件で必ず検証する。
+      if (listPageLooksUnreadable(parsed)) {
+        unreadable = true;
+        break;
+      }
       reachedKnown = appendUnknown(
         fetched,
-        parseListPage(doc).orders,
+        parsed.orders,
         known,
         stopAtKnown
       );
@@ -789,6 +810,7 @@ async function fetchIndexTask(signal, force) {
       finishedAllPages,
       previousComplete,
     });
+    if (force && finishedAllPages) await pruneCacheAfterFullIndexRefresh();
   }
 
   if (unreadable) {

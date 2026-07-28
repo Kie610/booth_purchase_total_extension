@@ -514,6 +514,9 @@ function buildYearSummary(results, year) {
     else if (date.year < target) before.push(result);
   }
   const valid = inYear.filter((result) => typeof result.amount === "number");
+  // 金額が取れていても商品明細が無ければ、点数・作者数・ランキングは少なくなる。
+  // 金額の未収集と混ぜると何が不完全なのか分からないため、別の件数で返す。
+  const detailPendingCount = valid.filter((result) => !Array.isArray(result.items)).length;
 
   // その年より前に買ったことのある作者。未収集の注文は明細を持たないので
   // ここに現れず、「はじめて」を多めに数えてしまう。件数を返して画面で断る
@@ -573,6 +576,7 @@ function buildYearSummary(results, year) {
     orderCount: valid.length,
     // 金額を収集できていない注文。まとめは「その年の全部」を名乗るので必ず出す
     pendingCount: inYear.length - valid.length,
+    detailPendingCount,
     itemCount,
     giftItemCount,
     boost,

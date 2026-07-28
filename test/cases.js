@@ -766,6 +766,13 @@ const yearSummary = buildYearSummary(summaryRows, 2026);
 check("その年の支払いだけを合計する", [yearSummary.total, yearSummary.orderCount], [3800, 2]);
 // 未収集を黙って落とすと、実際より少ない額を「その年の全部」として見せてしまう
 check("未収集の件数を持つ", yearSummary.pendingCount, 1);
+// 金額だけ読めて商品明細が無い注文は、合計には入れられるが点数・作者数が欠ける
+const detailPendingSummary = buildYearSummary([
+  { id: "d", date: "2026年4月1日 00:00", amount: 700, gift: 0, items: null },
+], 2026);
+check("金額があっても明細なしを別に数える",
+  [detailPendingSummary.total, detailPendingSummary.pendingCount, detailPendingSummary.detailPendingCount],
+  [700, 0, 1]);
 check("ギフト額はその年の分だけ", yearSummary.gift, 500);
 check("点数は数量ぶん数える", [yearSummary.itemCount, yearSummary.giftItemCount], [4, 1]);
 check("支援した作者の数", yearSummary.shopCount, 2);
@@ -800,6 +807,17 @@ check("この年の推し作者を並べる",
   [...summaryTopShopsBody.querySelectorAll("tr.shop-row")].map(tr => tr.cells[1].textContent), ["SOUR FLAVOR", "べつのショップ"]);
 check("過去に未収集が無ければ断らない", summaryNewShopWarn.hidden, true);
 
+// 支払額だけ取得できた注文も、点数や作者数については未収集だと分かるようにする
+const savedSummaryItems = state.cache.s2.items;
+state.cache.s2.items = null;
+render();
+check("まとめに商品明細の未収集件数を添える",
+  summaryCards.querySelector(".stat-note").textContent.includes("商品明細未収集1件"), true);
+check("商品明細未収集はまとめの数字のずれを警告する",
+  summaryNewShopWarn.textContent.includes("点数・作者数・推し作者は実際より少なくなる"), true);
+state.cache.s2.items = savedSummaryItems;
+render();
+
 // まとめの共有(ボタンには年が入る。何年分が出るのか押す前に分かる必要がある)
 location.hash = "#/summary";
 renderCurrentView();
@@ -808,8 +826,11 @@ check("まとめの共有文面", buildSummaryShareText(summaryShareStats),
   "2026年のBOOTHお買いもの🛍️\n\n合計額 ¥3,800（2件）\n買ったもの 4点\n支援した作者 2人\nうちはじめて 1人\nいちばん買った月 2026年2月\n\n推し作者\n🥇 SOUR FLAVOR\n🥈 べつのショップ\n\n#BOOTHお買いものレポート");
 // 未収集があると数字がずれるので、出す前に断る
 check("まとめの共有 未収集を断る", summaryShareIssues(summaryShareStats), ["2026年に未収集の注文が1件あります"]);
+check("まとめの共有 商品明細の未収集を断る",
+  summaryShareIssues({ ...summaryShareStats, pendingCount: 0, detailPendingCount: 2, beforePending: 0 }),
+  ["2026年に商品明細を未収集の注文が2件あります"]);
 check("まとめの共有 揃っていれば断らない",
-  summaryShareIssues({ ...summaryShareStats, pendingCount: 0, beforePending: 0 }), []);
+  summaryShareIssues({ ...summaryShareStats, pendingCount: 0, detailPendingCount: 0, beforePending: 0 }), []);
 // 「はじめて」が0人なら、過去が未収集でもずれようがない
 check("まとめの共有 はじめてが0人なら過去の未収集を断らない",
   summaryShareIssues({ ...summaryShareStats, pendingCount: 0, beforePending: 3, newShopCount: 0 }), []);
@@ -1225,11 +1246,38 @@ check("読み込み JSONでない", parseBackup("これはJSONではない").ok,
 check("読み込み 別のJSON", parseBackup('{"foo":1}').message,
   "このファイルはBOOTHお買いものレポートのバックアップではありません。");
 check("読み込み 配列", parseBackup("[1,2]").ok, false);
+const backupEnvelope = {
+  format: "booth-purchase-report",
+  version: 1,
+  exportedAt: "2026-07-05T00:00:00.000Z",
+  index: null,
+  cache: {},
+};
+check("読み込み 未対応バージョンを拒否",
+  parseBackup(JSON.stringify({ ...backupEnvelope, version: 2 })).message,
+  "このバックアップのバージョン(2)には対応していません。");
+check("読み込み 書き出し日時が壊れている",
+  parseBackup(JSON.stringify({ ...backupEnvelope, exportedAt: "not-a-date" })).message,
+  "バックアップの書き出し日時が壊れています。");
 check("読み込み 注文履歴が壊れている",
-  parseBackup('{"format":"booth-purchase-report","index":{"orders":"x"}}').message,
+  parseBackup(JSON.stringify({ ...backupEnvelope, index: { orders: "x" } })).message,
+  "バックアップの注文履歴が壊れています。");
+check("読み込み 注文の型が壊れている",
+  parseBackup(JSON.stringify({ ...backupEnvelope, index: {
+    orders: [{ id: 123, status: "completed", date: "2026年1月1日" }],
+  } })).message,
   "バックアップの注文履歴が壊れています。");
 check("読み込み 金額データが壊れている",
-  parseBackup('{"format":"booth-purchase-report","cache":[]}').message,
+  parseBackup(JSON.stringify({ ...backupEnvelope, cache: [] })).message,
+  "バックアップの金額データが壊れています。");
+check("読み込み 金額の型が壊れている",
+  parseBackup(JSON.stringify({ ...backupEnvelope, cache: { x: { amount: "500" } } })).message,
+  "バックアップの金額データが壊れています。");
+check("読み込み 商品明細の型が壊れている",
+  parseBackup(JSON.stringify({ ...backupEnvelope, cache: { x: {
+    amount: 500,
+    items: [{ shop: "S", name: "商品", price: 500, gift: "false" }],
+  } } })).message,
   "バックアップの金額データが壊れています。");
 const restored = parseBackup(JSON.stringify(backup));
 check("読み込み 書き出したものを読み戻せる",
@@ -1519,6 +1567,19 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   await runTask((signal) => fetchIndexTask(signal, false));
   check("1件も読めなければ全期間扱いにしない", state.index.complete, false);
 
+  // 1ページ目が正常でも、途中のページだけログイン画面などへ変わることがある
+  resetIndex();
+  routes = {
+    [ORDERS_URL]: `<html><body>${orderLink("p1", "2026年5月3日 12:34")}
+      <div class="pager"><a href="/orders?page=2">2</a></div></body></html>`,
+    [`${ORDERS_URL}?page=2`]: "<html><body></body></html>",
+  };
+  await runTask((signal) => fetchIndexTask(signal, false));
+  check("後続ページを読めなければ全期間扱いにしない", state.index.complete, false);
+  check("後続ページより前に読めた注文は残す", state.index.orders.map(o => o.id), ["p1"]);
+  check("後続ページの読み取り失敗も警告する",
+    noticeBox.textContent.includes("読み取れませんでした"), true);
+
   // --- 中断で途中までしか取れていない索引は、次の取得で抜けた範囲まで辿り直す ---
   // (既知の注文で打ち切ると、その先に残った抜けを永久に拾えない)
   const pagedRoutes = (page2Seen) => ({
@@ -1558,6 +1619,24 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   check("新しい注文が無ければ0件と伝える", noticeBox.textContent.includes("新しく追加された注文: 0件"), true);
   check("揃っていれば2ページ目は見に行かない", seenWhenComplete.length, 0);
   check("停止しても全期間のまま", state.index.complete, true);
+
+  // 増分取得では古い状態を確認し直さない代わりに、利用者が明示的に全件再取得を
+  // 完了したときだけ、キャンセル済み・履歴外の詳細キャッシュを整理する
+  resetIndex();
+  state.cache = {
+    keep: { amount: 100, items: [] },
+    cancelled: { amount: 200, items: [] },
+    missing: { amount: 300, items: [] },
+  };
+  routes = {
+    [ORDERS_URL]: `<html><body>${orderLink("keep", "2026年5月3日 12:34")}` +
+      `${orderLink("cancelled", "2026年4月3日 12:34").replace("completed", "cancelled")}</body></html>`,
+  };
+  await runTask((signal) => fetchIndexTask(signal, true));
+  check("全件再取得ではキャンセル状態を索引に反映する",
+    state.index.orders.map(o => [o.id, o.status]), [["keep", "completed"], ["cancelled", "cancelled"]]);
+  check("全件再取得の完了時だけ集計対象外のキャッシュを消す",
+    Object.keys(state.cache), ["keep"]);
 
   // 全件再取得を中断しても、収集済みの金額は消さない。
   // 消してしまうと「ここまでに取得した金額は保存されている」という案内が嘘になる
