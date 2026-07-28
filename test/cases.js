@@ -539,6 +539,10 @@ check("最も多いマスは最も濃い", heatmapCellAlpha(4, 4), 1);
 setTrendYears(2026, 2025);
 check("年に合わせた範囲になる",
   [heatmapFrom.value.slice(0, 4), heatmapTo.value.slice(0, 4)], ["2026", "2026"]);
+// 1年間を指定しても、注文の無い月は選択肢に無い。実在する範囲へ寄せる
+const keys2026 = heatmapMonthKeys(buildResults()).filter((key) => key.startsWith("2026"));
+check("その年に実在する範囲を選ぶ",
+  [heatmapFrom.value, heatmapTo.value], [keys2026[0], keys2026[keys2026.length - 1]]);
 setTrendYears(2025, 2026);
 check("年を切り替えると範囲も付いてくる",
   [heatmapFrom.value.slice(0, 4), heatmapTo.value.slice(0, 4)], ["2025", "2025"]);
@@ -552,12 +556,12 @@ check("同じ年で描き直しても手で選んだ範囲は残る",
 setTrendYears(2026, 2025);
 check("年を切り替えたときだけ上書きする", heatmapFrom.value.slice(0, 4), "2026");
 
-// 今年は今月までしか買っていないので、上のグラフと同じところで切る
+// 曜日と時間帯の傾向を見るものなので、今年でも今月で切らず1年間で見る
 heatmapSyncedYear = null;
-syncHeatmapToYear(2026, 3);
-check("今年は上のグラフと同じ月で切る", [heatmapFromKey, heatmapToKey], ["2026-01", "2026-03"]);
+syncHeatmapToYear(2026);
+check("期間は1年間", [heatmapFromKey, heatmapToKey], ["2026-01", "2026-12"]);
 heatmapFromKey = "2026-02";
-syncHeatmapToYear(2026, 3);
+syncHeatmapToYear(2026);
 check("同じ年をもう一度渡しても上書きしない", heatmapFromKey, "2026-02");
 
 // 選択肢には注文のある月しか無い。1月や12月が無くても選べるよう、近い月へ寄せる

@@ -815,8 +815,8 @@ function renderSpendingTrends(now = new Date()) {
   }
 
   renderCumulativeChart(trend);
-  // 上のグラフと同じ期間へ合わせてから描く
-  syncHeatmapToYear(trend.year, trend.throughMonth);
+  // 左で選んでいる年へ合わせてから描く
+  syncHeatmapToYear(trend.year);
   renderHeatmap();
   renderPeriodTableInto(
     trendPeriodTableBody,
@@ -838,12 +838,15 @@ let heatmapToKey = null;
 // 触らない。収集が進むたびに手で選んだ範囲が戻ってしまう)
 let heatmapSyncedYear = null;
 
-function syncHeatmapToYear(year, throughMonth) {
+function syncHeatmapToYear(year) {
   if (heatmapSyncedYear === year) return;
   heatmapSyncedYear = year;
-  // 今年は今月までしか買っていないので、上のグラフと同じところで切る
+  // **今年でも今月で切らず、1年間で見る。** ここで数えるのは曜日と時間帯の
+  // 傾向なので、月をそろえる意味がない(上の年比較は金額を足し合わせるため、
+  // 同じ月まででないと差が出てしまうので、あちらだけ今月で切る)。
+  // その年に注文の無い月は clampMonthKey が実在する範囲へ寄せる
   heatmapFromKey = `${year}-01`;
-  heatmapToKey = `${year}-${String(throughMonth).padStart(2, "0")}`;
+  heatmapToKey = `${year}-12`;
 }
 
 function setHeatmapRange(from, to) {
