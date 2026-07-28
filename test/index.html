@@ -88,17 +88,17 @@
   <div id="backupStats"></div>
   <div id="backupCoverage" hidden></div>
   <button id="backupSaveBtn"></button>
-  <input type="file" id="restoreFile">
-  <div id="restoreStatus"></div>
+  <label for="restoreFile">読み込むバックアップ</label><input type="file" id="restoreFile">
+  <div id="restoreStatus" role="status"></div>
 </div>
 
-<div id="progress" hidden>
+<div id="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" hidden>
   <span id="progressText"></span>
   <button id="abortBtn"></button>
   <div><div id="progressFill"></div></div>
 </div>
-<div id="noticeBox" hidden></div>
-<div id="errorBox" hidden></div>
+<div id="noticeBox" role="status" hidden></div>
+<div id="errorBox" role="alert" hidden></div>
 
 <div id="summarySection" hidden>
   <span id="totalGift"></span><span id="totalAmount"></span><span id="totalCount"></span>
@@ -106,6 +106,7 @@
 </div>
 
 <button id="runAllBtn"></button>
+<span id="allPlannedCount"></span>
 <input type="checkbox" id="forceRefreshAll">
 
 <details class="accordion">
@@ -138,6 +139,16 @@
   <table><tbody id="periodTableBody"></tbody></table>
   <details class="accordion">
     <summary><h2>注文ごとの内訳<span id="orderRowCount"></span></h2></summary>
+    <label>注文番号・ショップを検索<input type="search" id="orderSearch"></label>
+    <label>ステータス<select id="orderStatusFilter"><option value="">すべて</option></select></label>
+    <label>並べ替え<select id="orderSort">
+      <option value="date-desc">注文日時が新しい順</option>
+      <option value="date-asc">注文日時が古い順</option>
+      <option value="amount-desc">金額が高い順</option>
+      <option value="amount-asc">金額が低い順</option>
+      <option value="shop-asc">ショップ名順</option>
+    </select></label>
+    <span id="orderFilterCount" role="status"></span>
     <div class="table-scroll"><table><tbody id="orderTableBody"></tbody></table></div>
   </details>
 </div>
@@ -149,7 +160,7 @@
 </div>
 
 <div id="shareOverlay" hidden></div>
-<div id="sharePanel" hidden>
+<div id="sharePanel" role="dialog" aria-modal="true" hidden>
   <button id="shareCloseBtn"></button>
   <div id="shareRatioToggle">
     <button class="segmented-btn" data-ratio="16:9" aria-pressed="true">16:9</button>
@@ -160,7 +171,7 @@
   <div id="shareDropZone"></div>
   <div id="shareColors"></div>
   <div id="sharePatterns"></div>
-  <canvas id="shareCanvas" width="1200" height="675"></canvas>
+  <canvas id="shareCanvas" width="1200" height="675" role="img" aria-label="作成した共有カードのプレビュー"></canvas>
   <input type="file" id="shareBgFile">
   <button id="shareBgClearBtn" hidden></button>
   <span id="shareBgName"></span>

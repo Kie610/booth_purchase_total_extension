@@ -13,6 +13,7 @@ function extractOrderId(href) {
 // 取り違えないよう、まず既知のステータス名に一致するものを探す。
 // キャンセルの除外がこの判定に乗っているので、取り違えると合計そのものが狂う
 const BADGE_LAYOUT_CLASSES = new Set(["badge", "mx-0", "align-top", "order-state"]);
+const EMPTY_HISTORY_PATTERN = /(?:購入履歴|注文履歴|購入した商品)(?:は|が)?(?:まだ)?ありません/;
 
 function extractStatusFromBadge(badgeEl) {
   if (!badgeEl) return "unknown";
@@ -49,9 +50,18 @@ function parseListPage(doc) {
     if (m) maxPage = Math.max(maxPage, parseInt(m[1], 10));
   });
 
+  // 0件はセレクタが壊れた場合と区別できないため、BOOTHが明示する空状態の文面を確認する。
+  const pageText = (doc.body ? doc.body.textContent : "").replace(/\s/g, "");
+  const emptyFound = EMPTY_HISTORY_PATTERN.test(pageText);
+
   // ページ送りの枠自体があったかどうか。枠はあるのにページ番号を1つも読めない
   // 場合は「1ページしかない」ではなく「読めなかった」なので、呼び出し側で区別する
-  return { orders, maxPage, pagerFound: doc.querySelector(".pager") !== null };
+  return {
+    orders,
+    maxPage,
+    pagerFound: doc.querySelector(".pager") !== null,
+    emptyFound,
+  };
 }
 
 // 「BOOST¥ 0」のようにラベルと金額が同じ要素に入っている場合があるため、

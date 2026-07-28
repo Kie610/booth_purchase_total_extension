@@ -131,8 +131,12 @@ collectRangeBtn.addEventListener("click", () =>
 runAllBtn.addEventListener("click", () => runTask(runAllTask));
 
 forceRefreshRange.addEventListener("change", updatePlannedCount);
+forceRefreshAll.addEventListener("change", updatePlannedCount);
 rangeFrom.addEventListener("change", onRangeChanged);
 rangeTo.addEventListener("change", onRangeChanged);
+orderSearch.addEventListener("input", () => renderOrderTable(buildResults()));
+orderStatusFilter.addEventListener("change", () => renderOrderTable(buildResults()));
+orderSort.addEventListener("change", () => renderOrderTable(buildResults()));
 
 function onRangeChanged() {
   highlightSelectedRange();
@@ -214,7 +218,13 @@ function shareYearSummary() {
 shareCloseBtn.addEventListener("click", closeSharePanel);
 shareOverlay.addEventListener("click", closeSharePanel);
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && !sharePanel.hidden) closeSharePanel();
+  if (sharePanel.hidden) return;
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeSharePanel();
+    return;
+  }
+  trapSharePanelFocus(event);
 });
 
 // 画像の縦横比。投稿先に合わせて選べるようにする
@@ -334,8 +344,8 @@ trendBaseYear.addEventListener("change", () =>
 // 順位をクリックすると、そのショップで買った商品を開く
 for (const tbody of [rankingTableBody, summaryTopShopsBody]) {
   tbody.addEventListener("click", (event) => {
-    const cell = event.target.closest("td.rank");
-    if (cell) toggleShopItems(cell.closest("tr.shop-row").dataset.shopKey);
+    const button = event.target.closest("button.rank-toggle");
+    if (button) toggleShopItems(button.closest("tr.shop-row").dataset.shopKey);
   });
 }
 
@@ -408,7 +418,7 @@ monthTableBody.addEventListener("click", (event) => {
   const yearRow = event.target.closest("tr.year-row");
   if (yearRow) {
     // ▸ は開閉、それ以外の場所はその年をまとめて範囲に設定
-    if (event.target.closest(".toggle")) {
+    if (event.target.closest(".table-toggle")) {
       toggleYearRow(monthTableBody, expandedMonthYears, yearRow);
     } else {
       setRange(yearRow.dataset.rangeFrom, yearRow.dataset.rangeTo);
@@ -416,6 +426,17 @@ monthTableBody.addEventListener("click", (event) => {
     return;
   }
   const monthRow = event.target.closest("tr.month-row");
+  if (monthRow) setRange(monthRow.dataset.monthKey, monthRow.dataset.monthKey);
+});
+
+monthTableBody.addEventListener("keydown", (event) => {
+  if (running || (event.target !== event.currentTarget && event.target.closest(".table-toggle"))) return;
+  if (event.key !== "Enter" && event.key !== " ") return;
+  const yearRow = event.target.closest("tr.year-row");
+  const monthRow = event.target.closest("tr.month-row");
+  if (!yearRow && !monthRow) return;
+  event.preventDefault();
+  if (yearRow) setRange(yearRow.dataset.rangeFrom, yearRow.dataset.rangeTo);
   if (monthRow) setRange(monthRow.dataset.monthKey, monthRow.dataset.monthKey);
 });
 
@@ -682,9 +703,9 @@ async function fetchDoc(url, signal) {
 // 一覧ページを読めていないと分かる兆候。どちらの場合も、実際は取得できていない
 // 古い注文があるのに「全期間を取得済み」と表示してしまい、少ない合計を
 // 正しい合計だと思わせることになるため、完全とは記録しない
-function listPageLooksUnreadable({ orders, maxPage, pagerFound }) {
-  // 1ページ目から1件も取れない(行のセレクタが効いていない、または購入履歴が空)
-  if (orders.length === 0) return true;
+function listPageLooksUnreadable({ orders, maxPage, pagerFound, emptyFound = false }) {
+  // 1件も取れず、BOOTHの正式な空状態も見つからない(行のセレクタが効いていない疑い)
+  if (orders.length === 0) return !emptyFound;
   // ページ送りはあるのに、ページ番号を1つも読めない(ページャのセレクタが効いていない)
   return pagerFound && maxPage === 1;
 }
@@ -761,6 +782,7 @@ async function fetchIndexTask(signal, force) {
   let reachedKnown = false;
   let finishedAllPages = false;
   let unreadable = false;
+  let emptyHistory = false;
   let added = 0;
 
   try {
@@ -770,6 +792,7 @@ async function fetchIndexTask(signal, force) {
     const firstDoc = await fetchDoc(ORDERS_INDEX_URL, signal);
     const firstPage = parseListPage(firstDoc);
     const { orders: firstOrders, maxPage } = firstPage;
+    emptyHistory = firstOrders.length === 0 && firstPage.emptyFound;
     unreadable = listPageLooksUnreadable(firstPage);
     reachedKnown = appendUnknown(fetched, firstOrders, known, stopAtKnown);
 
@@ -815,10 +838,12 @@ async function fetchIndexTask(signal, force) {
 
   if (unreadable) {
     addNotice(
-      "購入履歴の一覧をうまく読み取れませんでした。BOOTHに購入履歴が無いか、" +
+      "購入履歴の一覧をうまく読み取れませんでした。ログイン状態または" +
         "ページの構造が変わっている可能性があります。" +
         "この場合すべての注文を取得できていないため、合計は実際より少なくなります。"
     );
+  } else if (emptyHistory) {
+    addNotice("購入履歴はありませんでした。集計する注文はありません。");
   } else if (reachedKnown) {
     addNotice(
       `取得済みの注文に到達したため、そこで停止しました(以降は読み込み済み)。新しく追加された注文: ${added}件。`

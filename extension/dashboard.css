@@ -6,12 +6,26 @@
   --border-strong: #c9ced6;
   --bg-hover: #f0f1f4;
   --accent: #fc4d50;
+  /* ブランド色は維持し、白背景上の小さな文字だけ読みやすい濃色を使う */
+  --accent-text: #b42326;
   --bg-soft: #f7f8fa;
   --footer-height: 78px;
 }
 
 * {
   box-sizing: border-box;
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
 }
 
 body {
@@ -105,7 +119,7 @@ body {
 /* 今どの画面にいるかは、左の線と太字で示す */
 .nav-link.current {
   font-weight: 700;
-  color: var(--accent);
+  color: var(--accent-text);
   box-shadow: inset 3px 0 0 var(--accent);
 }
 
@@ -144,7 +158,7 @@ body {
 }
 
 a {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* ---- 固定フッター ---- */
@@ -169,6 +183,10 @@ a {
 /* 実行中は進捗の分だけフッターを高くする(本文の下余白も追従する) */
 body.has-progress {
   --footer-height: 128px;
+}
+
+body.modal-open {
+  overflow: hidden;
 }
 
 .foot-body {
@@ -238,8 +256,19 @@ body.has-progress {
 }
 
 .step-no {
-  color: var(--accent);
+  color: var(--fg);
+  background: var(--accent);
+  border-radius: 4px;
+  padding: 1px 5px;
   margin-right: 4px;
+}
+
+.collection-options {
+  margin: 20px 0;
+}
+
+.collection-options > .step {
+  margin: 14px 0 0;
 }
 
 .step-controls {
@@ -288,7 +317,8 @@ button.small {
 
 button.primary {
   background: var(--accent);
-  color: #fff;
+  color: #111827;
+  font-weight: 700;
 }
 
 button.primary:hover:not(:disabled) {
@@ -303,6 +333,16 @@ button.secondary {
 
 button.secondary:hover:not(:disabled) {
   background: var(--bg-hover);
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible,
+summary:focus-visible {
+  outline: 3px solid #111827;
+  outline-offset: 2px;
 }
 
 button.share-btn {
@@ -415,6 +455,17 @@ button.share-btn:hover:not(:disabled) {
   background: #fdecec;
   border: 1px solid #f3c4c4;
   color: #a3272a;
+}
+
+.sensitive-note {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border: 1px solid #c74346;
+  border-radius: 6px;
+  background: #fff1f1;
+  color: #a3272a;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 /* レポート以外の画面で、数字が実際より少ないことを伝える案内。
@@ -758,7 +809,7 @@ button.share-btn:hover:not(:disabled) {
 }
 
 .accordion > summary:hover h2 {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .accordion-count {
@@ -873,6 +924,69 @@ button.share-btn:hover:not(:disabled) {
 .table-scroll .data-table td {
   padding-left: 12px;
   padding-right: 12px;
+}
+
+/* ---- 注文内訳の検索・絞り込み ---- */
+
+.order-tools {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin-top: 14px;
+}
+
+.order-tool-field {
+  display: grid;
+  gap: 4px;
+  color: var(--fg-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.order-tool-field:first-child {
+  flex: 1 1 240px;
+}
+
+.order-tool-field input,
+.order-tool-field select {
+  min-height: 36px;
+  padding: 6px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--fg);
+  font: inherit;
+  font-weight: 400;
+}
+
+.order-filter-count {
+  margin-left: auto;
+  padding-bottom: 7px;
+}
+
+.order-shop-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+}
+
+/* 表の開閉は実ボタンにして、Enter/Spaceでも操作できるようにする */
+button.table-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  text-align: left;
+}
+
+button.table-toggle:hover:not(:disabled) {
+  text-decoration: underline;
 }
 
 /* ---- 年別・月別の集計 ---- */
@@ -1016,6 +1130,7 @@ button.icon-btn:hover:not(:disabled) {
    寸法は button.small に合わせる。白地に埋もれないよう色は付けるが、
    実行系の primary(赤)と間違えないよう淡い紫にする */
 label.file-btn {
+  position: relative;
   display: inline-block;
   padding: 5px 12px;
   border: 1px solid #d3b6ee;
@@ -1029,6 +1144,20 @@ label.file-btn {
 
 label.file-btn:hover {
   background: #ead9fb;
+}
+
+.visually-hidden-file {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+label.file-btn:focus-within {
+  outline: 3px solid #111827;
+  outline-offset: 2px;
 }
 
 /* 背景画像の区画と文面の区画は、どちらが高くても下端をそろえる。
@@ -1154,9 +1283,36 @@ button.share-template.current {
 .share-panel-foot {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 16px;
+}
+
+.share-media-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid #d68b8d;
+  border-radius: 8px;
+  background: #fff1f1;
+}
+
+button.share-media-btn {
+  border-color: #b84c4f;
+  background: #fff;
+  color: #7f1d1f;
+  font-weight: 700;
+}
+
+button.share-media-btn:hover:not(:disabled) {
+  background: #ffe3e3;
+}
+
+.restore-field {
+  font-size: 13px;
+  font-weight: 700;
 }
 
 /* ---- 今年のまとめ ---- */
@@ -1198,12 +1354,12 @@ button.segmented-btn:hover:not(.current) {
 /* 選ばれている側。表のどの列で並べているかと色をそろえる */
 button.segmented-btn.current {
   background: var(--accent);
-  color: #fff;
+  color: #111827;
   font-weight: 700;
 }
 
 .ranking-table th.sorted {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .ranking-share-option {

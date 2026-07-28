@@ -20,6 +20,7 @@ const rangeTo = document.getElementById("rangeTo");
 const selectPendingBtn = document.getElementById("selectPendingBtn");
 const collectRangeBtn = document.getElementById("collectRangeBtn");
 const plannedCountEl = document.getElementById("plannedCount");
+const allPlannedCountEl = document.getElementById("allPlannedCount");
 const forceRefreshRange = document.getElementById("forceRefreshRange");
 const unknownArea = document.getElementById("unknownArea");
 const unknownCount = document.getElementById("unknownCount");
@@ -38,6 +39,10 @@ const progressFill = document.getElementById("progressFill");
 const summarySection = document.getElementById("summarySection");
 const breakdownSection = document.getElementById("breakdownSection");
 const orderRowCountEl = document.getElementById("orderRowCount");
+const orderSearch = document.getElementById("orderSearch");
+const orderStatusFilter = document.getElementById("orderStatusFilter");
+const orderSort = document.getElementById("orderSort");
+const orderFilterCount = document.getElementById("orderFilterCount");
 const footTotal = document.getElementById("footTotal");
 const footTotalCount = document.getElementById("footTotalCount");
 const footYearLabel = document.getElementById("footYearLabel");
@@ -238,8 +243,12 @@ function td(text, className) {
 // 折りたたみの三角印を添えた見出しセル
 function toggleCell(label, expanded) {
   const cell = td("");
-  cell.appendChild(el("span", "toggle", expanded ? "▾" : "▸"));
-  cell.appendChild(document.createTextNode(` ${label}`));
+  const button = el("button", "table-toggle");
+  button.type = "button";
+  button.setAttribute("aria-expanded", String(expanded));
+  button.appendChild(el("span", "toggle", expanded ? "▾" : "▸"));
+  button.appendChild(el("span", "table-toggle-label", label));
+  cell.appendChild(button);
   return cell;
 }
 
@@ -262,12 +271,19 @@ function renderCollapsibleTable(tbody, years, expandedKeys, buildYearRow, buildM
     if (year.key !== null) yearRow.dataset.yearKey = year.key;
     tbody.appendChild(yearRow);
 
-    for (const month of year.months) {
+    const controlledIds = [];
+    for (const [monthIndex, month] of year.months.entries()) {
       const monthRow = buildMonthRow(month, year);
       if (!monthRow) continue;
       monthRow.dataset.yearKey = year.key;
+      monthRow.id = `${tbody.id}-${year.key || "unknown"}-${monthIndex}`;
+      controlledIds.push(monthRow.id);
       monthRow.hidden = !expanded;
       tbody.appendChild(monthRow);
+    }
+    const toggle = yearRow.querySelector(".table-toggle");
+    if (toggle && controlledIds.length > 0) {
+      toggle.setAttribute("aria-controls", controlledIds.join(" "));
     }
   }
 }
@@ -282,7 +298,9 @@ function toggleYearRow(tbody, expandedKeys, yearRow) {
   } else {
     expandedKeys.add(key);
   }
-  yearRow.querySelector(".toggle").textContent = expanded ? "▸" : "▾";
+  const button = yearRow.querySelector(".table-toggle");
+  button.querySelector(".toggle").textContent = expanded ? "▸" : "▾";
+  button.setAttribute("aria-expanded", String(!expanded));
   tbody
     .querySelectorAll(`tr.month-row[data-year-key="${key}"]`)
     .forEach((row) => {
@@ -294,6 +312,8 @@ function toggleYearRow(tbody, expandedKeys, yearRow) {
 
 // 実行中は操作を止める。running そのものは dashboard.js が持つ
 function renderRunningState(isRunning) {
+  const main = document.querySelector("main");
+  if (main) main.setAttribute("aria-busy", String(isRunning));
   ACTION_BUTTONS.forEach((btn) => {
     btn.disabled = isRunning;
   });
@@ -307,6 +327,7 @@ function renderRunningState(isRunning) {
   abortBtn.disabled = !isRunning;
   if (!isRunning) {
     progressBox.hidden = true;
+    progressBox.removeAttribute("aria-valuenow");
     document.body.classList.remove("has-progress");
   }
 }
@@ -344,7 +365,11 @@ function setProgress(text, ratio) {
   document.body.classList.add("has-progress");
   progressText.textContent = text;
   if (typeof ratio === "number") {
-    progressFill.style.width = `${Math.min(100, Math.max(0, ratio * 100))}%`;
+    const percent = Math.min(100, Math.max(0, ratio * 100));
+    progressFill.style.width = `${percent}%`;
+    progressBox.setAttribute("aria-valuenow", String(Math.round(percent)));
+  } else {
+    progressBox.removeAttribute("aria-valuenow");
   }
 }
 
@@ -410,14 +435,20 @@ function shopNameCell(row) {
   return cell;
 }
 
-function rankCell(rank, expanded) {
+function rankCell(rank, expanded, detailsId, shopName) {
   const cell = td("", "rank");
+  const button = el("button", "table-toggle rank-toggle");
+  button.type = "button";
+  button.setAttribute("aria-expanded", String(expanded));
+  button.setAttribute("aria-controls", detailsId);
+  button.setAttribute("aria-label", `${shopName}の商品明細を${expanded ? "閉じる" : "開く"}`);
   const badge = el("span", "rank-badge", String(rank));
   // 1〜3位は王冠を背景に敷く(金・銀・銅)
   if (rank <= RANKING_CROWNS) badge.classList.add(`rank-crown-${rank}`);
-  cell.appendChild(badge);
+  button.appendChild(badge);
   // 何が買えるのか押す前に分かるよう、開閉できることを三角で示す
-  cell.appendChild(el("span", "toggle", expanded ? "▾" : "▸"));
+  button.appendChild(el("span", "toggle", expanded ? "▾" : "▸"));
+  cell.appendChild(button);
   return cell;
 }
 
@@ -474,14 +505,17 @@ function renderShopRows(tbody, shops, boldUntil) {
   tbody.innerHTML = "";
   shops.forEach((row, index) => {
     const expanded = expandedShopKeys.has(row.key);
+    const detailsId = `${tbody.id}-shop-details-${index}`;
     const tr = el("tr", index < boldUntil ? "shop-row rank-top" : "shop-row");
     tr.dataset.shopKey = row.key;
-    tr.appendChild(rankCell(index + 1, expanded));
+    tr.appendChild(rankCell(index + 1, expanded, detailsId, row.name));
     tr.appendChild(shopNameCell(row));
     tr.appendChild(countCell(row.count, row.giftCount));
     tr.appendChild(amountCell(row.total, row.gift));
     tbody.appendChild(tr);
-    tbody.appendChild(shopItemsRow(row, expanded));
+    const itemsRow = shopItemsRow(row, expanded);
+    itemsRow.id = detailsId;
+    tbody.appendChild(itemsRow);
   });
 }
 
@@ -519,8 +553,11 @@ function toggleShopItems(key) {
   document.querySelectorAll(`tr.shop-items-row${selector}`).forEach((tr) => {
     tr.hidden = expanded;
   });
-  document.querySelectorAll(`tr.shop-row${selector} .toggle`).forEach((mark) => {
-    mark.textContent = expanded ? "▸" : "▾";
+  document.querySelectorAll(`tr.shop-row${selector} .rank-toggle`).forEach((button) => {
+    button.querySelector(".toggle").textContent = expanded ? "▸" : "▾";
+    button.setAttribute("aria-expanded", String(!expanded));
+    const shopName = button.getAttribute("aria-label").replace(/の商品明細を(?:開く|閉じる)$/, "");
+    button.setAttribute("aria-label", `${shopName}の商品明細を${expanded ? "開く" : "閉じる"}`);
   });
 }
 
@@ -1109,7 +1146,12 @@ function renderMonthArea() {
   const hasIndex = Boolean(state.index) && stats.length > 0;
   monthEmpty.hidden = hasIndex;
   monthArea.hidden = !hasIndex;
-  if (!hasIndex) return;
+  if (!hasIndex) {
+    monthEmpty.textContent = state.index && indexIsComplete(state.index)
+      ? "購入履歴はありませんでした。集計する注文はありません。"
+      : "先に「① 注文履歴を取得」を実行してください。";
+    return;
+  }
 
   renderCollapsibleTable(
     monthTableBody,
@@ -1122,12 +1164,16 @@ function renderMonthArea() {
       // 年をクリックしたときに設定する範囲(その年に存在する月の最古〜最新)
       row.dataset.rangeFrom = year.months[year.months.length - 1].key;
       row.dataset.rangeTo = year.months[0].key;
+      row.tabIndex = 0;
+      row.setAttribute("aria-label", `${year.label}を収集範囲に設定`);
       return row;
     },
     (month, year) => {
       if (year.key === null) return null;
       const row = statRow(month, { className: "month-row", indent: true });
       row.dataset.monthKey = month.key;
+      row.tabIndex = 0;
+      row.setAttribute("aria-label", `${month.label}を収集範囲に設定`);
       return row;
     }
   );
@@ -1209,7 +1255,26 @@ function setRange(from, to) {
 }
 
 // 選択範囲で実際に取得しにいく件数(キャッシュ無視の指定を反映する)
+function collectionTimeEstimate(count) {
+  if (count <= 0) return "";
+  // リクエスト間隔だけから出す最低目安。実際は通信時間も加わるため「以上」とする。
+  const seconds = Math.max(1, Math.ceil((count * REQUEST_INTERVAL_MS) / 1000));
+  if (seconds < 60) return `約${seconds}秒以上`;
+  const minutes = Math.max(1, Math.round(seconds / 60));
+  return `約${minutes}分以上`;
+}
+
 function updatePlannedCount() {
+  if (!state.index) {
+    allPlannedCountEl.textContent = "所要時間は注文履歴の取得後に表示します";
+  } else {
+    const allPlanned = pendingTargets(targetOrders(), forceRefreshAll.checked).length;
+    allPlannedCountEl.textContent =
+      allPlanned > 0
+        ? `金額取得: ${allPlanned}件 / 目安: ${collectionTimeEstimate(allPlanned)}`
+        : "金額取得: なし（注文履歴のみ確認します）";
+  }
+
   const from = rangeFrom.value;
   const to = rangeTo.value;
   if (!from || !to) {
@@ -1221,7 +1286,9 @@ function updatePlannedCount() {
     forceRefreshRange.checked
   ).length;
   plannedCountEl.textContent =
-    planned > 0 ? `取得予定: ${planned}件` : "取得予定: なし(収集済み)";
+    planned > 0
+      ? `取得予定: ${planned}件 / 目安: ${collectionTimeEstimate(planned)}`
+      : "取得予定: なし(収集済み)";
   if (!running) collectRangeBtn.disabled = planned === 0;
 }
 
@@ -1268,7 +1335,6 @@ function renderResult() {
 
   renderPeriodTable(results);
   renderOrderTable(results);
-  orderRowCountEl.textContent = `(${results.length}件)`;
   highlightSelectedRange();
 
   summarySection.hidden = false;
@@ -1343,13 +1409,105 @@ function collectNote(entry) {
   return "";
 }
 
+function orderShops(result) {
+  const shops = new Map();
+  if (!Array.isArray(result.items)) return [];
+  for (const item of result.items) {
+    const name = String(item.shop || "").trim();
+    const url = String(item.shopUrl || "").trim();
+    if (!name) continue;
+    shops.set(url || name, { name, url });
+  }
+  return Array.from(shops.values());
+}
+
+function orderShopsLabel(result) {
+  const names = orderShops(result).map((shop) => shop.name);
+  return names.length > 0 ? names.join("、") : "—";
+}
+
+function orderShopsCell(result) {
+  const cell = td("");
+  const shops = orderShops(result);
+  if (shops.length === 0) {
+    cell.textContent = "—";
+    return cell;
+  }
+  const links = el("div", "order-shop-links");
+  for (const shop of shops) {
+    if (SHOP_URL_PATTERN.test(shop.url)) {
+      const link = el("a", null, shop.name);
+      link.href = shop.url;
+      link.target = "_blank";
+      link.rel = "noopener";
+      links.appendChild(link);
+    } else {
+      links.appendChild(el("span", "", shop.name));
+    }
+  }
+  cell.appendChild(links);
+  return cell;
+}
+
+function renderOrderStatusOptions(results) {
+  const selected = orderStatusFilter.value;
+  const statuses = Array.from(new Set(results.map((result) => result.status))).sort((a, b) =>
+    (STATUS_LABELS[a] || a).localeCompare(STATUS_LABELS[b] || b, "ja")
+  );
+  orderStatusFilter.innerHTML = "";
+  const all = el("option", "", "すべて");
+  all.value = "";
+  orderStatusFilter.appendChild(all);
+  for (const status of statuses) {
+    const option = el("option", "", STATUS_LABELS[status] || status);
+    option.value = status;
+    orderStatusFilter.appendChild(option);
+  }
+  orderStatusFilter.value = statuses.includes(selected) ? selected : "";
+}
+
+function compareOrderRows(a, b, sort) {
+  if (sort === "date-asc") {
+    const aDate = orderSortKey(a);
+    const bDate = orderSortKey(b);
+    // 日付不明は「古い」とは言えないため、昇順でも末尾へ送る。
+    if (aDate < 0 || bDate < 0) {
+      if (aDate < 0 && bDate < 0) return 0;
+      return aDate < 0 ? 1 : -1;
+    }
+    return aDate - bDate;
+  }
+  if (sort === "shop-asc") {
+    return orderShopsLabel(a).localeCompare(orderShopsLabel(b), "ja") ||
+      orderSortKey(b) - orderSortKey(a);
+  }
+  if (sort === "amount-desc" || sort === "amount-asc") {
+    const aValid = typeof a.amount === "number";
+    const bValid = typeof b.amount === "number";
+    if (aValid !== bValid) return aValid ? -1 : 1;
+    if (aValid && a.amount !== b.amount) {
+      return sort === "amount-desc" ? b.amount - a.amount : a.amount - b.amount;
+    }
+  }
+  return orderSortKey(b) - orderSortKey(a);
+}
+
 function renderOrderTable(results) {
   orderTableBody.innerHTML = "";
-  const sorted = [...results].sort((a, b) => orderSortKey(b) - orderSortKey(a));
+  renderOrderStatusOptions(results);
+  const query = orderSearch.value.trim().toLocaleLowerCase("ja");
+  const status = orderStatusFilter.value;
+  const filtered = results.filter((result) => {
+    if (status && result.status !== status) return false;
+    if (!query) return true;
+    return `${result.id} ${orderShopsLabel(result)}`.toLocaleLowerCase("ja").includes(query);
+  });
+  const sorted = [...filtered].sort((a, b) => compareOrderRows(a, b, orderSort.value));
   for (const r of sorted) {
     const tr = el("tr");
     tr.appendChild(td(r.date));
     tr.appendChild(td(STATUS_LABELS[r.status] || r.status));
+    tr.appendChild(orderShopsCell(r));
     if (typeof r.amount === "number") {
       const cell = amountCell(r.amount, giftAmount(r));
       // 金額は読めたが取り直しの対象になっている注文。月別表では未収集として
@@ -1367,6 +1525,12 @@ function renderOrderTable(results) {
     tr.appendChild(td(r.id));
     orderTableBody.appendChild(tr);
   }
+  orderRowCountEl.textContent = `(${filtered.length === results.length
+    ? `${results.length}件`
+    : `${filtered.length}/${results.length}件`})`;
+  orderFilterCount.textContent = filtered.length === results.length
+    ? `${results.length}件を表示`
+    : `${results.length}件中 ${filtered.length}件を表示`;
 }
 
 // ---- 共有 --------------------------------------------------------------
@@ -1431,28 +1595,74 @@ let shareBackground = null;
 
 // 選んでいる縦横比
 let shareRatio = DEFAULT_SHARE_RATIO;
+let shareReturnFocus = null;
+
+function shareModalBackgroundElements() {
+  return Array.from(document.body.children).filter(
+    (element) => element !== shareOverlay && element !== sharePanel && element.tagName !== "SCRIPT"
+  );
+}
+
+function setShareModalBackgroundInert(inert) {
+  for (const element of shareModalBackgroundElements()) element.inert = inert;
+  document.body.classList.toggle("modal-open", inert);
+}
+
+function sharePanelFocusableElements() {
+  return Array.from(
+    sharePanel.querySelectorAll(
+      'button:not([disabled]):not([hidden]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), a[href]'
+    )
+  ).filter((element) => element.getClientRects().length > 0 || document.body.dataset.noAutoInit !== undefined);
+}
+
+function trapSharePanelFocus(event) {
+  if (event.key !== "Tab" || sharePanel.hidden) return;
+  const focusable = sharePanelFocusableElements();
+  if (focusable.length === 0) {
+    event.preventDefault();
+    sharePanel.focus();
+    return;
+  }
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
 
 function openSharePanel(payload) {
+  shareReturnFocus = document.activeElement;
   sharePayload = payload;
   shareText.value = payload.text;
   setShareCardStatus("");
   shareOverlay.hidden = false;
   sharePanel.hidden = false;
+  setShareModalBackgroundInert(true);
   renderShareRatioToggle();
   renderShareTemplates();
   drawSharePanelCard();
   // パネルを開いている間は、後ろの共有ボタンを押せないようにする
   updateShareButton();
-  shareOpenBtn.focus();
+  shareCloseBtn.focus();
 }
 
 function closeSharePanel() {
+  if (sharePanel.hidden) return;
   shareOverlay.hidden = true;
   sharePanel.hidden = true;
+  setShareModalBackgroundInert(false);
   sharePayload = null;
   setShareCardStatus("");
   updateShareButton();
-  shareBtn.focus();
+  if (shareReturnFocus && typeof shareReturnFocus.focus === "function") {
+    shareReturnFocus.focus();
+  }
+  shareReturnFocus = null;
 }
 
 function setShareRatio(ratio) {

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "BOOTHお買いものレポート",
-  "version": "0.27.0",
+  "version": "0.28.0",
   "description": "BOOTHの購入履歴から、実際に支払った合計金額を注文単位で正確に集計します（1注文に複数商品があっても二重カウントしません）。",
   "icons": {
     "16": "icons/icon16.png",
