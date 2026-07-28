@@ -504,6 +504,21 @@
         </div>
       </div>
 
+      <!-- 手持ちの画像が無くても選べるように、その場で描く下地を並べる。
+           色と模様を別々に選び、その組み合わせが背景になる。
+           見本を小さく詰めると何の模様か分からないので、幅いっぱいを使う -->
+      <div class="share-template-box">
+        <span class="share-field-label">背景テンプレート</span>
+        <div class="share-template-row">
+          <span class="share-template-kind">色</span>
+          <div class="share-templates" id="shareColors" role="group" aria-label="背景の色"></div>
+        </div>
+        <div class="share-template-row">
+          <span class="share-template-kind">模様</span>
+          <div class="share-templates" id="sharePatterns" role="group" aria-label="背景の模様"></div>
+        </div>
+      </div>
+
       <div class="share-controls">
         <div class="share-bg">
           <span class="share-field-label">背景画像</span>
@@ -517,17 +532,13 @@
           <!-- ボタンの下が空くので、そこをそのまま投げ込み先にする -->
           <div class="share-drop" id="shareDropZone">
             <span class="share-drop-text">ここに画像をドロップ</span>
-            <span class="hint" id="shareBgName">未選択（既定の背景を使います）</span>
+            <span class="hint" id="shareBgName">未選択（テンプレートを使います）</span>
           </div>
-
-          <!-- 手持ちの画像が無くても選べるように、その場で描く下地を並べる -->
-          <span class="share-field-label share-template-label">テンプレート</span>
-          <div class="share-templates" id="shareTemplates"></div>
         </div>
 
         <div class="share-text-box">
           <span class="share-field-label">投稿する文面</span>
-          <textarea id="shareText" class="share-text" rows="8" readonly></textarea>
+          <textarea id="shareText" class="share-text" readonly></textarea>
         </div>
       </div>
 

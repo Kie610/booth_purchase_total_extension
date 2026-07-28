@@ -261,16 +261,21 @@ shareDropZone.addEventListener("drop", async (event) => {
   await applyShareBackgroundFile(file);
 });
 
-// テンプレートの選択。もう一度押すと既定の下地へ戻る
-shareTemplates.addEventListener("click", (event) => {
-  const button = event.target.closest(".share-template");
-  if (!button) return;
-  if (shareBackground) {
-    setShareCardStatus("画像を選んでいる間はテンプレートを使えません。「元に戻す」を押してください。");
-    return;
-  }
-  setShareTemplate(button.dataset.templateId);
-});
+// テンプレートの選択。色と模様を別々に選び、その組み合わせが背景になる
+function bindShareTemplateRow(row, apply) {
+  row.addEventListener("click", (event) => {
+    const button = event.target.closest(".share-template");
+    if (!button) return;
+    if (shareBackground) {
+      setShareCardStatus("画像を選んでいる間はテンプレートを使えません。「元に戻す」を押してください。");
+      return;
+    }
+    apply(button.dataset.templateId);
+  });
+}
+
+bindShareTemplateRow(shareColors, setShareColor);
+bindShareTemplateRow(sharePatterns, setSharePattern);
 
 shareBgClearBtn.addEventListener("click", () => {
   setShareBackground(null, "");

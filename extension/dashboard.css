@@ -1031,8 +1031,16 @@ label.file-btn:hover {
   background: #ead9fb;
 }
 
+/* 背景画像の区画と文面の区画は、どちらが高くても下端をそろえる。
+   余った高さは、それぞれ投げ込み先と文面の枠に配る */
+.share-bg {
+  display: flex;
+  flex-direction: column;
+}
+
 /* ボタンのすぐ下を投げ込み先にする。何もしていないときは枠線だけの控えめな見た目 */
 .share-drop {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1056,12 +1064,33 @@ label.file-btn:hover {
   color: var(--fg-muted);
 }
 
-.share-template-label {
-  margin-top: 14px;
+/* 色と模様は別々に選ぶ。見本を小さく詰めると何の模様か分からなくなるので、
+   2列に割らずパネルの幅いっぱいを使う */
+.share-template-box {
+  margin-bottom: 16px;
 }
 
-/* 色7種と柄7種。1行に7つ並べて、2行で組の違いが分かるようにする */
+.share-template-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.share-template-row + .share-template-row {
+  margin-top: 8px;
+}
+
+/* 「色」「模様」の見出し。幅を決め打ちして、下の行と見本の左端をそろえる */
+.share-template-kind {
+  flex: 0 0 32px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--fg-muted);
+}
+
+/* 色7種と模様7種。1行に7つ並べる */
 .share-templates {
+  flex: 1;
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 6px;
@@ -1097,7 +1126,16 @@ button.share-template.current {
   gap: 8px;
 }
 
+/* 文面の枠は、隣の背景画像の区画と下端をそろえる。高さを行数で決めると
+   段差が出て、パネルの中で2つの区画がずれて見える */
+.share-text-box {
+  display: flex;
+  flex-direction: column;
+}
+
 .share-text {
+  flex: 1;
+  min-height: 132px;
   width: 100%;
   padding: 8px 10px;
   border: 1px solid var(--border);

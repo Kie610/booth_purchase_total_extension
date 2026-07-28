@@ -892,29 +892,151 @@ check("寸法から組み方を引ける",
   shareCardLayout(900, 1200).statsPerRow, SHARE_CARD_LAYOUTS["3:4"].statsPerRow);
 setShareRatio("16:9");
 
-// 背景のテンプレート(色7種と柄7種)
-check("色は7種類", SHARE_TEMPLATES.filter(t => t.group === "color").length, 7);
-check("柄は7種類", SHARE_TEMPLATES.filter(t => t.group === "pattern").length, 7);
-check("テンプレートのidは重複しない",
-  new Set(SHARE_TEMPLATES.map(t => t.id)).size, SHARE_TEMPLATES.length);
-check("見本を全部並べる", shareTemplates.querySelectorAll(".share-template").length, 14);
-setShareTemplate("color-blue");
-check("選んだテンプレートに印を付ける",
-  shareTemplates.querySelector(".share-template.current").dataset.templateId, "color-blue");
-// 押し直すと既定へ戻せる(戻す手段が無いと選び直せない)
-setShareTemplate("color-blue");
-check("同じものを押すと既定へ戻る",
-  [shareTemplate, shareTemplates.querySelector(".share-template.current")], [null, null]);
+// 背景のテンプレート(色7種と模様7種の組み合わせ)
+check("色は7種類", SHARE_TEMPLATE_COLORS.length, 7);
+check("模様は7種類", SHARE_TEMPLATE_PATTERNS.length, 7);
+check("色のidは重複しない",
+  new Set(SHARE_TEMPLATE_COLORS.map(c => c.id)).size, 7);
+check("模様のidは重複しない",
+  new Set(SHARE_TEMPLATE_PATTERNS.map(p => p.id)).size, 7);
+check("模様は基本の7種を持つ",
+  SHARE_TEMPLATE_PATTERNS.map(p => p.id),
+  ["gradient", "dots", "stripes", "grid", "checker", "waves", "flakes"]);
+check("見本は色と模様を別々に並べる",
+  [shareColors.querySelectorAll(".share-template").length,
+   sharePatterns.querySelectorAll(".share-template").length], [7, 7]);
+
+// 色はHSVの色相だけを回して作る。彩度と明度を1か所に持つので、
+// 色を足しても濃さがそろう
+check("色相0は赤", hsvColor(0, 1, 1, 1), "rgba(255, 0, 0, 1)");
+check("色相120は緑", hsvColor(120, 1, 1, 1), "rgba(0, 255, 0, 1)");
+check("色相240は青", hsvColor(240, 1, 1, 1), "rgba(0, 0, 255, 1)");
+check("彩度0は灰色", hsvColor(200, 0, 0.5, 1), "rgba(128, 128, 128, 1)");
+check("負の色相も回して扱う", hsvColor(-120, 1, 1, 1), hsvColor(240, 1, 1, 1));
+check("色相は範囲を超えても回る", hsvColor(360, 1, 1, 1), hsvColor(0, 1, 1, 1));
+check("色は色相だけを持ち、濃さは共通", SHARE_TEMPLATE_COLORS.every(c => typeof c.hue === "number"), true);
+
+// 色と模様は独立に選べる。組み合わせがそのままidになる
+check("組み合わせでテンプレートになる",
+  shareTemplate("blue", "dots").id, "blue-dots");
+check("知らないidは既定へ落とす",
+  shareTemplate("none", "none").id, `${DEFAULT_SHARE_COLOR}-${DEFAULT_SHARE_PATTERN}`);
+setShareColor("blue");
+setSharePattern("dots");
+check("選んだ色と模様に印を付ける",
+  [shareColors.querySelector(".share-template.current").dataset.templateId,
+   sharePatterns.querySelector(".share-template.current").dataset.templateId], ["blue", "dots"]);
+check("片方を変えてももう片方は残る",
+  (() => { setSharePattern("waves"); return [shareColor, sharePattern]; })(), ["blue", "waves"]);
+
 // テンプレートは実際に色が変わること(見本と本番で違う関数を使うと食い違う)
-setShareTemplate("color-green");
 const templateCanvas = document.createElement("canvas");
 templateCanvas.width = 40;
 templateCanvas.height = 40;
 const templateCtx = templateCanvas.getContext("2d");
-drawShareCard(templateCtx, summaryShareCard, null, shareTemplateById("color-green"));
+drawShareCard(templateCtx, summaryShareCard, null, shareTemplate("green", "gradient"));
 const greenPixel = templateCtx.getImageData(2, 2, 1, 1).data;
 check("緑のテンプレートは緑がかる", greenPixel[1] > greenPixel[0], true);
-setShareTemplate("color-green");
+drawShareCard(templateCtx, summaryShareCard, null, shareTemplate("blue", "gradient"));
+const bluePixel = templateCtx.getImageData(2, 2, 1, 1).data;
+check("青のテンプレートは青がかる", bluePixel[2] > bluePixel[0], true);
+
+// 幾何学模様は中心について点対称にする。端から敷くと割り切れないぶんが
+// 片側へ余り、16:9では右に寄って見えていた。
+// **下地のグラデーションは斜めに向きがあり、それ自体は点対称にならない。**
+// 混ぜると常に不一致になるので、模様だけを白地へ描いて見る
+function patternPixels(patternId, width, height) {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+  ctx.fillStyle = "#000000";
+  ctx.strokeStyle = "#000000";
+  sharePatternById(patternId).draw(ctx, width, height, patternStep(width, height));
+  return ctx.getImageData(0, 0, width, height).data;
+}
+
+// 点(x,y)の中心は(x+0.5,y+0.5)なので、canvasの中心を軸にすると対になるのは
+// (width-1-x, height-1-y)。**1画素ずつ比べると縁のなめらかさの差で必ず落ちる**
+// (小さな円の描き方は画素単位では左右で揃わない)。見たいのは「模様が片側へ
+// 寄っていないか」なので、4x4の平均で比べる。寸法は4で割り切れるものを使う
+const SYMMETRY_BLOCK = 4;
+
+function pointSymmetryGap(patternId, width, height) {
+  const data = patternPixels(patternId, width, height);
+  const cols = width / SYMMETRY_BLOCK;
+  const rows = height / SYMMETRY_BLOCK;
+  const blocks = [];
+  for (let by = 0; by < rows; by += 1) {
+    for (let bx = 0; bx < cols; bx += 1) {
+      let sum = 0;
+      for (let y = by * SYMMETRY_BLOCK; y < (by + 1) * SYMMETRY_BLOCK; y += 1) {
+        for (let x = bx * SYMMETRY_BLOCK; x < (bx + 1) * SYMMETRY_BLOCK; x += 1) {
+          sum += data[(y * width + x) * 4];
+        }
+      }
+      blocks[by * cols + bx] = sum / (SYMMETRY_BLOCK * SYMMETRY_BLOCK);
+    }
+  }
+  let worst = 0;
+  for (let by = 0; by < rows; by += 1) {
+    for (let bx = 0; bx < cols; bx += 1) {
+      const mirror = (rows - 1 - by) * cols + (cols - 1 - bx);
+      worst = Math.max(worst, Math.abs(blocks[by * cols + bx] - blocks[mirror]));
+    }
+  }
+  return worst;
+}
+
+for (const id of ["dots", "stripes", "grid", "checker", "waves"]) {
+  check(`${id}は16:9で点対称`, pointSymmetryGap(id, 240, 136) <= 16, true);
+  check(`${id}は縦長でも点対称`, pointSymmetryGap(id, 136, 240) <= 16, true);
+}
+// フレークは散らばりが持ち味。対称にしないと決めているので、そのことを固定する
+check("フレークは点対称にしない", pointSymmetryGap("flakes", 240, 136) > 16, true);
+
+// 見本は間隔を詰めて描く。実寸と同じ間隔だと模様が1つ2つしか入らず、
+// 何の模様なのか見て分からない
+check("見本の間隔は実寸より狭い", SHARE_PREVIEW_STEP < patternStep(1200, 675), true);
+check("実寸の間隔は比率が変わっても近い値",
+  Math.abs(patternStep(1200, 675) - patternStep(1080, 1080)) < 16, true);
+check("見本の大きさでも模様が描かれる", (() => {
+  const canvas = document.createElement("canvas");
+  canvas.width = 96;
+  canvas.height = 54;
+  const ctx = canvas.getContext("2d");
+  // 同じ大きさで、模様なしと模様ありが違う絵になること
+  shareTemplate("red", "gradient").draw(ctx, 96, 54, SHARE_PREVIEW_STEP);
+  const plain = [...ctx.getImageData(0, 0, 96, 54).data];
+  return SHARE_TEMPLATE_PATTERNS.filter(p => p.draw).every(p => {
+    shareTemplate("red", p.id).draw(ctx, 96, 54, SHARE_PREVIEW_STEP);
+    const drawn = ctx.getImageData(0, 0, 96, 54).data;
+    let diff = 0;
+    for (let i = 0; i < drawn.length; i += 4) {
+      // 赤の模様は赤の下地と赤成分がほとんど変わらない。全成分の差で見る
+      const gap = Math.abs(drawn[i] - plain[i]) + Math.abs(drawn[i + 1] - plain[i + 1]) +
+        Math.abs(drawn[i + 2] - plain[i + 2]);
+      if (gap > 8) diff += 1;
+    }
+    // 見本の4%以上を模様が占めていれば、何の模様かは見て分かる
+    return diff > 96 * 54 * 0.04;
+  });
+})(), true);
+
+// 順位表の金額・購入数は、補足の文字と同じ濃さだと作者名に負けて読み取りにくい
+function themeLuminance(color) {
+  const [r, g, b] = color.slice(1).match(/../g).map(v => parseInt(v, 16));
+  return 0.299 * r + 0.587 * g + 0.114 * b;
+}
+check("順位表の数字は補足より濃い",
+  themeLuminance(SHARE_CARD_THEMES.light.value) < themeLuminance(SHARE_CARD_THEMES.light.muted), true);
+check("暗い背景でも順位表の数字を濃くする",
+  SHARE_CARD_THEMES.dark.value !== SHARE_CARD_THEMES.dark.muted, true);
+
+setShareColor(DEFAULT_SHARE_COLOR);
+setSharePattern(DEFAULT_SHARE_PATTERN);
 
 // 状態表示は用が済んだら消す。前回の結果が残ると今の操作の結果と見分けが付かない
 setShareCardStatus("画像を保存しました。");
@@ -1514,6 +1636,14 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   check("一括集計は目立つ色にする",
     dashboardDoc.getElementById("runAllBtn").className, "primary");
 
+  // 共有パネルは「テンプレートを選ぶ→無ければ画像を持ってくる」の順に読ませる。
+  // 手持ちの画像が要るように見えると、その場で作れることに気付けない
+  check("テンプレートは背景画像より先に置く",
+    dashboardHtml.indexOf('id="shareColors"') < dashboardHtml.indexOf('id="shareBgFile"'), true);
+  check("色と模様を別々に選ばせる",
+    [Boolean(dashboardDoc.getElementById("shareColors")),
+     Boolean(dashboardDoc.getElementById("sharePatterns"))], [true, true]);
+
   // 読み込めなかったファイルを名指しできるよう、スクリプトの一覧と対応させる
   const harnessDoc = new DOMParser().parseFromString(await (await fetch("index.html")).text(), "text/html");
   check("読み込み確認は全ての拡張スクリプトを見ている",
@@ -1528,6 +1658,19 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   check("共有ボタンの背景は黒", shareButtonStyle.backgroundColor, "rgb(0, 0, 0)");
   check("共有ボタンの文字は白", shareButtonStyle.color, "rgb(255, 255, 255)");
   check("支出推移の要約はカード配置", getComputedStyle(trendSummary).display, "grid");
+  // 背景画像の区画と文面の区画は下端をそろえる。片方だけ伸ばすと、
+  // パネルの中で2つの枠がずれて見える。配るCSSとHTMLで実測する
+  const shareLayoutFixture = document.createElement("div");
+  shareLayoutFixture.style.width = "712px";
+  shareLayoutFixture.appendChild(
+    document.importNode(dashboardDoc.querySelector(".share-controls"), true)
+  );
+  document.body.appendChild(shareLayoutFixture);
+  const bgBottom = shareLayoutFixture.querySelector(".share-drop").getBoundingClientRect().bottom;
+  const textBottom = shareLayoutFixture.querySelector(".share-text").getBoundingClientRect().bottom;
+  check("文面と背景画像の下端がそろう", Math.abs(bgBottom - textBottom) <= 1, true);
+  shareLayoutFixture.remove();
+
   const trendLineFixture = svgEl("polyline", { class: "trend-line current" });
   cumulativeTrendChart.appendChild(trendLineFixture);
   check("今年の累計線はアクセント色",

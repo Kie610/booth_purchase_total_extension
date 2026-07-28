@@ -109,7 +109,8 @@ const shareCloseBtn = document.getElementById("shareCloseBtn");
 const shareCanvas = document.getElementById("shareCanvas");
 const shareRatioToggle = document.getElementById("shareRatioToggle");
 const shareDropZone = document.getElementById("shareDropZone");
-const shareTemplates = document.getElementById("shareTemplates");
+const shareColors = document.getElementById("shareColors");
+const sharePatterns = document.getElementById("sharePatterns");
 const shareBgFile = document.getElementById("shareBgFile");
 const shareBgClearBtn = document.getElementById("shareBgClearBtn");
 const shareBgName = document.getElementById("shareBgName");
@@ -1431,54 +1432,80 @@ function drawSharePanelCard() {
   }
   const ctx = shareCanvas.getContext("2d");
   ctx.clearRect(0, 0, width, height);
-  drawShareCard(ctx, sharePayload.card, shareBackground, shareTemplateById(shareTemplate));
+  drawShareCard(ctx, sharePayload.card, shareBackground, currentShareTemplate());
 }
 
 function setShareBackground(image, name) {
   shareBackground = image;
-  shareBgName.textContent = image ? name : "未選択（既定の背景を使います）";
+  shareBgName.textContent = image ? name : "未選択（テンプレートを使います）";
   shareBgClearBtn.hidden = !image;
   renderShareTemplates();
   drawSharePanelCard();
 }
 
 // ---- 背景のテンプレート ------------------------------------------------
+//
+// 色と模様を別々に選び、その組み合わせが背景になる。どちらも必ず1つ選ばれて
+// いる状態にする(「選択なし」を作ると、下地の見た目がもう1種類増えるだけ)。
 
-// 選んでいるテンプレート。null は既定の下地
-let shareTemplate = null;
+let shareColor = DEFAULT_SHARE_COLOR;
+let sharePattern = DEFAULT_SHARE_PATTERN;
 
-function setShareTemplate(id) {
-  shareTemplate = shareTemplate === id ? null : id;
+function currentShareTemplate() {
+  return shareTemplate(shareColor, sharePattern);
+}
+
+function setShareColor(id) {
+  if (!shareColorById(id) || id === shareColor) return;
+  shareColor = id;
   renderShareTemplates();
   drawSharePanelCard();
 }
 
-// 見本は実際の描画関数で小さく描く。色見本を別に持つと、
-// 実物と食い違っても気付けない
-function renderShareTemplates() {
-  if (shareTemplates.childElementCount === 0) {
-    for (const template of SHARE_TEMPLATES) {
-      const button = el("button", `share-template share-template-${template.group}`);
-      button.type = "button";
-      button.dataset.templateId = template.id;
-      button.title = template.label;
-      button.setAttribute("aria-label", template.label);
+function setSharePattern(id) {
+  if (!sharePatternById(id) || id === sharePattern) return;
+  sharePattern = id;
+  renderShareTemplates();
+  drawSharePanelCard();
+}
 
-      const preview = document.createElement("canvas");
-      preview.width = 96;
-      preview.height = 54;
-      template.draw(preview.getContext("2d"), preview.width, preview.height);
-      button.appendChild(preview);
-      shareTemplates.appendChild(button);
-    }
+// 見本は実際の描画関数で小さく描く。見本だけ別に持つと、実物と食い違っても
+// 気付けない。ただし**間隔だけは詰める**(実寸と同じ間隔だと模様が1つ2つしか
+// 入らず、何の模様なのか見て分からない)。
+// 色の見本には選んでいる模様を、模様の見本には選んでいる色を乗せる。
+// 組み合わせた結果がそのまま見えるので、選ぶ前に確かめられる
+function renderShareTemplateRow(container, items, selectedId, buildTemplate) {
+  container.textContent = "";
+  for (const item of items) {
+    const template = buildTemplate(item);
+    const button = el("button", "share-template");
+    button.type = "button";
+    button.dataset.templateId = item.id;
+    button.title = template.label;
+    button.setAttribute("aria-label", template.label);
+    button.setAttribute("aria-pressed", String(item.id === selectedId));
+    if (item.id === selectedId) button.classList.add("current");
+
+    const preview = document.createElement("canvas");
+    preview.width = 96;
+    preview.height = 54;
+    template.draw(preview.getContext("2d"), preview.width, preview.height, SHARE_PREVIEW_STEP);
+    button.appendChild(preview);
+    container.appendChild(button);
   }
-  shareTemplates.querySelectorAll(".share-template").forEach((button) => {
-    const on = button.dataset.templateId === shareTemplate;
-    button.classList.toggle("current", on);
-    button.setAttribute("aria-pressed", String(on));
-  });
+}
+
+function renderShareTemplates() {
+  renderShareTemplateRow(shareColors, SHARE_TEMPLATE_COLORS, shareColor, (color) =>
+    shareTemplate(color.id, sharePattern)
+  );
+  renderShareTemplateRow(sharePatterns, SHARE_TEMPLATE_PATTERNS, sharePattern, (pattern) =>
+    shareTemplate(shareColor, pattern.id)
+  );
   // 画像を選んでいる間はテンプレートが効かないので、そのことを見た目でも示す
-  shareTemplates.classList.toggle("disabled", Boolean(shareBackground));
+  for (const row of [shareColors, sharePatterns]) {
+    row.classList.toggle("disabled", Boolean(shareBackground));
+  }
 }
 
 // 状態表示は用が済んだら消す。前回の「保存しました」が残っていると、

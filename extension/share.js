@@ -169,10 +169,18 @@ const SHARE_CARD_HEIGHT = SHARE_RATIOS[DEFAULT_SHARE_RATIO].height;
 
 const SHARE_CARD_FONT = '"Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif';
 
-// 背景の明るさで文字色を変える。写真の上では薄い灰色が沈むので、白と半透明の白を使う
+// 背景の明るさで文字色を変える。写真の上では薄い灰色が沈むので、白と半透明の白を使う。
+// value は順位表に並ぶ金額・購入数の色。muted のままだと作者名に対して薄く、
+// 数字だけが読み取りにくかったので、本文(fg)寄りの濃さを別に持たせている
 const SHARE_CARD_THEMES = {
-  light: { fg: "#2a2f36", muted: "#6b7280", accent: "#fc4d50", line: "#e2e5ea" },
-  dark: { fg: "#ffffff", muted: "rgba(255,255,255,0.78)", accent: "#ffd7d8", line: "rgba(255,255,255,0.3)" },
+  light: { fg: "#2a2f36", muted: "#6b7280", value: "#39414b", accent: "#fc4d50", line: "#e2e5ea" },
+  dark: {
+    fg: "#ffffff",
+    muted: "rgba(255,255,255,0.78)",
+    value: "rgba(255,255,255,0.95)",
+    accent: "#ffd7d8",
+    line: "rgba(255,255,255,0.3)",
+  },
 };
 
 // ---- カードの中身を組む ------------------------------------------------
@@ -267,6 +275,10 @@ function fitText(ctx, text, maxWidth) {
 // アップロードした画像が無いときに選べる下地。外部の画像を読まず、
 // すべてその場でcanvasへ描く(MV3のリモートコード禁止に触れないため)。
 // 明るい下地は濃い文字、濃い下地は白文字にしたいので、組ごとに theme を持つ。
+//
+// **色と模様は別々に選び、その組み合わせで下地になる。** 模様は赤(色相0)で
+// 一度だけ組み、他の色はHSVの**色相だけを回して**作る。色ごとに描き分けると、
+// 同じ模様でも色によって太さや間隔が食い違い、選び直したときに別の模様に見える。
 
 function fillLinearGradient(ctx, width, height, from, to) {
   const gradient = ctx.createLinearGradient(0, 0, width, height);
@@ -276,159 +288,216 @@ function fillLinearGradient(ctx, width, height, from, to) {
   ctx.fillRect(0, 0, width, height);
 }
 
-// 柄は「下地を塗ってから、薄い色で図形を敷き詰める」形にそろえる
-function tintedShapes(ctx, width, height, base, ink, draw) {
-  fillLinearGradient(ctx, width, height, base[0], base[1]);
-  ctx.save();
-  ctx.fillStyle = ink;
-  ctx.strokeStyle = ink;
-  draw(ctx, width, height);
-  ctx.restore();
+// HSV(色相0-360、彩度・明度0-1)をcanvasへ渡せる文字列にする。
+// 色の指定をHSVでそろえるのは、色相だけを差し替えて同じ濃さの色を作るため
+function hsvColor(hue, saturation, value, alpha) {
+  const h = ((hue % 360) + 360) % 360;
+  const c = value * saturation;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = value - c;
+  const table = [
+    [c, x, 0],
+    [x, c, 0],
+    [0, c, x],
+    [0, x, c],
+    [x, 0, c],
+    [c, 0, x],
+  ];
+  const [r, g, b] = table[Math.floor(h / 60) % 6];
+  const to255 = (n) => Math.round((n + m) * 255);
+  return `rgba(${to255(r)}, ${to255(g)}, ${to255(b)}, ${alpha})`;
+}
+
+// 赤で組んだときの彩度・明度。下地は薄く、模様のインクだけ濃くする。
+// ここを1か所に持つので、色を足すときは色相を1行足すだけで濃さがそろう
+const TEMPLATE_HSV = {
+  from: { s: 0.16, v: 1 },
+  to: { s: 0.04, v: 1 },
+  ink: { s: 0.52, v: 0.86, a: 0.3 },
+};
+
+function templatePalette(hue) {
+  return {
+    from: hsvColor(hue, TEMPLATE_HSV.from.s, TEMPLATE_HSV.from.v, 1),
+    to: hsvColor(hue, TEMPLATE_HSV.to.s, TEMPLATE_HSV.to.v, 1),
+    ink: hsvColor(hue, TEMPLATE_HSV.ink.s, TEMPLATE_HSV.ink.v, TEMPLATE_HSV.ink.a),
+  };
 }
 
 const SHARE_TEMPLATE_COLORS = [
-  ["red", "赤", "#ffe1e1", "#fff6f6"],
-  ["orange", "オレンジ", "#ffe8d2", "#fff8f1"],
-  ["pink", "ピンク", "#ffe0ef", "#fff5fa"],
-  ["yellow", "黄", "#fff4cc", "#fffdf2"],
-  ["green", "緑", "#ddf4e2", "#f5fcf7"],
-  ["blue", "青", "#dcecff", "#f4f9ff"],
-  ["purple", "紫", "#f0e2ff", "#faf5ff"],
+  { id: "red", label: "赤", hue: 0 },
+  { id: "orange", label: "オレンジ", hue: 28 },
+  { id: "yellow", label: "黄", hue: 48 },
+  { id: "green", label: "緑", hue: 138 },
+  { id: "blue", label: "青", hue: 210 },
+  { id: "purple", label: "紫", hue: 278 },
+  { id: "pink", label: "ピンク", hue: 330 },
 ];
 
-// 柄の下地は一色に寄せる。柄と色の両方を選ばせるとUIが増えるので、
-// 柄は「模様が主役」、色は「無地の色が主役」と役割を分ける
-const PATTERN_BASE = ["#f4f1fa", "#ffffff"];
-const PATTERN_INK = "rgba(120, 92, 160, 0.16)";
+// 模様の基準となる間隔。実寸(1200x675)で72px前後になるよう対角線から出す。
+// 見本のボタンでは別の値を渡す(下の SHARE_PREVIEW_STEP)
+function patternStep(width, height) {
+  return Math.max(6, Math.round(Math.hypot(width, height) * 0.052));
+}
 
+// 見本は小さいので、実寸と同じ間隔で描くと模様が1つ2つしか入らず、
+// 何の模様か分からない。見本だけ間隔を詰めて4つ前後を見せる。
+// **描画関数は実物と同じものを使う**(別に持つと実物と食い違っても気付けない)
+const SHARE_PREVIEW_STEP = 22;
+
+// 模様は canvas の**中心を原点**にして敷く。端から順に敷くと、幅や高さで
+// 割り切れないぶんが片側に余り、16:9では右へ寄って見える。
+// 中心から両側へ伸ばせば、どの比率でも中心について点対称になる。
+// フレークだけは散らばりが持ち味なので対称にしない
+
+function patternDots(ctx, w, h, step) {
+  const cx = w / 2;
+  const cy = h / 2;
+  const radius = step * 0.17;
+  const nx = Math.ceil(cx / step);
+  const ny = Math.ceil(cy / step);
+  for (let j = -ny; j <= ny; j += 1) {
+    for (let i = -nx; i <= nx; i += 1) {
+      ctx.beginPath();
+      ctx.arc(cx + i * step, cy + j * step, radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+function patternStripes(ctx, w, h, step) {
+  // x+y=c の斜線。中心を通る線を基準に、両側へ同じ本数ずつ足す
+  const center = w / 2 + h / 2;
+  const span = Math.ceil((w + h) / (2 * step));
+  ctx.lineWidth = step * 0.25;
+  for (let k = -span; k <= span; k += 1) {
+    const c = center + k * step;
+    ctx.beginPath();
+    ctx.moveTo(c - h, h);
+    ctx.lineTo(c, 0);
+    ctx.stroke();
+  }
+}
+
+function patternGrid(ctx, w, h, step) {
+  const cx = w / 2;
+  const cy = h / 2;
+  const nx = Math.ceil(cx / step);
+  const ny = Math.ceil(cy / step);
+  ctx.lineWidth = Math.max(1, step * 0.09);
+  for (let i = -nx; i <= nx; i += 1) {
+    const x = cx + i * step;
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, h);
+    ctx.stroke();
+  }
+  for (let j = -ny; j <= ny; j += 1) {
+    const y = cy + j * step;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(w, y);
+    ctx.stroke();
+  }
+}
+
+function patternChecker(ctx, w, h, step) {
+  // 中心に格子の交点を置くと、(i,j)のマスは点対称の位置にある
+  // (-i-1,-j-1)へ移り、i+jの偶奇が変わらないので市松のまま重なる
+  const cx = w / 2;
+  const cy = h / 2;
+  const nx = Math.ceil(cx / step) + 1;
+  const ny = Math.ceil(cy / step) + 1;
+  for (let j = -ny; j <= ny; j += 1) {
+    for (let i = -nx; i <= nx; i += 1) {
+      if ((i + j) % 2 !== 0) continue;
+      ctx.fillRect(cx + i * step, cy + j * step, step, step);
+    }
+  }
+}
+
+function patternWaves(ctx, w, h, step) {
+  const cx = w / 2;
+  const cy = h / 2;
+  const amp = step * 0.2;
+  const length = step * 0.67;
+  const sample = Math.max(2, step / 8);
+  const ny = Math.ceil((cy + amp) / step) + 1;
+  ctx.lineWidth = Math.max(1, step * 0.11);
+  // 位相を中心から測る。sinは奇関数なので、これで上下の段が点対称になる
+  const waveY = (x, j) => cy + j * step + Math.sin((x - cx) / length) * amp;
+  for (let j = -ny; j <= ny; j += 1) {
+    ctx.beginPath();
+    ctx.moveTo(0, waveY(0, j));
+    for (let x = sample; x < w; x += sample) ctx.lineTo(x, waveY(x, j));
+    // **右端は必ず打つ。** 幅が刻み幅で割り切れないと右だけ線が途切れ、
+    // 左右で見え方が変わってしまう
+    ctx.lineTo(w, waveY(w, j));
+    ctx.stroke();
+  }
+}
+
+function patternFlakes(ctx, w, h, step) {
+  // 位置は式で決める。乱数だと描き直すたびに柄が変わってしまう。
+  // 散らばりが持ち味なので、ここだけは点対称にしない
+  const count = Math.round(((w * h) / (step * step)) * 0.8);
+  for (let i = 0; i < count; i += 1) {
+    const x = ((i * 137) % w) + ((i % 7) * step) / 6;
+    const y = ((i * 89) % h) + ((i % 5) * step) / 5;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate((i % 6) * 0.5);
+    ctx.fillRect(-step * 0.25, -step * 0.09, step * 0.5, step * 0.18);
+    ctx.restore();
+  }
+}
+
+// draw が null のものは下地のグラデーションだけ。模様を足すときはここへ1行
 const SHARE_TEMPLATE_PATTERNS = [
-  [
-    "dots",
-    "水玉",
-    (ctx, w, h) => {
-      for (let y = 40; y < h; y += 72) {
-        for (let x = 40; x < w; x += 72) {
-          ctx.beginPath();
-          ctx.arc(x, y, 12, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
-    },
-  ],
-  [
-    "stripes",
-    "ストライプ",
-    (ctx, w, h) => {
-      ctx.lineWidth = 18;
-      for (let x = -h; x < w; x += 56) {
-        ctx.beginPath();
-        ctx.moveTo(x, h);
-        ctx.lineTo(x + h, 0);
-        ctx.stroke();
-      }
-    },
-  ],
-  [
-    "grid",
-    "チェック",
-    (ctx, w, h) => {
-      ctx.lineWidth = 6;
-      for (let x = 0; x < w; x += 72) {
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, h);
-        ctx.stroke();
-      }
-      for (let y = 0; y < h; y += 72) {
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(w, y);
-        ctx.stroke();
-      }
-    },
-  ],
-  [
-    "checker",
-    "市松",
-    (ctx, w, h) => {
-      const size = 60;
-      for (let row = 0; row * size < h; row += 1) {
-        for (let col = row % 2; col * size < w; col += 2) {
-          ctx.fillRect(col * size, row * size, size, size);
-        }
-      }
-    },
-  ],
-  [
-    "waves",
-    "波",
-    (ctx, w, h) => {
-      ctx.lineWidth = 8;
-      for (let y = 40; y < h + 80; y += 64) {
-        ctx.beginPath();
-        for (let x = 0; x <= w; x += 8) {
-          const wy = y + Math.sin(x / 48) * 14;
-          if (x === 0) ctx.moveTo(x, wy);
-          else ctx.lineTo(x, wy);
-        }
-        ctx.stroke();
-      }
-    },
-  ],
-  [
-    "confetti",
-    "紙ふぶき",
-    (ctx, w, h) => {
-      // 位置は式で決める。乱数だと描き直すたびに柄が変わってしまう
-      for (let i = 0; i < 90; i += 1) {
-        const x = ((i * 137) % w) + (i % 7) * 11;
-        const y = ((i * 89) % h) + (i % 5) * 13;
-        ctx.save();
-        ctx.translate(x, y);
-        ctx.rotate((i % 6) * 0.5);
-        ctx.fillRect(-14, -5, 28, 10);
-        ctx.restore();
-      }
-    },
-  ],
-  [
-    "rays",
-    "放射",
-    (ctx, w, h) => {
-      const cx = w / 2;
-      const cy = h / 2;
-      const far = Math.hypot(w, h);
-      for (let i = 0; i < 24; i += 1) {
-        const a = (Math.PI * 2 * i) / 24;
-        ctx.beginPath();
-        ctx.moveTo(cx, cy);
-        ctx.arc(cx, cy, far, a, a + Math.PI / 48);
-        ctx.closePath();
-        ctx.fill();
-      }
-    },
-  ],
+  { id: "gradient", label: "グラデーション", draw: null },
+  { id: "dots", label: "水玉", draw: patternDots },
+  { id: "stripes", label: "斜めストライプ", draw: patternStripes },
+  { id: "grid", label: "格子", draw: patternGrid },
+  { id: "checker", label: "市松", draw: patternChecker },
+  { id: "waves", label: "波", draw: patternWaves },
+  { id: "flakes", label: "フレーク", draw: patternFlakes },
 ];
 
-const SHARE_TEMPLATES = [
-  ...SHARE_TEMPLATE_COLORS.map(([id, label, from, to]) => ({
-    id: `color-${id}`,
-    group: "color",
-    label,
-    theme: "light",
-    draw: (ctx, w, h) => fillLinearGradient(ctx, w, h, from, to),
-  })),
-  ...SHARE_TEMPLATE_PATTERNS.map(([id, label, draw]) => ({
-    id: `pattern-${id}`,
-    group: "pattern",
-    label,
-    theme: "light",
-    draw: (ctx, w, h) => tintedShapes(ctx, w, h, PATTERN_BASE, PATTERN_INK, draw),
-  })),
-];
+// 既定は淡い紫の無地。以前の既定の下地と同じ見え方にそろえてある
+const DEFAULT_SHARE_COLOR = "purple";
+const DEFAULT_SHARE_PATTERN = "gradient";
 
-function shareTemplateById(id) {
-  return SHARE_TEMPLATES.find((template) => template.id === id) || null;
+function shareColorById(id) {
+  return SHARE_TEMPLATE_COLORS.find((color) => color.id === id) || null;
+}
+
+function sharePatternById(id) {
+  return SHARE_TEMPLATE_PATTERNS.find((pattern) => pattern.id === id) || null;
+}
+
+// 色と模様の組み合わせから下地を作る。知らないidは既定へ落とす
+// (下地が無い状態を作ると、背景の描き分けが1つ増えるだけで得が無い)
+function shareTemplate(colorId, patternId) {
+  const color = shareColorById(colorId) || shareColorById(DEFAULT_SHARE_COLOR);
+  const pattern = sharePatternById(patternId) || sharePatternById(DEFAULT_SHARE_PATTERN);
+  const palette = templatePalette(color.hue);
+  return {
+    id: `${color.id}-${pattern.id}`,
+    color,
+    pattern,
+    label: `${color.label}の${pattern.label}`,
+    theme: "light",
+    // step を省くと canvas の大きさから決める。見本だけ詰めた値を渡す
+    draw: (ctx, w, h, step) => {
+      fillLinearGradient(ctx, w, h, palette.from, palette.to);
+      if (!pattern.draw) return;
+      ctx.save();
+      ctx.fillStyle = palette.ink;
+      ctx.strokeStyle = palette.ink;
+      pattern.draw(ctx, w, h, step || patternStep(w, h));
+      ctx.restore();
+    },
+  };
 }
 
 // 背景画像は縦横比を保ったまま全面を覆う(cover)。引き伸ばすと人物や絵が歪む
@@ -448,12 +517,9 @@ function drawShareCardBackground(ctx, background, width, height, template) {
     ctx.fillRect(0, 0, width, height);
     return "dark";
   }
-  if (template) {
-    template.draw(ctx, width, height);
-    return template.theme;
-  }
-  fillLinearGradient(ctx, width, height, "#f6e6ff", "#ffffff");
-  return "light";
+  const used = template || shareTemplate(DEFAULT_SHARE_COLOR, DEFAULT_SHARE_PATTERN);
+  used.draw(ctx, width, height);
+  return used.theme;
 }
 
 // ---- 組み方 ------------------------------------------------------------
@@ -551,16 +617,17 @@ function drawShareCard(ctx, card, background, template) {
       ctx.font = `bold ${layout.listRank}px ${SHARE_CARD_FONT}`;
       ctx.fillText(`${row.rank}`, left, y);
 
-      // 金額を先に測り、名前が入れる幅を残す
-      ctx.font = `${layout.listValue}px ${SHARE_CARD_FONT}`;
+      // 金額を先に測り、名前が入れる幅を残す。**測るときも描くときと同じ字体にする**
+      // (細い字で測ると、太くした分だけ名前に重なる)
+      ctx.font = `600 ${layout.listValue}px ${SHARE_CARD_FONT}`;
       const valueWidth = row.value ? ctx.measureText(row.value).width : 0;
       ctx.fillStyle = theme.fg;
       ctx.font = `bold ${layout.listName}px ${SHARE_CARD_FONT}`;
       ctx.fillText(fitText(ctx, row.name, right - left - 56 - valueWidth - 32), left + 56, y);
 
       if (row.value) {
-        ctx.fillStyle = theme.muted;
-        ctx.font = `${layout.listValue}px ${SHARE_CARD_FONT}`;
+        ctx.fillStyle = theme.value;
+        ctx.font = `600 ${layout.listValue}px ${SHARE_CARD_FONT}`;
         ctx.textAlign = "right";
         ctx.fillText(row.value, right, y);
         ctx.textAlign = "left";
