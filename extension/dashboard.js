@@ -1,8 +1,8 @@
 "use strict";
 
 // 集計ページの中枢。状態を持ち、イベントを受け取り、BOOTHから取得する。
-// ページの読み取りは dashboard-parse.js、画面への反映は dashboard-view.js。
-// この3つは classic script として同じグローバルを共有する(モジュールではない)。
+// ページの読み取りは dashboard-parse.js、画面への反映は dashboard-*-view.js。
+// これらは classic script として同じグローバルを共有する(モジュールではない)。
 
 const ORDERS_INDEX_URL = "https://accounts.booth.pm/orders";
 const ORDER_DETAIL_URL = "https://accounts.booth.pm/orders/";

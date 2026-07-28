@@ -1,6 +1,6 @@
 "use strict";
 
-// Chrome / Firefox 両対応のための簡易ラッパー
+// Chromiumを主対象にしつつ、Firefoxの一時読み込みでも使えるAPI名へ寄せる簡易ラッパー
 const ext = typeof browser !== "undefined" ? browser : chrome;
 
 // { [orderId]: { amount, gift, status, date, items: [{ shop, shopUrl, name, price, boost, gift }] } }

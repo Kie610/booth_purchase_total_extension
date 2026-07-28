@@ -17,6 +17,9 @@ const REQUIRED_GLOBALS = [
   ["share.js", () => drawShareCard],
   ["dashboard-parse.js", () => parseDetailPage],
   ["dashboard-view.js", () => render],
+  ["dashboard-author-view.js", () => openAuthorPanel],
+  ["dashboard-insights-view.js", () => renderSpendingTrends],
+  ["dashboard-share-view.js", () => openSharePanel],
   ["dashboard.js", () => buildResults],
 ];
 

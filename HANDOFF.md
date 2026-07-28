@@ -229,15 +229,20 @@ extension/
   popup.html/css/js      収集済み合計の概要表示と集計ページへの導線
   dashboard.html/css     集計ページ(ハンバーガーメニューで画面を切り替える)
   dashboard-parse.js     BOOTHのHTML解析。構造変更時は主にここを修正
-  dashboard-view.js      DOM参照と描画。イベントは扱わない
+  dashboard-view.js      共通DOM参照とレポート画面の描画。イベントは扱わない
+  dashboard-author-view.js 作者情報ダイアログの表示とフォーカス管理
+  dashboard-insights-view.js ランキング・まとめ・支出推移の描画
+  dashboard-share-view.js 共有ボタンと共有カード作成ダイアログの描画
   dashboard.js           状態、イベント配線、BOOTHからの取得
 tools/make_icons.py      アイコン生成(Pillow使用)
+tools/release.ps1        配布用ZIPとSHA-256チェックサムの作成
 test/                    ブラウザ上で動くテスト
 ```
 
-`dashboard-parse.js`、`dashboard-view.js`、`dashboard.js`はclassic scriptとして同じグローバルを共有します。
-import/exportは使わず、`dashboard.html`のscriptタグ順が依存順です。
-責務は「parse=入力、view=出力、dashboard=制御」で、viewからstateや`targetOrders()`を読むのは想定内です。
+`dashboard-parse.js`、`dashboard-*-view.js`、`dashboard.js`はclassic scriptとして同じグローバルを共有します。
+import/exportは使わず、`dashboard.html`のscriptタグ順が依存順です。表示層は共通・作者情報・分析画面・共有画面に
+分割してあります。責務は「parse=入力、view=出力、dashboard=制御」で、viewからstateや`targetOrders()`を
+読むのは想定内です。表示機能を追加するときは、対応する`dashboard-*-view.js`へ置きます。
 
 ポップアップは閉じるとJavaScriptコンテキストごと破棄されるため、処理は専用タブへ移してあります。
 Service Worker常駐はChromeでDOMParserが使えず、offscreen APIとFirefox対応の分岐が必要になるため採用していません。
@@ -350,6 +355,10 @@ netstat -ano | grep ':8733' | grep LISTENING   # 2行以上あれば別プロセ
 - 未リリース中は`0.x`に留め、`1.0.0`以上へ上げない
 - `1.0.0`へ上げるのは、ユーザーが「リリースする」と明示したときだけ
 - アイコンの原本は`tools/make_icons.py`。生成済みPNGを直接編集しない
+- 配布物はPowerShellで`.\tools\release.ps1`を実行して作る。`dist/`にZIPとSHA-256チェックサムが出る
+- ZIPのルートに`manifest.json`があること、ファイル名のversionがmanifestと一致することを確認する
+- 同じversionの成果物を作り直す場合だけ`-Force`を付ける。通常は既存成果物を上書きしない
+- Chromeウェブストアには公開しない。Firefoxは開発時の一時読み込みのみ確認済みで、署名・恒久利用は未対応
 
 ## 5. 守るべき設計
 
@@ -755,11 +764,7 @@ BOOSTは`BOOST¥ 0`のようにラベルと金額が同じ要素に入るため�
 - **商品名からのジャンル自動分類** — 命名規則が作者ごとに異なり推定が外れる。ショップ別で代替する
 - **対応アバター別の集計** — 商品ページ側の情報が必要で、表記ゆれも大きく精度が出ない
 
-## 8. 残っている候補
+## 8. リリース対象外
 
-- 注文ごとの内訳のソート・絞り込み
-- Chromeウェブストア提出
-  - アイコン16/32/48/128は用意済み
-  - ストア掲載用スクリーンショット1280x800と小タイル440x280が必要
-- Firefox対応
-  - MV3ではhost_permissionsがユーザー許可制になるため、現状のfetchがCORSで弾かれる可能性がある
+- Firefoxは開発時の一時読み込みのみ確認済み。署名・配布パッケージ・恒久利用は対象外
+- Chromeウェブストアには公開しないため、ストア素材と提出作業は対象外

@@ -2001,10 +2001,20 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
 
   // 未リリースのうちは 0.x に留める。1.0.0 に上げるのはリリースを宣言するときだけ
   check("バージョンは 0.x(未リリース)", /^0\.\d+\.\d+$/.test(manifest.version), true);
-  check("今回の機能追加版", manifest.version, "0.29.0");
+  check("今回の機能追加版", manifest.version, "0.30.0");
 
   check("manifestのiconsに4サイズを宣言", manifest.icons, expectedIcons);
   check("ツールバー用のdefault_iconも同じ4サイズ", manifest.action.default_icon, expectedIcons);
+
+  const readmeText = await (await fetch("../README.md")).text();
+  check("Firefoxは一時読み込みのみ確認済みと明記",
+    readmeText.includes("Firefoxは**開発時の一時読み込みのみ確認済み**です"), true);
+  check("Chromeウェブストアへ公開しない方針を明記",
+    readmeText.includes("Chromeウェブストアには公開せず"), true);
+
+  const releaseScript = await (await fetch("../tools/release.ps1")).text();
+  check("リリーススクリプトはZIPとSHA-256を作る",
+    [releaseScript.includes("Compress-Archive"), releaseScript.includes("Get-FileHash")], [true, true]);
 
   const iconSizes = [];
   for (const size of ICON_SIZES) {
@@ -2018,7 +2028,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   }
   check("アイコンの実ファイルが宣言どおりの寸法", iconSizes, ICON_SIZES.map((s) => `${s}: ${s}x${s}`));
   const authorImage = await createImageBitmap(await (await fetch("../extension/icons/author-kie.png")).blob());
-  check("著者近影の実ファイルを同梱", [authorImage.width, authorImage.height], [420, 420]);
+  check("縮小した著者近影の実ファイルを同梱", [authorImage.width, authorImage.height], [240, 240]);
 
   document.getElementById("out").textContent =
     lines.join("\n") + `\n\n---- ${failures === 0 ? "ALL PASS" : failures + " FAILED"} (${lines.length} checks) ----`;

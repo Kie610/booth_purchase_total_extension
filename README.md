@@ -28,16 +28,23 @@ extension/          読み込み対象の拡張機能本体
   dashboard.html/css 集計ページ(注文履歴の取得・範囲を指定した金額収集・一括集計・
                     中断・進捗表示・年別月別集計・支出推移・注文内訳・データ出力)
   dashboard-parse.js  BOOTHのページ(HTML)の読み取り
-  dashboard-view.js   集計ページの描画(DOMの参照と組み立て)
+  dashboard-view.js   集計ページの共通DOM参照とレポート画面の描画
+  dashboard-author-view.js
+                    作者情報ダイアログの表示とフォーカス管理
+  dashboard-insights-view.js
+                    ランキング・今年のまとめ・支出推移の描画
+  dashboard-share-view.js
+                    共有ボタンと共有カード作成ダイアログの描画
   dashboard.js        集計ページの状態・イベント・BOOTHからの取得
 tools/              開発用スクリプト
   make_icons.py     アイコンの生成(形や色を変えるときはここを直して再生成する)
+  release.ps1       配布用ZIPとSHA-256チェックサムの作成
 test/               ブラウザ上で動く簡易テスト(test/README.md 参照)
 HANDOFF.md          開発を引き継ぐための資料(調査済みの事項と進め方)
 LICENSE             MIT License
 ```
 
-ビルド手順はありません。`extension/` をそのままブラウザに読み込みます。
+開発時のビルド手順はありません。`extension/` をそのままブラウザに読み込みます。
 アイコンは生成済みのPNGをコミットしてあるため、変更しない限り再生成は不要です。
 
 ## インストール方法
@@ -53,9 +60,20 @@ LICENSE             MIT License
 1. `about:debugging#/runtime/this-firefox` を開く
 2. 「一時的なアドオンを読み込む」から `extension/manifest.json` を選択
 
-※ Firefoxの「一時的なアドオン」はブラウザ再起動で消えるため、恒久的に使いたい場合は
-`about:config` で `xpinstall.signatures.required` を無効化するか、
-Firefox向けにMozillaの署名を通す必要があります。
+Firefoxは**開発時の一時読み込みのみ確認済み**です。ブラウザを再起動すると削除されます。
+署名・配布パッケージ・恒久利用は未確認のため、現時点では対応環境に含めません。
+
+## 配布用ZIPの作成
+
+PowerShellで次を実行すると、`extension/` の内容だけを格納した配布用ZIPと
+SHA-256チェックサムが `dist/` に作成されます。ZIPのルートには `manifest.json` が入ります。
+
+```powershell
+.\tools\release.ps1
+```
+
+同じバージョンの配布物が既にある場合は誤上書きを防ぐため停止します。確認のうえ作り直す場合だけ
+`-Force` を付けてください。Chromeウェブストアには公開せず、このZIPを個人配布する方針です。
 
 ## 使い方
 
