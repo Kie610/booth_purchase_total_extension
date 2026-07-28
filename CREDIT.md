@@ -14,6 +14,9 @@
 - **kurage long 62アバター対応**<br>
   制作: mochipun<br>
   https://booth.pm/ja/items/8036193
+- **Noir Lace : Gothic 〖17アバター対応〗**<br>
+  制作: BOUTIQUE SERINA<br>
+  https://boutiqueserina.booth.pm/items/8052440
 
 ## 撮影ワールド
 
