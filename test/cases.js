@@ -11,9 +11,15 @@ function parse(html) {
 }
 
 // --- parseOrderDate の表記ゆれ吸収 ---
-check("parseOrderDate 和暦区切り", parseOrderDate("2024年5月3日 12:34"), { year: 2024, month: 5, day: 3, sortKey: 20240503 });
-check("parseOrderDate スラッシュ", parseOrderDate("2024/05/03 12:34"), { year: 2024, month: 5, day: 3, sortKey: 20240503 });
-check("parseOrderDate ハイフン", parseOrderDate("2023-07-15 18:20"), { year: 2023, month: 7, day: 15, sortKey: 20230715 });
+check("parseOrderDate 和暦区切り", parseOrderDate("2024年5月3日 12:34"), { year: 2024, month: 5, day: 3, hour: 12, sortKey: 20240503 });
+check("parseOrderDate スラッシュ", parseOrderDate("2024/05/03 12:34"), { year: 2024, month: 5, day: 3, hour: 12, sortKey: 20240503 });
+check("parseOrderDate ハイフン", parseOrderDate("2023-07-15 18:20"), { year: 2023, month: 7, day: 15, hour: 18, sortKey: 20230715 });
+// 時刻が無い表記もありうる。必須にすると日付まで読めなくなる
+check("parseOrderDate 時刻が無ければnull", parseOrderDate("2023-07-15").hour, null);
+check("parseOrderDate 24時以上は時刻として読まない", parseOrderDate("2023-07-15 99:99").hour, null);
+// 曜日はUTCで数える(ローカル時間だと環境によって1日ずれる)
+check("orderWeekday 2024-05-03は金曜", orderWeekday(parseOrderDate("2024年5月3日 12:34")), 5);
+check("orderWeekday 日が読めなければnull", orderWeekday(parseOrderDate("2024年5月")), null);
 check("parseOrderDate 解析不能", parseOrderDate("不明"), null);
 check("formatYen", formatYen(1234567), "¥1,234,567");
 
@@ -506,6 +512,28 @@ check("入れ替えると要約も入れ替わる", [...trendSummary.querySelect
   ["¥3,000", "¥1,000", "+¥2,000"]);
 check("過ぎた年は12月まで見る", trendCurrentYearLabel.textContent, "2025年");
 setTrendYears(2026, 2025);
+// 買った曜日と時間帯(件数を数える。金額だと高額の1件でマスが真っ赤になる)
+const heatRows = [
+  { id: "h1", date: "2024年5月3日 21:10", amount: 100 },   // 金曜21時
+  { id: "h2", date: "2024年5月3日 21:40", amount: 200 },   // 同じマス
+  { id: "h3", date: "2024年5月4日 02:00", amount: 300 },   // 土曜2時
+  { id: "h4", date: "2026年1月5日 10:00", amount: 400 },   // 範囲外にできる月
+  { id: "h5", date: "日付不明", amount: 500 },
+  { id: "h6", date: "2024年5月6日", amount: 600 },          // 時刻が無い
+];
+const heat = buildWeekdayHourStats(heatRows);
+check("曜日と時間帯のマスに件数を積む", [heat.cells[5][21], heat.cells[6][2], heat.max], [2, 1, 2]);
+// 0として置くと、日曜0時に大量購入したように見えてしまう
+check("曜日か時刻が読めない注文は数から外す", [heat.counted, heat.skipped], [4, 2]);
+check("範囲で絞れる", buildWeekdayHourStats(heatRows, "2024-05", "2024-05").counted, 3);
+// 日付の分からない注文は、範囲を指定した時点で対象外(除外した件数にも入れない)
+check("範囲を指定すると日付不明は数えない", buildWeekdayHourStats(heatRows, "2024-05", "2024-05").skipped, 1);
+check("範囲外の月は入らない", buildWeekdayHourStats(heatRows, "2026-01", "2026-01").cells[1][10], 1);
+// 1件でも薄く色を付けて、0件と見分けられるようにする
+check("0件のマスは塗らない", heatmapCellAlpha(0, 4), 0);
+check("1件でも薄く塗る", heatmapCellAlpha(1, 4) > 0.1, true);
+check("最も多いマスは最も濃い", heatmapCellAlpha(4, 4), 1);
+
 // 集計そのものも任意の年を比べられる
 check("比較年を渡せる", buildSpendingTrend([
   { id: "x", date: "2026年1月1日 00:00", amount: 100 },
@@ -853,7 +881,40 @@ check("縦長でも描ける", (() => {
   return false;
 })(), true);
 check("知らない比率は無視する", (() => { setShareRatio("2:5"); return shareRatio; })(), "3:4");
+// 余白だけ変えると縦長で上に固まるので、比率ごとに組み方を持つ
+check("比率ごとに組み方を持つ",
+  Object.keys(SHARE_RATIOS).every(r => SHARE_CARD_LAYOUTS[r] !== undefined), true);
+check("横長は数字を1行に、縦長は2列に折り返す",
+  [SHARE_CARD_LAYOUTS["16:9"].statsPerRow, SHARE_CARD_LAYOUTS["3:4"].statsPerRow], [4, 2]);
+check("縦長は余った高さを配る",
+  [SHARE_CARD_LAYOUTS["16:9"].spread, SHARE_CARD_LAYOUTS["3:4"].spread], [false, true]);
+check("寸法から組み方を引ける",
+  shareCardLayout(900, 1200).statsPerRow, SHARE_CARD_LAYOUTS["3:4"].statsPerRow);
 setShareRatio("16:9");
+
+// 背景のテンプレート(色7種と柄7種)
+check("色は7種類", SHARE_TEMPLATES.filter(t => t.group === "color").length, 7);
+check("柄は7種類", SHARE_TEMPLATES.filter(t => t.group === "pattern").length, 7);
+check("テンプレートのidは重複しない",
+  new Set(SHARE_TEMPLATES.map(t => t.id)).size, SHARE_TEMPLATES.length);
+check("見本を全部並べる", shareTemplates.querySelectorAll(".share-template").length, 14);
+setShareTemplate("color-blue");
+check("選んだテンプレートに印を付ける",
+  shareTemplates.querySelector(".share-template.current").dataset.templateId, "color-blue");
+// 押し直すと既定へ戻せる(戻す手段が無いと選び直せない)
+setShareTemplate("color-blue");
+check("同じものを押すと既定へ戻る",
+  [shareTemplate, shareTemplates.querySelector(".share-template.current")], [null, null]);
+// テンプレートは実際に色が変わること(見本と本番で違う関数を使うと食い違う)
+setShareTemplate("color-green");
+const templateCanvas = document.createElement("canvas");
+templateCanvas.width = 40;
+templateCanvas.height = 40;
+const templateCtx = templateCanvas.getContext("2d");
+drawShareCard(templateCtx, summaryShareCard, null, shareTemplateById("color-green"));
+const greenPixel = templateCtx.getImageData(2, 2, 1, 1).data;
+check("緑のテンプレートは緑がかる", greenPixel[1] > greenPixel[0], true);
+setShareTemplate("color-green");
 
 // 状態表示は用が済んだら消す。前回の結果が残ると今の操作の結果と見分けが付かない
 setShareCardStatus("画像を保存しました。");

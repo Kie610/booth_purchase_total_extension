@@ -262,6 +262,175 @@ function fitText(ctx, text, maxWidth) {
   return `${cut}…`;
 }
 
+// ---- 背景 --------------------------------------------------------------
+
+// アップロードした画像が無いときに選べる下地。外部の画像を読まず、
+// すべてその場でcanvasへ描く(MV3のリモートコード禁止に触れないため)。
+// 明るい下地は濃い文字、濃い下地は白文字にしたいので、組ごとに theme を持つ。
+
+function fillLinearGradient(ctx, width, height, from, to) {
+  const gradient = ctx.createLinearGradient(0, 0, width, height);
+  gradient.addColorStop(0, from);
+  gradient.addColorStop(1, to);
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
+}
+
+// 柄は「下地を塗ってから、薄い色で図形を敷き詰める」形にそろえる
+function tintedShapes(ctx, width, height, base, ink, draw) {
+  fillLinearGradient(ctx, width, height, base[0], base[1]);
+  ctx.save();
+  ctx.fillStyle = ink;
+  ctx.strokeStyle = ink;
+  draw(ctx, width, height);
+  ctx.restore();
+}
+
+const SHARE_TEMPLATE_COLORS = [
+  ["red", "赤", "#ffe1e1", "#fff6f6"],
+  ["orange", "オレンジ", "#ffe8d2", "#fff8f1"],
+  ["pink", "ピンク", "#ffe0ef", "#fff5fa"],
+  ["yellow", "黄", "#fff4cc", "#fffdf2"],
+  ["green", "緑", "#ddf4e2", "#f5fcf7"],
+  ["blue", "青", "#dcecff", "#f4f9ff"],
+  ["purple", "紫", "#f0e2ff", "#faf5ff"],
+];
+
+// 柄の下地は一色に寄せる。柄と色の両方を選ばせるとUIが増えるので、
+// 柄は「模様が主役」、色は「無地の色が主役」と役割を分ける
+const PATTERN_BASE = ["#f4f1fa", "#ffffff"];
+const PATTERN_INK = "rgba(120, 92, 160, 0.16)";
+
+const SHARE_TEMPLATE_PATTERNS = [
+  [
+    "dots",
+    "水玉",
+    (ctx, w, h) => {
+      for (let y = 40; y < h; y += 72) {
+        for (let x = 40; x < w; x += 72) {
+          ctx.beginPath();
+          ctx.arc(x, y, 12, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    },
+  ],
+  [
+    "stripes",
+    "ストライプ",
+    (ctx, w, h) => {
+      ctx.lineWidth = 18;
+      for (let x = -h; x < w; x += 56) {
+        ctx.beginPath();
+        ctx.moveTo(x, h);
+        ctx.lineTo(x + h, 0);
+        ctx.stroke();
+      }
+    },
+  ],
+  [
+    "grid",
+    "チェック",
+    (ctx, w, h) => {
+      ctx.lineWidth = 6;
+      for (let x = 0; x < w; x += 72) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, h);
+        ctx.stroke();
+      }
+      for (let y = 0; y < h; y += 72) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+      }
+    },
+  ],
+  [
+    "checker",
+    "市松",
+    (ctx, w, h) => {
+      const size = 60;
+      for (let row = 0; row * size < h; row += 1) {
+        for (let col = row % 2; col * size < w; col += 2) {
+          ctx.fillRect(col * size, row * size, size, size);
+        }
+      }
+    },
+  ],
+  [
+    "waves",
+    "波",
+    (ctx, w, h) => {
+      ctx.lineWidth = 8;
+      for (let y = 40; y < h + 80; y += 64) {
+        ctx.beginPath();
+        for (let x = 0; x <= w; x += 8) {
+          const wy = y + Math.sin(x / 48) * 14;
+          if (x === 0) ctx.moveTo(x, wy);
+          else ctx.lineTo(x, wy);
+        }
+        ctx.stroke();
+      }
+    },
+  ],
+  [
+    "confetti",
+    "紙ふぶき",
+    (ctx, w, h) => {
+      // 位置は式で決める。乱数だと描き直すたびに柄が変わってしまう
+      for (let i = 0; i < 90; i += 1) {
+        const x = ((i * 137) % w) + (i % 7) * 11;
+        const y = ((i * 89) % h) + (i % 5) * 13;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate((i % 6) * 0.5);
+        ctx.fillRect(-14, -5, 28, 10);
+        ctx.restore();
+      }
+    },
+  ],
+  [
+    "rays",
+    "放射",
+    (ctx, w, h) => {
+      const cx = w / 2;
+      const cy = h / 2;
+      const far = Math.hypot(w, h);
+      for (let i = 0; i < 24; i += 1) {
+        const a = (Math.PI * 2 * i) / 24;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.arc(cx, cy, far, a, a + Math.PI / 48);
+        ctx.closePath();
+        ctx.fill();
+      }
+    },
+  ],
+];
+
+const SHARE_TEMPLATES = [
+  ...SHARE_TEMPLATE_COLORS.map(([id, label, from, to]) => ({
+    id: `color-${id}`,
+    group: "color",
+    label,
+    theme: "light",
+    draw: (ctx, w, h) => fillLinearGradient(ctx, w, h, from, to),
+  })),
+  ...SHARE_TEMPLATE_PATTERNS.map(([id, label, draw]) => ({
+    id: `pattern-${id}`,
+    group: "pattern",
+    label,
+    theme: "light",
+    draw: (ctx, w, h) => tintedShapes(ctx, w, h, PATTERN_BASE, PATTERN_INK, draw),
+  })),
+];
+
+function shareTemplateById(id) {
+  return SHARE_TEMPLATES.find((template) => template.id === id) || null;
+}
+
 // 背景画像は縦横比を保ったまま全面を覆う(cover)。引き伸ばすと人物や絵が歪む
 function drawCover(ctx, image, width, height) {
   const scale = Math.max(width / image.width, height / image.height);
@@ -270,7 +439,8 @@ function drawCover(ctx, image, width, height) {
   ctx.drawImage(image, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
 }
 
-function drawShareCardBackground(ctx, background, width, height) {
+// アップロードした画像が最優先。次にテンプレート、どちらも無ければ既定の下地
+function drawShareCardBackground(ctx, background, width, height, template) {
   if (background) {
     drawCover(ctx, background, width, height);
     // どんな写真でも文字が読めるように暗く敷く。これが無いと明るい画像で白文字が消える
@@ -278,103 +448,128 @@ function drawShareCardBackground(ctx, background, width, height) {
     ctx.fillRect(0, 0, width, height);
     return "dark";
   }
-  const gradient = ctx.createLinearGradient(0, 0, width, height);
-  gradient.addColorStop(0, "#f6e6ff");
-  gradient.addColorStop(1, "#ffffff");
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, width, height);
+  if (template) {
+    template.draw(ctx, width, height);
+    return template.theme;
+  }
+  fillLinearGradient(ctx, width, height, "#f6e6ff", "#ffffff");
   return "light";
 }
 
+// ---- 組み方 ------------------------------------------------------------
+
+// 縦横比ごとの組み方。**余白だけ変えると、正方形や縦長では上に固まって間延びする。**
+// 文字の大きさ・数字の並べ方・行間を比率ごとに決め、余った高さは spread で配る。
+const SHARE_CARD_LAYOUTS = {
+  "16:9": { statsPerRow: 4, subtitle: 24, title: 54, statLabel: 24, statValues: [52, 44, 38, 32], statNote: 22, statRow: 132, listRank: 34, listName: 36, listValue: 30, listStep: 60, spread: false },
+  "4:3": { statsPerRow: 2, subtitle: 26, title: 58, statLabel: 26, statValues: [58, 50, 42, 36], statNote: 24, statRow: 148, listRank: 36, listName: 40, listValue: 32, listStep: 68, spread: true },
+  "1:1": { statsPerRow: 2, subtitle: 26, title: 56, statLabel: 26, statValues: [56, 48, 40, 34], statNote: 24, statRow: 148, listRank: 36, listName: 38, listValue: 32, listStep: 68, spread: true },
+  "3:4": { statsPerRow: 2, subtitle: 24, title: 48, statLabel: 24, statValues: [50, 42, 36, 30], statNote: 22, statRow: 140, listRank: 32, listName: 34, listValue: 28, listStep: 62, spread: true },
+};
+
+function shareCardLayout(width, height) {
+  const name = Object.keys(SHARE_RATIOS).find(
+    (key) => SHARE_RATIOS[key].width === width && SHARE_RATIOS[key].height === height
+  );
+  return SHARE_CARD_LAYOUTS[name] || SHARE_CARD_LAYOUTS[DEFAULT_SHARE_RATIO];
+}
+
 // 大きさは canvas から読む。縦横比を選べるので寸法を決め打ちしない
-function drawShareCard(ctx, card, background) {
+function drawShareCard(ctx, card, background, template) {
   const width = ctx.canvas.width;
   const height = ctx.canvas.height;
   const padding = Math.round(width * 0.06);
-  const theme = SHARE_CARD_THEMES[drawShareCardBackground(ctx, background, width, height)];
+  const layout = shareCardLayout(width, height);
+  const theme =
+    SHARE_CARD_THEMES[drawShareCardBackground(ctx, background, width, height, template)];
   ctx.textBaseline = "alphabetic";
   ctx.textAlign = "left";
 
   const left = padding;
   const right = width - padding;
-  let y = padding + 34;
+  const bottom = height - padding;
+  let y = padding + layout.subtitle + 10;
 
   ctx.fillStyle = theme.muted;
-  ctx.font = `24px ${SHARE_CARD_FONT}`;
+  ctx.font = `${layout.subtitle}px ${SHARE_CARD_FONT}`;
   ctx.fillText(card.subtitle, left, y);
 
-  y += 68;
+  y += layout.title + 14;
   ctx.fillStyle = theme.fg;
-  ctx.font = `bold 54px ${SHARE_CARD_FONT}`;
+  ctx.font = `bold ${layout.title}px ${SHARE_CARD_FONT}`;
   ctx.fillText(fitText(ctx, card.title, right - left), left, y);
 
   y += 26;
   ctx.fillStyle = theme.accent;
   ctx.fillRect(left, y, 96, 6);
 
-  // 数字は横に並べる。段組にすると1項目のときに空白が目立つ
+  // 縦長や正方形では下が余る。余りを段の間へ配って、中身を縦に散らす
+  const statRows = card.stats.length > 0 ? Math.ceil(card.stats.length / layout.statsPerRow) : 0;
+  const needed = statRows * layout.statRow + card.list.length * layout.listStep;
+  const gaps = (statRows > 0 ? 1 : 0) + (card.list.length > 0 ? 1 : 0);
+  const spare =
+    layout.spread && gaps > 0
+      ? Math.max(0, (bottom - 56 - y - needed - 140) / gaps)
+      : 0;
+
   if (card.stats.length > 0) {
-    y += 96;
-    // 横長なら1行に並べられるが、正方形や縦長では潰れるので2列で折り返す
-    const perRow = width >= 1100 ? card.stats.length : Math.min(2, card.stats.length);
+    y += 96 + spare;
+    const perRow = Math.min(layout.statsPerRow, card.stats.length);
     const columnWidth = (right - left) / perRow;
     // 隣の数字とくっつかないよう、列の間を空けたぶんだけ使える幅を狭める
     const textWidth = columnWidth - 24;
-    const rowHeight = 132;
     card.stats.forEach((stat, index) => {
       const x = left + columnWidth * (index % perRow);
-      const top = y + rowHeight * Math.floor(index / perRow);
+      const top = y + layout.statRow * Math.floor(index / perRow);
 
       ctx.fillStyle = theme.muted;
-      ctx.font = `24px ${SHARE_CARD_FONT}`;
+      ctx.font = `${layout.statLabel}px ${SHARE_CARD_FONT}`;
       ctx.fillText(fitText(ctx, stat.label, textWidth), x, top);
 
       ctx.fillStyle = theme.fg;
-      fitFontSize(ctx, stat.value, textWidth, [52, 44, 38, 32], "bold");
-      ctx.fillText(stat.value, x, top + 62);
+      fitFontSize(ctx, stat.value, textWidth, layout.statValues, "bold");
+      ctx.fillText(stat.value, x, top + layout.statValues[0] + 10);
 
       if (stat.note) {
         ctx.fillStyle = theme.muted;
-        ctx.font = `22px ${SHARE_CARD_FONT}`;
-        ctx.fillText(fitText(ctx, stat.note, textWidth), x, top + 98);
+        ctx.font = `${layout.statNote}px ${SHARE_CARD_FONT}`;
+        ctx.fillText(fitText(ctx, stat.note, textWidth), x, top + layout.statValues[0] + 46);
       }
     });
-    y += rowHeight * Math.ceil(card.stats.length / perRow) - 12;
+    y += layout.statRow * statRows - 12;
   }
 
   if (card.list.length > 0) {
-    // 数字の下に並べるときは詰める。最後の行が下段の断り書きに重なるため
     if (card.stats.length > 0) {
       // 数字と作者名は読む単位が違う。細い線で切って、続きだと分かるようにする
       ctx.fillStyle = theme.line;
       ctx.fillRect(left, y + 4, right - left, 1);
     }
-    y += card.stats.length > 0 ? 44 : 88;
+    y += (card.stats.length > 0 ? 44 : 88) + spare;
     for (const row of card.list) {
       ctx.fillStyle = theme.accent;
-      ctx.font = `bold 34px ${SHARE_CARD_FONT}`;
+      ctx.font = `bold ${layout.listRank}px ${SHARE_CARD_FONT}`;
       ctx.fillText(`${row.rank}`, left, y);
 
       // 金額を先に測り、名前が入れる幅を残す
-      ctx.font = `30px ${SHARE_CARD_FONT}`;
+      ctx.font = `${layout.listValue}px ${SHARE_CARD_FONT}`;
       const valueWidth = row.value ? ctx.measureText(row.value).width : 0;
       ctx.fillStyle = theme.fg;
-      ctx.font = `bold 36px ${SHARE_CARD_FONT}`;
+      ctx.font = `bold ${layout.listName}px ${SHARE_CARD_FONT}`;
       ctx.fillText(fitText(ctx, row.name, right - left - 56 - valueWidth - 32), left + 56, y);
 
       if (row.value) {
         ctx.fillStyle = theme.muted;
-        ctx.font = `30px ${SHARE_CARD_FONT}`;
+        ctx.font = `${layout.listValue}px ${SHARE_CARD_FONT}`;
         ctx.textAlign = "right";
         ctx.fillText(row.value, right, y);
         ctx.textAlign = "left";
       }
-      y += 60;
+      y += layout.listStep;
     }
   }
 
   // 断り書きとハッシュタグは常に最下段。上の行数で位置が動くと落ち着かない
-  const bottom = height - padding;
   if (card.note) {
     ctx.fillStyle = theme.muted;
     ctx.font = `22px ${SHARE_CARD_FONT}`;

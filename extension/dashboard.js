@@ -261,6 +261,17 @@ shareDropZone.addEventListener("drop", async (event) => {
   await applyShareBackgroundFile(file);
 });
 
+// テンプレートの選択。もう一度押すと既定の下地へ戻る
+shareTemplates.addEventListener("click", (event) => {
+  const button = event.target.closest(".share-template");
+  if (!button) return;
+  if (shareBackground) {
+    setShareCardStatus("画像を選んでいる間はテンプレートを使えません。「元に戻す」を押してください。");
+    return;
+  }
+  setShareTemplate(button.dataset.templateId);
+});
+
 shareBgClearBtn.addEventListener("click", () => {
   setShareBackground(null, "");
   setShareCardStatus("既定の背景に戻しました。");
@@ -302,6 +313,12 @@ shareOpenBtn.addEventListener("click", () => {
 
 // まとめる年の切り替え
 summaryYear.addEventListener("change", () => setSummaryYear(summaryYear.value));
+
+// 買った時間帯の対象期間
+for (const select of [heatmapFrom, heatmapTo]) {
+  select.addEventListener("change", () => setHeatmapRange(heatmapFrom.value, heatmapTo.value));
+}
+heatmapAllBtn.addEventListener("click", () => setHeatmapRange(null, null));
 
 // 比較する2つの年の切り替え
 trendYear.addEventListener("change", () => setTrendYears(trendYear.value, trendBaseYear.value));

@@ -60,6 +60,13 @@ const trendPreviousYearLabel = document.getElementById("trendPreviousYearLabel")
 const monthlyTrendChart = document.getElementById("monthlyTrendChart");
 const cumulativeTrendChart = document.getElementById("cumulativeTrendChart");
 const trendPeriodTableBody = document.getElementById("trendPeriodTableBody");
+const heatmapFrom = document.getElementById("heatmapFrom");
+const heatmapTo = document.getElementById("heatmapTo");
+const heatmapAllBtn = document.getElementById("heatmapAllBtn");
+const heatmapStats = document.getElementById("heatmapStats");
+const heatmapEmpty = document.getElementById("heatmapEmpty");
+const heatmapGrid = document.getElementById("heatmapGrid");
+const heatmapSkipped = document.getElementById("heatmapSkipped");
 const trendYear = document.getElementById("trendYear");
 const trendBaseYear = document.getElementById("trendBaseYear");
 const orderTableBody = document.getElementById("orderTableBody");
@@ -102,6 +109,7 @@ const shareCloseBtn = document.getElementById("shareCloseBtn");
 const shareCanvas = document.getElementById("shareCanvas");
 const shareRatioToggle = document.getElementById("shareRatioToggle");
 const shareDropZone = document.getElementById("shareDropZone");
+const shareTemplates = document.getElementById("shareTemplates");
 const shareBgFile = document.getElementById("shareBgFile");
 const shareBgClearBtn = document.getElementById("shareBgClearBtn");
 const shareBgName = document.getElementById("shareBgName");
@@ -806,11 +814,107 @@ function renderSpendingTrends(now = new Date()) {
   }
 
   renderCumulativeChart(trend);
+  renderHeatmap();
   renderPeriodTableInto(
     trendPeriodTableBody,
     aggregateByPeriod(results),
     expandedTrendPeriodYears
   );
+}
+
+// ---- 買った曜日と時間帯 ------------------------------------------------
+
+// 選んでいる範囲。null は「全期間」
+let heatmapFromKey = null;
+let heatmapToKey = null;
+
+function setHeatmapRange(from, to) {
+  // 逆に選んでも同じ範囲として扱う(範囲指定の他の場所と同じ)
+  heatmapFromKey = from && to && from > to ? to : from;
+  heatmapToKey = from && to && from > to ? from : to;
+  renderHeatmap();
+}
+
+function heatmapMonthKeys(results) {
+  const keys = new Set();
+  for (const result of results) {
+    const key = monthKeyOf(result.date);
+    if (key) keys.add(key);
+  }
+  return Array.from(keys).sort();
+}
+
+function renderHeatmapRangeOptions(keys) {
+  for (const [select, selected] of [
+    [heatmapFrom, heatmapFromKey || keys[0]],
+    [heatmapTo, heatmapToKey || keys[keys.length - 1]],
+  ]) {
+    const same =
+      select.options.length === keys.length &&
+      keys.every((key, index) => select.options[index].value === key);
+    if (!same) {
+      select.innerHTML = "";
+      for (const key of keys) {
+        select.appendChild(el("option", "", monthLabel(key))).value = key;
+      }
+    }
+    select.value = selected;
+  }
+}
+
+// 濃さは最大の回数を基準にする。1件でも薄く色を付けて、0件と見分けられるようにする
+function heatmapCellAlpha(count, max) {
+  if (count === 0) return 0;
+  return 0.15 + (count / max) * 0.85;
+}
+
+function renderHeatmap() {
+  const results = buildResults();
+  const keys = heatmapMonthKeys(results);
+  if (keys.length === 0) {
+    heatmapGrid.innerHTML = "";
+    heatmapEmpty.hidden = false;
+    heatmapStats.textContent = "";
+    heatmapSkipped.hidden = true;
+    return;
+  }
+  renderHeatmapRangeOptions(keys);
+
+  const stats = buildWeekdayHourStats(results, heatmapFrom.value, heatmapTo.value);
+  heatmapEmpty.hidden = stats.counted > 0;
+  heatmapGrid.hidden = stats.counted === 0;
+  heatmapStats.textContent = stats.counted > 0 ? `${stats.counted}件` : "";
+  heatmapSkipped.hidden = stats.skipped === 0;
+  if (stats.skipped > 0) {
+    heatmapSkipped.textContent =
+      `注文日時から曜日または時刻を読み取れなかった注文が${stats.skipped}件あります。` +
+      "この表には入っていません。";
+  }
+  if (stats.counted === 0) {
+    heatmapGrid.innerHTML = "";
+    return;
+  }
+
+  heatmapGrid.setAttribute(
+    "aria-label",
+    `曜日と時間帯ごとの注文件数(${monthLabel(heatmapFrom.value)}〜${monthLabel(heatmapTo.value)}、${stats.counted}件)`
+  );
+  heatmapGrid.innerHTML = "";
+  // 左上は曜日の列の見出し分
+  heatmapGrid.appendChild(el("span", "heatmap-corner"));
+  for (let hour = 0; hour < 24; hour += 1) {
+    // 24個すべて数字を出すと潰れるので、3時間おきに目印を置く
+    heatmapGrid.appendChild(el("span", "heatmap-hour", hour % 3 === 0 ? String(hour) : ""));
+  }
+  stats.cells.forEach((row, weekday) => {
+    heatmapGrid.appendChild(el("span", "heatmap-weekday", WEEKDAY_LABELS[weekday]));
+    row.forEach((count, hour) => {
+      const cell = el("span", "heatmap-cell");
+      cell.style.backgroundColor = `rgba(252, 77, 80, ${heatmapCellAlpha(count, stats.max)})`;
+      cell.title = `${WEEKDAY_LABELS[weekday]}曜 ${hour}時台: ${count}件`;
+      heatmapGrid.appendChild(cell);
+    });
+  });
 }
 
 // 引っ越しの画面。何を持ち出せるのかが分かれば十分なので、件数と期間だけを出す
@@ -1286,6 +1390,7 @@ function openSharePanel(payload) {
   shareOverlay.hidden = false;
   sharePanel.hidden = false;
   renderShareRatioToggle();
+  renderShareTemplates();
   drawSharePanelCard();
   // パネルを開いている間は、後ろの共有ボタンを押せないようにする
   updateShareButton();
@@ -1326,14 +1431,54 @@ function drawSharePanelCard() {
   }
   const ctx = shareCanvas.getContext("2d");
   ctx.clearRect(0, 0, width, height);
-  drawShareCard(ctx, sharePayload.card, shareBackground);
+  drawShareCard(ctx, sharePayload.card, shareBackground, shareTemplateById(shareTemplate));
 }
 
 function setShareBackground(image, name) {
   shareBackground = image;
   shareBgName.textContent = image ? name : "未選択（既定の背景を使います）";
   shareBgClearBtn.hidden = !image;
+  renderShareTemplates();
   drawSharePanelCard();
+}
+
+// ---- 背景のテンプレート ------------------------------------------------
+
+// 選んでいるテンプレート。null は既定の下地
+let shareTemplate = null;
+
+function setShareTemplate(id) {
+  shareTemplate = shareTemplate === id ? null : id;
+  renderShareTemplates();
+  drawSharePanelCard();
+}
+
+// 見本は実際の描画関数で小さく描く。色見本を別に持つと、
+// 実物と食い違っても気付けない
+function renderShareTemplates() {
+  if (shareTemplates.childElementCount === 0) {
+    for (const template of SHARE_TEMPLATES) {
+      const button = el("button", `share-template share-template-${template.group}`);
+      button.type = "button";
+      button.dataset.templateId = template.id;
+      button.title = template.label;
+      button.setAttribute("aria-label", template.label);
+
+      const preview = document.createElement("canvas");
+      preview.width = 96;
+      preview.height = 54;
+      template.draw(preview.getContext("2d"), preview.width, preview.height);
+      button.appendChild(preview);
+      shareTemplates.appendChild(button);
+    }
+  }
+  shareTemplates.querySelectorAll(".share-template").forEach((button) => {
+    const on = button.dataset.templateId === shareTemplate;
+    button.classList.toggle("current", on);
+    button.setAttribute("aria-pressed", String(on));
+  });
+  // 画像を選んでいる間はテンプレートが効かないので、そのことを見た目でも示す
+  shareTemplates.classList.toggle("disabled", Boolean(shareBackground));
 }
 
 // 状態表示は用が済んだら消す。前回の「保存しました」が残っていると、

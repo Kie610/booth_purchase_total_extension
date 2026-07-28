@@ -182,7 +182,17 @@ function parseOrderDate(text) {
   const month = Number(m[2]);
   const day = m[3] ? Number(m[3]) : 0;
   if (month < 1 || month > 12) return null;
-  return { year, month, day, sortKey: year * 10000 + month * 100 + day };
+  // 時刻は一覧ページに「12:34」の形で並ぶ。無い表記もありうるので必須にしない
+  const time = String(text).match(/(\d{1,2}):(\d{2})/);
+  const hour = time && Number(time[1]) < 24 ? Number(time[1]) : null;
+  return { year, month, day, hour, sortKey: year * 10000 + month * 100 + day };
+}
+
+// 曜日(0=日)。日が読めていないと決められないので null を返す。
+// 曜日はUTCで数える。ローカル時間で作ると、環境によって1日ずれることがある
+function orderWeekday(date) {
+  if (!date || !date.day) return null;
+  return new Date(Date.UTC(date.year, date.month - 1, date.day)).getUTCDay();
 }
 
 // 日付が読めなかった注文は末尾へ送る
@@ -363,6 +373,43 @@ function buildSpendingTrend(
       ...months.flatMap((month) => [month.currentCumulative, month.previousCumulative])
     ),
   };
+}
+
+// ---- 買った曜日と時間帯 ------------------------------------------------
+
+const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
+
+// 曜日×時間帯の購入回数。BOOTHの画面には無い切り口で、
+// 買い物が集中する時間が分かる。
+//
+// **金額ではなく注文の件数を数える。** 高額の1件で1マスが真っ赤になると、
+// 「その時間によく買う」ようには読めない。
+//
+// 日付が読めない注文と時刻が無い注文は数えられないので、除外した件数を返して
+// 画面で断る(0として置くと、日曜0時に大量購入したように見えてしまう)。
+function buildWeekdayHourStats(results, fromKey, toKey) {
+  const cells = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0));
+  let counted = 0;
+  let skipped = 0;
+  let max = 0;
+
+  for (const result of results) {
+    const monthKey = monthKeyOf(result.date);
+    if (fromKey && (!monthKey || monthKey < fromKey)) continue;
+    if (toKey && (!monthKey || monthKey > toKey)) continue;
+
+    const date = parseOrderDate(result.date);
+    const weekday = orderWeekday(date);
+    if (weekday === null || date.hour === null) {
+      skipped += 1;
+      continue;
+    }
+    cells[weekday][date.hour] += 1;
+    counted += 1;
+    max = Math.max(max, cells[weekday][date.hour]);
+  }
+
+  return { cells, counted, skipped, max };
 }
 
 // ---- ショップ(作者)ごとのまとめ ----------------------------------------

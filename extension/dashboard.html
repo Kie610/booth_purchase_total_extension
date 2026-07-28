@@ -278,6 +278,37 @@
            <svg id="cumulativeTrendChart" class="cumulative-chart" viewBox="0 0 720 250" role="img"></svg>
          </section>
 
+         <!-- 買った時間帯は、上の年比較とは対象期間が違う(全期間で見たい)ので
+              この区画だけの範囲指定を持たせる -->
+         <section class="block-section" aria-labelledby="heatmapTitle">
+           <div class="block-head">
+             <h3 id="heatmapTitle">買った曜日と時間帯</h3>
+             <span class="hint block-caption">注文の件数。金額ではありません</span>
+           </div>
+           <div class="range-controls heatmap-range">
+             <label class="range-field">開始
+               <select id="heatmapFrom"></select>
+             </label>
+             <span class="range-sep">〜</span>
+             <label class="range-field">終了
+               <select id="heatmapTo"></select>
+             </label>
+             <button type="button" id="heatmapAllBtn" class="secondary small">全期間</button>
+             <span class="hint" id="heatmapStats"></span>
+           </div>
+           <div id="heatmapEmpty" class="empty-note" hidden>
+             選んだ期間に、曜日と時刻の分かる注文がありません。
+           </div>
+           <div id="heatmapGrid" class="heatmap" role="img"></div>
+           <div class="heatmap-legend">
+             <span class="hint">少ない</span>
+             <span class="heatmap-scale"></span>
+             <span class="hint">多い</span>
+           </div>
+           <!-- 0として置くと、日曜0時に大量購入したように見えてしまう -->
+           <div class="status warn" id="heatmapSkipped" hidden></div>
+         </section>
+
          <section class="panel trend-period-panel">
            <h2>年別・月別の集計</h2>
            <p class="hint">お買いものレポートと同じ集計です。年の行をクリックすると月別の内訳を開閉できます。</p>
@@ -488,6 +519,10 @@
             <span class="share-drop-text">ここに画像をドロップ</span>
             <span class="hint" id="shareBgName">未選択（既定の背景を使います）</span>
           </div>
+
+          <!-- 手持ちの画像が無くても選べるように、その場で描く下地を並べる -->
+          <span class="share-field-label share-template-label">テンプレート</span>
+          <div class="share-templates" id="shareTemplates"></div>
         </div>
 
         <div class="share-text-box">

@@ -39,6 +39,13 @@
     <span id="trendPreviousYearLabel"></span>
     <div id="monthlyTrendChart" class="trend-bars"></div>
     <svg id="cumulativeTrendChart" class="cumulative-chart" viewBox="0 0 720 250"></svg>
+    <select id="heatmapFrom"></select>
+    <select id="heatmapTo"></select>
+    <button id="heatmapAllBtn"></button>
+    <span id="heatmapStats"></span>
+    <div id="heatmapEmpty" hidden></div>
+    <div id="heatmapGrid"></div>
+    <div id="heatmapSkipped" hidden></div>
     <table class="period-table"><tbody id="trendPeriodTableBody"></tbody></table>
   </div>
 </div>
@@ -151,6 +158,7 @@
     <button class="segmented-btn" data-ratio="3:4" aria-pressed="false">3:4</button>
   </div>
   <div id="shareDropZone"></div>
+  <div id="shareTemplates"></div>
   <canvas id="shareCanvas" width="1200" height="675"></canvas>
   <input type="file" id="shareBgFile">
   <button id="shareBgClearBtn" hidden></button>
