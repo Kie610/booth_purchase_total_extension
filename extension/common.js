@@ -303,16 +303,21 @@ function aggregateByPeriod(results) {
   );
 }
 
-// 今年と前年の月別支出・累計を、グラフと要約の両方で使える形にする。
+// 2つの年の月別支出・累計を、グラフと要約の両方で使える形にする。
 // 画面側で集計し直すと、表とグラフで対象条件がずれるため、ここで一度だけ
 // 「金額を収集できた注文」を同じ基準でまとめる。
+//
+// 比べる相手は既定では前年だが、任意の年を選べる(2年前と見比べたいことがある)。
+// 同じ年を2つ渡すと比較対象が空になり差が全額になってしまうので、
+// 画面側で同じ年を選べないようにしてある。
 function buildSpendingTrend(
   results,
   year = new Date().getFullYear(),
-  throughMonth = new Date().getMonth() + 1
+  throughMonth = new Date().getMonth() + 1,
+  compareYear = Number(year) - 1
 ) {
   const currentYear = Number(year);
-  const previousYear = currentYear - 1;
+  const baseYear = Number(compareYear);
   const cutoff = Math.min(12, Math.max(1, Number(throughMonth) || 1));
   const months = Array.from({ length: 12 }, (_, index) => ({
     month: index + 1,
@@ -325,7 +330,8 @@ function buildSpendingTrend(
   for (const result of results) {
     if (typeof result.amount !== "number") continue;
     const date = parseOrderDate(result.date);
-    if (!date || (date.year !== currentYear && date.year !== previousYear)) continue;
+    if (!date) continue;
+    if (date.year !== currentYear && date.year !== baseYear) continue;
     const key = date.year === currentYear ? "current" : "previous";
     months[date.month - 1][key] += result.amount;
   }
@@ -344,7 +350,7 @@ function buildSpendingTrend(
   const difference = currentToDate - previousToDate;
   return {
     year: currentYear,
-    previousYear,
+    baseYear,
     throughMonth: cutoff,
     months,
     currentToDate,
@@ -375,7 +381,7 @@ const DEFAULT_SHOP_SORT = "amount";
 // **ここだけは注文単位のお支払金額を使えない。**お支払金額は注文に1つしかなく、
 // 1つの注文が複数のショップにまたがるため、ショップへ割り振れない。
 // そのため商品の合計(単価×数量+BOOST)で集計する。送料やクーポンは入らないので、
-// ショップ別の合計をすべて足しても全体の合計支払額とは一致しない。
+// ショップ別の合計をすべて足しても全体の合計額とは一致しない。
 // 画面にその旨を出すこと。
 //
 // 表示名は変わりうるので、同じショップかどうかはURLで判断する。
@@ -397,10 +403,13 @@ function aggregateByShop(results, sortBy) {
           // 金額を読めなかった商品。0として足すと少ない額を正しい合計に見せてしまう
           unknown: 0,
           orderIds: new Set(),
+          // 買った商品の名前。同じ商品を複数の注文で買うと重複するので集合で持つ
+          itemNames: new Set(),
         });
       }
       const row = shops.get(key);
       row.orderIds.add(result.id);
+      if (item.name) row.itemNames.add(item.name);
 
       const quantity = itemQuantity(item);
       const count = typeof quantity === "number" ? quantity : 0;
@@ -418,7 +427,12 @@ function aggregateByShop(results, sortBy) {
   }
   const compare = SHOP_SORTS[sortBy] || SHOP_SORTS[DEFAULT_SHOP_SORT];
   return Array.from(shops.values())
-    .map(({ orderIds, ...row }) => ({ ...row, orders: orderIds.size }))
+    .map(({ orderIds, itemNames, ...row }) => ({
+      ...row,
+      orders: orderIds.size,
+      // 並びが実行のたびに変わらないよう名前順で固定する
+      items: Array.from(itemNames).sort((a, b) => a.localeCompare(b, "ja")),
+    }))
     .sort((a, b) => compare(a, b) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 }
 
@@ -483,6 +497,8 @@ function buildYearSummary(results, year) {
       const count = typeof quantity === "number" ? quantity : 0;
       itemCount += count;
       if (item.gift) giftItemCount += count;
+      // BOOSTは今のところ画面にも共有文面にも出していない(使う人が少なく、
+      // 「支援した作者」と語がぶつかるため一旦外した)。集計だけは残してある。
       // 0円のBOOSTは「応援した」と数えない。金額の行は常に出るため
       if (typeof item.boost === "number" && item.boost > 0) {
         boost += item.boost;

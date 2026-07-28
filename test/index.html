@@ -8,13 +8,9 @@
 <!-- dashboard.js の init() は保存データを非同期で state へ読み込む。
      テストは state を直接差し替えるので、走らせると競合する -->
 <body data-no-auto-init>
-<!-- 途中で例外が出ると結果が「running...」のまま止まって原因が分からないので、
-     ここで拾って画面に出す(構文エラーも拾えるよう capture 段階で待ち受ける) -->
-<script>
-const showFailure = (m) => { document.getElementById("out").textContent = m; };
-window.addEventListener("error", (e) => showFailure(`ERROR ${e.message} @${e.filename}:${e.lineno}`), true);
-window.addEventListener("unhandledrejection", (e) => showFailure("ERROR " + ((e.reason && e.reason.stack) || e.reason)));
-</script>
+<!-- エラー拾いは harness.js に置く。index.html は拡張と同じ script-src 'self' を
+     宣言しているため、インラインの <script> は実行されずに黙って捨てられる -->
+<script src="harness.js"></script>
 <pre id="out">running...</pre>
 
 <!-- dashboard.html と同じ要素構成 -->
@@ -36,6 +32,8 @@ window.addEventListener("unhandledrejection", (e) => showFailure("ERROR " + ((e.
 <div class="view" id="view-trends" hidden>
   <div id="trendsEmpty"></div>
   <div id="trendsArea" hidden>
+    <select id="trendYear"></select>
+    <select id="trendBaseYear"></select>
     <div id="trendSummary" class="stat-grid"></div>
     <span id="trendCurrentYearLabel"></span>
     <span id="trendPreviousYearLabel"></span>
@@ -146,6 +144,13 @@ window.addEventListener("unhandledrejection", (e) => showFailure("ERROR " + ((e.
 <div id="shareOverlay" hidden></div>
 <div id="sharePanel" hidden>
   <button id="shareCloseBtn"></button>
+  <div id="shareRatioToggle">
+    <button class="segmented-btn" data-ratio="16:9" aria-pressed="true">16:9</button>
+    <button class="segmented-btn" data-ratio="1:1" aria-pressed="false">1:1</button>
+    <button class="segmented-btn" data-ratio="4:3" aria-pressed="false">4:3</button>
+    <button class="segmented-btn" data-ratio="3:4" aria-pressed="false">3:4</button>
+  </div>
+  <div id="shareDropZone"></div>
   <canvas id="shareCanvas" width="1200" height="675"></canvas>
   <input type="file" id="shareBgFile">
   <button id="shareBgClearBtn" hidden></button>
@@ -166,6 +171,9 @@ window.addEventListener("unhandledrejection", (e) => showFailure("ERROR " + ((e.
 <script src="../extension/dashboard-parse.js"></script>
 <script src="../extension/dashboard-view.js"></script>
 <script src="../extension/dashboard.js"></script>
+
+<script src="loaded.js"></script>
+
 <script src="cases.js"></script>
 </body>
 </html>

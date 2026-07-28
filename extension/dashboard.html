@@ -43,9 +43,11 @@
       収集の実行中でもメニューから画面を切り替えられます(処理は止まりません)。
     </p>
 
+    <!-- 年別・月別は合計額の内訳なので、離して置くと見比べられない。
+         同じ枠に入れ、既定では畳んでおく -->
     <section id="summarySection" class="summary" hidden>
       <div class="summary-main">
-        <span class="summary-label">収集済みの合計支払額</span>
+        <span class="summary-label">収集済みの合計額</span>
         <span class="gift" id="totalGift"></span>
         <span class="summary-value" id="totalAmount"></span>
       </div>
@@ -54,13 +56,24 @@
         <span id="pendingCount"></span>
         <span id="skippedCount"></span>
       </div>
+
+      <details class="accordion summary-breakdown" id="periodAccordion">
+        <summary><h2>年別・月別の集計</h2></summary>
+        <p class="hint">年の行をクリックすると月別の内訳を開閉できます。収集済みの注文のみが対象です。</p>
+        <table class="data-table period-table">
+          <thead>
+            <tr><th>期間</th><th class="num">注文数</th><th class="num">合計額</th></tr>
+          </thead>
+          <tbody id="periodTableBody"></tbody>
+        </table>
+      </details>
     </section>
 
     <section class="step step-alt">
       <h2>まとめて一括集計</h2>
       <p class="hint">①と②をまとめて実行します。注文数が多い場合は時間がかかります。</p>
       <div class="step-controls">
-        <button id="runAllBtn" class="secondary">一括で集計を実行</button>
+        <button id="runAllBtn" class="primary">一括で集計を実行</button>
         <label class="checkbox">
           <input type="checkbox" id="forceRefreshAll">
           キャッシュを無視して全件再取得
@@ -141,17 +154,6 @@
     </section>
 
     <section id="breakdownSection" hidden>
-      <section class="panel">
-        <h2>年別・月別の集計</h2>
-        <p class="hint">年の行をクリックすると月別の内訳を開閉できます。収集済みの注文のみが対象です。</p>
-        <table class="data-table period-table">
-          <thead>
-            <tr><th>期間</th><th class="num">注文数</th><th class="num">支払額</th></tr>
-          </thead>
-          <tbody id="periodTableBody"></tbody>
-        </table>
-      </section>
-
       <details class="panel accordion">
         <summary><h2>注文ごとの内訳<span class="accordion-count" id="orderRowCount"></span></h2></summary>
         <div class="table-scroll">
@@ -193,7 +195,7 @@
        </div>
        <p class="hint">
          その年に買ったものを振り返ります。金額は注文ごとのお支払金額から、
-         点数・作者数・BOOSTは商品の明細から数えています。
+         点数と作者数は商品の明細から数えています。
        </p>
 
        <div id="summaryEmpty" class="empty-note">
@@ -210,11 +212,11 @@
          <section class="block-section" aria-labelledby="summaryTopShopsTitle">
            <div class="block-head">
              <h3 id="summaryTopShopsTitle">この年の推し作者</h3>
-             <span class="hint block-caption">商品の合計金額が多い順に3ショップ</span>
+             <span class="hint block-caption">商品の合計額が多い順に3ショップ</span>
            </div>
            <table class="data-table ranking-table">
              <thead>
-               <tr><th class="rank">順位</th><th>ショップ名</th><th class="num">購入商品数</th><th class="num">合計金額</th></tr>
+               <tr><th class="rank">順位</th><th>ショップ名</th><th class="num">購入商品数</th><th class="num">合計額</th></tr>
              </thead>
              <tbody id="summaryTopShopsBody"></tbody>
            </table>
@@ -222,7 +224,7 @@
 
          <p class="hint">
            作者ごとの金額は商品の合計（単価×数量＋BOOST）です。送料やクーポンが入らないため、
-           足しても上の合計金額とは一致しません。
+           足しても上の合計額とは一致しません。
          </p>
        </div>
      </section>
@@ -230,14 +232,27 @@
 
    <div class="view" id="view-trends" hidden>
      <section class="step">
-       <h2>支出推移・前年比較</h2>
+       <div class="section-head">
+         <h2>支出推移・前年比較</h2>
+         <!-- 既定は今年と前年だが、2年前と見比べたいこともあるので選べるようにする -->
+         <div class="trend-years">
+           <label class="summary-year">
+             比較する年
+             <select id="trendYear"></select>
+           </label>
+           <span class="range-sep">と</span>
+           <label class="summary-year">
+             <select id="trendBaseYear"></select>
+           </label>
+         </div>
+       </div>
        <p class="hint">
-         収集済みの注文を月ごとにまとめ、今年と前年の支出ペースを比較します。
+         収集済みの注文を月ごとにまとめ、選んだ2つの年の支出ペースを比較します。
          未収集の注文とキャンセルされた注文は金額に含みません。
        </p>
 
        <div id="trendsEmpty" class="empty-note">
-         比較できる支払額がありません。「お買いものレポート」で金額を収集してください。
+         比較できる合計額がありません。「お買いものレポート」で金額を収集してください。
        </div>
 
        <div id="trendsArea" hidden>
@@ -268,7 +283,7 @@
            <p class="hint">お買いものレポートと同じ集計です。年の行をクリックすると月別の内訳を開閉できます。</p>
            <table class="data-table period-table">
              <thead>
-               <tr><th>期間</th><th class="num">注文数</th><th class="num">支払額</th></tr>
+               <tr><th>期間</th><th class="num">注文数</th><th class="num">合計額</th></tr>
              </thead>
              <tbody id="trendPeriodTableBody"></tbody>
            </table>
@@ -302,7 +317,7 @@
            <div class="status" id="rankingStats"></div>
            <!-- ショップ別の金額だけは注文単位のお支払金額を使えないので、そのことを断る -->
            <div class="status" id="rankingBasis">
-             金額は商品の合計です。送料やクーポンは含まないため、全体の合計支払額とは一致しません。
+             金額は商品の合計です。送料やクーポンは含まないため、全体の合計額とは一致しません。
            </div>
            <div class="status warn" id="rankingUnknown" hidden></div>
          </div>
@@ -311,7 +326,7 @@
               ときのために、順位とショップ名だけの文面も選べるようにしておく -->
          <label class="checkbox ranking-share-option">
            <input type="checkbox" id="rankingHideNumbers">
-           共有する文面に金額や購入数を含めない（順位とショップ名だけにする）
+           共有カードに金額や購入数を含めない（順位とショップ名だけにする）
          </label>
 
          <table class="data-table ranking-table">
@@ -321,7 +336,7 @@
                <th>ショップ名</th>
                <!-- 並べ替えに使っている側の列に印を付ける -->
                <th class="num" data-sort="count">購入商品数</th>
-               <th class="num" data-sort="amount">合計金額</th>
+               <th class="num" data-sort="amount">合計額</th>
              </tr>
            </thead>
            <tbody id="rankingTableBody"></tbody>
@@ -412,7 +427,7 @@
     <div class="foot-body">
       <div class="foot-totals">
         <div class="foot-item">
-          <span class="foot-label">合計</span>
+          <span class="foot-label">合計額</span>
           <div class="foot-figures">
             <div class="foot-figures-main">
               <span class="foot-value" id="footTotal">¥0</span>
@@ -448,25 +463,35 @@
     <div class="share-panel-body">
       <canvas id="shareCanvas" class="share-canvas" width="1200" height="675" role="img"></canvas>
 
+      <div class="share-shape">
+        <span class="share-field-label">画像の形</span>
+        <div class="segmented" id="shareRatioToggle" role="group" aria-label="画像の縦横比">
+          <button type="button" class="segmented-btn" data-ratio="16:9" aria-pressed="true">16:9</button>
+          <button type="button" class="segmented-btn" data-ratio="1:1" aria-pressed="false">1:1</button>
+          <button type="button" class="segmented-btn" data-ratio="4:3" aria-pressed="false">4:3</button>
+          <button type="button" class="segmented-btn" data-ratio="3:4" aria-pressed="false">3:4</button>
+        </div>
+      </div>
+
       <div class="share-controls">
         <div class="share-bg">
-          <span class="share-bg-label">背景画像</span>
+          <span class="share-field-label">背景画像</span>
           <div class="share-bg-row">
-            <label class="secondary small file-btn">
+            <label class="file-btn">
               画像を選ぶ
               <input type="file" id="shareBgFile" accept="image/*" hidden>
             </label>
             <button type="button" id="shareBgClearBtn" class="secondary small" hidden>元に戻す</button>
+          </div>
+          <!-- ボタンの下が空くので、そこをそのまま投げ込み先にする -->
+          <div class="share-drop" id="shareDropZone">
+            <span class="share-drop-text">ここに画像をドロップ</span>
             <span class="hint" id="shareBgName">未選択（既定の背景を使います）</span>
           </div>
-          <p class="hint">
-            選んだ画像はこのタブの中だけで使い、保存も送信もしません。
-            文字が読めるように、上から暗く重ねます。
-          </p>
         </div>
 
         <div class="share-text-box">
-          <span class="share-bg-label">投稿する文面</span>
+          <span class="share-field-label">投稿する文面</span>
           <textarea id="shareText" class="share-text" rows="8" readonly></textarea>
         </div>
       </div>

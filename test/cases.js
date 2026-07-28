@@ -496,6 +496,22 @@ check("支出推移の年別表も月を開閉できる",
   [...trendPeriodTableBody.querySelectorAll('.month-row[data-year-key="2026"]')].every(row => !row.hidden), true);
 check("別画面の表の開閉状態は独立", [...periodTableBody.querySelectorAll('.month-row[data-year-key="2026"]')].every(row => !row.hidden), true);
 
+// 比較する2つの年を選べる(2年前と見比べたいことがある)
+check("既定は今年と前年", [trendYear.value, trendBaseYear.value], ["2026", "2025"]);
+check("選べるのは注文のある年だけ", [...trendYear.options].map(o => o.value), ["2026", "2025"]);
+// 同じ年どうしを比べると比較対象が空になり、差が全額になってしまう
+check("選んでいる年は相手側から外す", [...trendBaseYear.options].map(o => o.value), ["2025"]);
+setTrendYears(2025, 2026);
+check("入れ替えると要約も入れ替わる", [...trendSummary.querySelectorAll(".stat-value")].map(e => e.textContent),
+  ["¥3,000", "¥1,000", "+¥2,000"]);
+check("過ぎた年は12月まで見る", trendCurrentYearLabel.textContent, "2025年");
+setTrendYears(2026, 2025);
+// 集計そのものも任意の年を比べられる
+check("比較年を渡せる", buildSpendingTrend([
+  { id: "x", date: "2026年1月1日 00:00", amount: 100 },
+  { id: "y", date: "2024年1月1日 00:00", amount: 400 },
+], 2026, 12, 2024).difference, -300);
+
 // 注文ごとの内訳
 const orderRows = [...orderTableBody.querySelectorAll("tr")];
 check("内訳は日付の降順(日付不明は末尾)", orderRows.map(tr => tr.cells[3].textContent), ["a2", "a1", "b1", "c2", "c1", "e1"]);
@@ -545,7 +561,11 @@ check("同じショップはURLでまとめる", shopRows[1].key, "https://sourf
 check("明細の無い注文は入らない", shopRows.reduce((n, s) => n + s.orders, 0), 2);
 check("同じショップは複数の注文をまとめる",
   aggregateByShop([{ id: "o1", items: [item("A", 100)] }, { id: "o2", items: [item("B", 200)] }])[0],
-  { key: "https://sourflavor.booth.pm/", name: "SOUR FLAVOR", url: "https://sourflavor.booth.pm/", count: 2, giftCount: 0, total: 300, gift: 0, unknown: 0, orders: 2 });
+  { key: "https://sourflavor.booth.pm/", name: "SOUR FLAVOR", url: "https://sourflavor.booth.pm/", count: 2, giftCount: 0, total: 300, gift: 0, unknown: 0, orders: 2, items: ["A", "B"] });
+// 同じ商品を複数の注文で買っても、開いたときに同じ名前が並ばないようにする
+check("商品名は重複を除いて名前順に並べる",
+  aggregateByShop([{ id: "o1", items: [item("ぼうし", 100), item("あうたー", 100)] }, { id: "o2", items: [item("ぼうし", 100)] }])[0].items,
+  ["あうたー", "ぼうし"]);
 check("数量ぶん商品数と金額を数える",
   aggregateByShop([{ id: "o1", items: [{ ...item("A", 890), quantity: 4 }] }]).map(s => [s.count, s.total])[0], [4, 3560]);
 // 読めなかった分を0として足すと、少ない額を正しい合計に見せてしまう
@@ -554,7 +574,7 @@ check("金額を読めない商品は合計に足さない", [unknownShop.total,
 
 // 表示(ギフトは金額・商品数のどちらも左に小さく添える)
 render();
-const shopRowEls = [...rankingTableBody.querySelectorAll("tr")];
+const shopRowEls = [...rankingTableBody.querySelectorAll("tr.shop-row")];
 check("ランキングの行数", shopRowEls.length, 2);
 check("ショップ名はリンクにする", shopRowEls[1].cells[1].querySelector("a").getAttribute("href"), "https://sourflavor.booth.pm/");
 check("商品数のギフト併記", shopRowEls[1].cells[2].textContent, "ギフト 1点2点");
@@ -574,9 +594,9 @@ state.cache = Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`r${i}`, 
   items: [{ shop: `ショップ${i}`, shopUrl: `https://shop${i}.booth.pm/`, name: "商品", price: (12 - i) * 100, quantity: 1, boost: 0, gift: false }],
 }]));
 render();
-const rankRows = [...rankingTableBody.querySelectorAll("tr")];
+const rankRows = [...rankingTableBody.querySelectorAll("tr.shop-row")];
 check("上位10位まで表示する", rankRows.length, 10);
-check("順位は金額の多い順", rankRows.map(tr => tr.cells[0].textContent), ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]);
+check("順位は金額の多い順", rankRows.map(tr => tr.cells[0].querySelector(".rank-badge").textContent), ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]);
 check("1〜3位に金・銀・銅の王冠を敷く",
   rankRows.slice(0, 4).map(tr => tr.cells[0].querySelector(".rank-badge").className),
   ["rank-badge rank-crown-1", "rank-badge rank-crown-2", "rank-badge rank-crown-3", "rank-badge"]);
@@ -587,6 +607,22 @@ state.index = savedRankIndex;
 state.cache = savedRankCache;
 render();
 check("全部表示できるときは件数だけ出す", rankingStats.textContent, "ショップ: 2件");
+
+// 順位をクリックすると、そのショップで買った商品が下に開く
+const firstShopKey = [...rankingTableBody.querySelectorAll("tr.shop-row")][0].dataset.shopKey;
+const firstItemsRow = () => rankingTableBody.querySelector(`tr.shop-items-row[data-shop-key="${CSS.escape(firstShopKey)}"]`);
+check("商品の行は最初は閉じている", firstItemsRow().hidden, true);
+toggleShopItems(firstShopKey);
+check("順位を押すと商品が開く", firstItemsRow().hidden, false);
+check("開いたことを三角で示す",
+  rankingTableBody.querySelector("tr.shop-row .toggle").textContent, "▾");
+check("商品名を並べる", [...firstItemsRow().querySelectorAll("li")].map(li => li.textContent).length > 0, true);
+// 並べ替えても開いたままにする(閉じると探し直しになる)
+setRankingSort("count");
+check("並べ替えても開いたまま", firstItemsRow().hidden, false);
+setRankingSort("amount");
+toggleShopItems(firstShopKey);
+check("もう一度押すと閉じる", firstItemsRow().hidden, true);
 
 // --- ランキングの基準の切り替え(金額編・購入数編) ---
 // 少額をたくさん買ったショップと、高額を1点だけのショップでは1位が入れ替わる
@@ -601,7 +637,7 @@ check("購入数編の同点は金額の多い順", aggregateByShop(tiedRows, "c
 // 切り替えは表の並びと、押されているボタン・並べ替えに使っている列の印に効く
 setRankingSort("count");
 check("購入数編に切り替えると表も入れ替わる",
-  [...rankingTableBody.querySelectorAll("tr")].map(tr => tr.cells[1].textContent),
+  [...rankingTableBody.querySelectorAll("tr.shop-row")].map(tr => tr.cells[1].textContent),
   ["SOUR FLAVOR", "べつのショップ"]);
 check("押されている基準が分かる",
   [...rankingSortToggle.querySelectorAll(".segmented-btn")].map(b => b.getAttribute("aria-pressed")),
@@ -686,13 +722,13 @@ setSummaryYear(2026);
 render();
 check("年のプルダウンは注文のある年だけ", [...summaryYear.options].map(o => o.value), ["2026", "2024"]);
 check("カードの見出し", [...summaryCards.querySelectorAll(".stat-label")].map(e => e.textContent),
-  ["2026年の支払い", "買ったもの", "支援した作者", "BOOSTの上乗せ", "いちばん買った月"]);
+  ["2026年の合計額", "買ったもの", "支援した作者", "いちばん買った月"]);
 check("カードの数字", [...summaryCards.querySelectorAll(".stat-value")].map(e => e.textContent),
-  ["¥3,800", "4点", "2人", "¥300", "2026年2月"]);
+  ["¥3,800", "4点", "2人", "2026年2月"]);
 check("合計には未収集の件数を添える",
   summaryCards.querySelector(".stat-note").textContent, "注文2件 / ギフト ¥500 / 未収集1件");
 check("この年の推し作者を並べる",
-  [...summaryTopShopsBody.querySelectorAll("tr")].map(tr => tr.cells[1].textContent), ["SOUR FLAVOR", "べつのショップ"]);
+  [...summaryTopShopsBody.querySelectorAll("tr.shop-row")].map(tr => tr.cells[1].textContent), ["SOUR FLAVOR", "べつのショップ"]);
 check("過去に未収集が無ければ断らない", summaryNewShopWarn.hidden, true);
 
 // まとめの共有(ボタンには年が入る。何年分が出るのか押す前に分かる必要がある)
@@ -700,7 +736,7 @@ location.hash = "#/summary";
 renderCurrentView();
 check("まとめでは年入りの共有ボタンになる", [shareBtn.textContent, shareBtn.disabled], ["𝕏で2026年のまとめを共有", false]);
 check("まとめの共有文面", buildSummaryShareText(summaryShareStats),
-  "2026年のBOOTHお買いもの🛍️\n\n支払い ¥3,800（2件）\n買ったもの 4点\n支援した作者 2人\nうちはじめて 1人\nBOOSTの上乗せ ¥300\nいちばん買った月 2026年2月\n\n推し作者\n🥇 SOUR FLAVOR\n🥈 べつのショップ\n\n#BOOTHお買いものレポート");
+  "2026年のBOOTHお買いもの🛍️\n\n合計額 ¥3,800（2件）\n買ったもの 4点\n支援した作者 2人\nうちはじめて 1人\nいちばん買った月 2026年2月\n\n推し作者\n🥇 SOUR FLAVOR\n🥈 べつのショップ\n\n#BOOTHお買いものレポート");
 // 未収集があると数字がずれるので、出す前に断る
 check("まとめの共有 未収集を断る", summaryShareIssues(summaryShareStats), ["2026年に未収集の注文が1件あります"]);
 check("まとめの共有 揃っていれば断らない",
@@ -743,10 +779,15 @@ check("開けたときは押し直しを案内しない", noticeBox.hidden, true
 const openedWindow = { opener: {} };
 openShareWith(openedWindow);
 check("開いたタブの opener は切る", openedWindow.opener, null);
-// 本当に止められたときだけ案内する
+// 本当に止められたときだけ案内する。
+// 押す先のボタンは画面によって文言が変わるので、そのまま引用する
+location.hash = "#/ranking";
+renderCurrentView();
 openShareWith(null);
 check("止められたときは押し直しを案内する",
-  noticeBox.textContent.includes("もう一度「Xで共有」を押してください"), true);
+  noticeBox.textContent.includes("もう一度「𝕏でランキングを共有」を押してください"), true);
+location.hash = "#/report";
+renderCurrentView();
 clearNotice();
 
 // --- 共有カード ---
@@ -756,7 +797,7 @@ const summaryShareCard = buildSummaryShareCard(buildYearSummary(summaryRows, 202
 check("まとめのカードの見出し", [summaryShareCard.title, summaryShareCard.subtitle],
   ["2026年のお買いもの", "BOOTHお買いものレポート"]);
 check("まとめのカードの数字", summaryShareCard.stats.map(s => [s.label, s.value]),
-  [["支払い", "¥3,800"], ["買ったもの", "4点"], ["支援した作者", "2人"], ["BOOSTの上乗せ", "¥300"]]);
+  [["合計額", "¥3,800"], ["買ったもの", "4点"], ["支援した作者", "2人"]]);
 check("まとめのカードは推し作者を並べる", summaryShareCard.list.map(r => [r.rank, r.name]),
   [[1, "SOUR FLAVOR"], [2, "べつのショップ"]]);
 // 画像だけが転載されることがあるので、断り書きは画像にも要る
@@ -766,7 +807,7 @@ check("ランキングのカードは金額を出す", rankingCard.list[0].value
 const hiddenCard = buildRankingShareCard({ sort: "amount", rows: [{ name: "A", count: 1, total: 100 }] }, true);
 check("金額を伏せたら断り書きも出さない", [hiddenCard.list[0].value, hiddenCard.note], ["", ""]);
 const totalCard = buildTotalShareCard({ year: 2026, total: 100000, count: 5, yearTotal: 400, yearCount: 1, pendingCount: 0, indexComplete: true });
-check("合計のカードは合計と今年を並べる", totalCard.stats.map(s => s.label), ["合計", "2026年"]);
+check("合計のカードは合計と今年を並べる", totalCard.stats.map(s => s.label), ["合計額", "2026年"]);
 
 // 描画(実際にcanvasへ描けること。文字が1つも乗らないと真っ白なカードが出る)
 const testCanvas = document.createElement("canvas");
@@ -792,8 +833,37 @@ check("収まる金額は大きいまま", testCtx.font.includes("52px"), true);
 openSharePanel({ name: "booth-2026", text: "本文", card: summaryShareCard });
 check("パネルを開くと本文を出す", [sharePanel.hidden, shareOverlay.hidden, shareText.value], [false, false, "本文"]);
 check("保存するファイル名", shareCardFileName(), "booth-2026.png");
+// 開いている間にフッターの共有を押しても何も起きない。押せる見た目のままだと壊れて見える
+check("パネルを開いている間は共有ボタンを押せない", shareBtn.disabled, true);
+
+// 縦横比。canvasの大きさごと変える
+check("既定は16:9", [shareCanvas.width, shareCanvas.height], [1200, 675]);
+setShareRatio("1:1");
+check("1:1に変えるとcanvasも正方形になる", [shareCanvas.width, shareCanvas.height], [1080, 1080]);
+check("押されている比率が分かる",
+  [...shareRatioToggle.querySelectorAll(".segmented-btn")].map(b => b.getAttribute("aria-pressed")),
+  ["false", "true", "false", "false"]);
+setShareRatio("3:4");
+check("3:4は縦長になる", [shareCanvas.width, shareCanvas.height], [900, 1200]);
+// 縦長でも中身が入りきること(欠けると数字が読めない画像が出る)
+check("縦長でも描ける", (() => {
+  drawShareCard(shareCanvas.getContext("2d"), summaryShareCard, null);
+  const data = shareCanvas.getContext("2d").getImageData(0, 0, shareCanvas.width, shareCanvas.height).data;
+  for (let i = 0; i < data.length; i += 4) { if (data[i] < 80 && data[i + 1] < 80) return true; }
+  return false;
+})(), true);
+check("知らない比率は無視する", (() => { setShareRatio("2:5"); return shareRatio; })(), "3:4");
+setShareRatio("16:9");
+
+// 状態表示は用が済んだら消す。前回の結果が残ると今の操作の結果と見分けが付かない
+setShareCardStatus("画像を保存しました。");
+check("状態表示を出す", shareCardStatus.textContent, "画像を保存しました。");
+setShareCardStatus("");
+check("空を渡すと消える", shareCardStatus.textContent, "");
+
 closeSharePanel();
 check("閉じると中身を捨てる", [sharePanel.hidden, sharePayload], [true, null]);
+check("閉じると共有ボタンが戻る", shareBtn.disabled, false);
 
 // --- CSV出力(データ出力の画面) ---
 check("csvField そのまま", csvField("髪型A"), "髪型A");
@@ -1363,7 +1433,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   // ショップ別の金額は商品の合計なので、全体の合計支払額とは一致しない。
   // 断りを外すと、送料やクーポンの分だけ少ない額を「そのショップに使った額」として見せることになる
   check("ランキングに合計と一致しない旨の断りがある",
-    dashboardHtml.includes("全体の合計支払額とは一致しません"), true);
+    dashboardHtml.includes("全体の合計額とは一致しません"), true);
   check("ランキング画面をメニューから開ける",
     dashboardDoc.querySelector('.nav-link[data-view="ranking"]').getAttribute("href"), "#/ranking");
   check("メニューに追加した画面が並んでいる",
@@ -1371,7 +1441,23 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
     ["#/report", "#/ranking", "#/trends", "#/summary", "#/export", "#/backup"]);
   // まとめの作者別金額もランキングと同じ商品合計なので、同じ断りを画面に出す
   check("まとめに合計と一致しない旨の断りがある",
-    dashboardHtml.includes("足しても上の合計金額とは一致しません"), true);
+    dashboardHtml.includes("足しても上の合計額とは一致しません"), true);
+  // 年別・月別は合計額の内訳なので同じ枠に入れ、既定では畳んでおく
+  const periodAccordion = dashboardDoc.getElementById("periodAccordion");
+  check("年別・月別は合計額の中に入れる",
+    periodAccordion.closest("#summarySection") !== null, true);
+  check("年別・月別は畳んだ状態で始める", periodAccordion.hasAttribute("open"), false);
+  check("年別・月別の表はその中にある",
+    periodAccordion.querySelector("#periodTableBody") !== null, true);
+  // 一括集計はこの画面で最初に押すボタンなので、他と同じ白地だと見つけられない
+  check("一括集計は目立つ色にする",
+    dashboardDoc.getElementById("runAllBtn").className, "primary");
+
+  // 読み込めなかったファイルを名指しできるよう、スクリプトの一覧と対応させる
+  const harnessDoc = new DOMParser().parseFromString(await (await fetch("index.html")).text(), "text/html");
+  check("読み込み確認は全ての拡張スクリプトを見ている",
+    [...harnessDoc.querySelectorAll('script[src^="../extension/"]')].map(s => s.getAttribute("src").replace("../extension/", "")),
+    REQUIRED_GLOBALS.map(([file]) => file));
 
   const dashboardCss = await (await fetch("../extension/dashboard.css")).text();
   const dashboardStyle = document.createElement("style");

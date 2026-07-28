@@ -117,13 +117,12 @@ function buildSummaryShareText(stats) {
   const lines = [
     `${stats.year}年のBOOTHお買いもの🛍️`,
     "",
-    `支払い ${formatYen(stats.total)}（${stats.orderCount}件）`,
+    `合計額 ${formatYen(stats.total)}（${stats.orderCount}件）`,
     `買ったもの ${stats.itemCount}点`,
     `支援した作者 ${stats.shopCount}人`,
   ];
   // はじめて買った作者がいない年に「はじめて 0人」と出すと寂しいだけなので落とす
   if (stats.newShopCount > 0) lines.push(`うちはじめて ${stats.newShopCount}人`);
-  if (stats.boost > 0) lines.push(`BOOSTの上乗せ ${formatYen(stats.boost)}`);
   if (stats.busiestMonth) lines.push(`いちばん買った月 ${monthLabel(stats.busiestMonth.key)}`);
   if (stats.topShops.length > 0) {
     lines.push("", "推し作者");
@@ -156,10 +155,17 @@ function summaryShareConfirmMessage(stats) {
   );
 }
 
-// 𝕏のタイムラインで切り取られない比率(16:9)。実寸は投稿後の縮小を見込んで大きめ
-const SHARE_CARD_WIDTH = 1200;
-const SHARE_CARD_HEIGHT = 675;
-const SHARE_CARD_PADDING = 72;
+// 投稿先に合わせて選べる縦横比。実寸は投稿後の縮小を見込んで大きめに取る。
+// 既定は𝕏のタイムラインで切り取られない16:9
+const SHARE_RATIOS = {
+  "16:9": { width: 1200, height: 675 },
+  "1:1": { width: 1080, height: 1080 },
+  "4:3": { width: 1200, height: 900 },
+  "3:4": { width: 900, height: 1200 },
+};
+const DEFAULT_SHARE_RATIO = "16:9";
+const SHARE_CARD_WIDTH = SHARE_RATIOS[DEFAULT_SHARE_RATIO].width;
+const SHARE_CARD_HEIGHT = SHARE_RATIOS[DEFAULT_SHARE_RATIO].height;
 
 const SHARE_CARD_FONT = '"Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif';
 
@@ -185,7 +191,7 @@ function buildTotalShareCard(stats) {
     "BOOTHお買いものレポート"
   );
   if (full) {
-    card.stats.push({ label: "合計", value: formatYen(stats.total), note: `${stats.count}件` });
+    card.stats.push({ label: "合計額", value: formatYen(stats.total), note: `${stats.count}件` });
   }
   card.stats.push({
     label: `${stats.year}年`,
@@ -217,7 +223,7 @@ function buildRankingShareCard(stats, hideNumbers) {
 function buildSummaryShareCard(stats) {
   const card = shareCardBase(`${stats.year}年のお買いもの`, "BOOTHお買いものレポート");
   card.stats.push({
-    label: "支払い",
+    label: "合計額",
     value: formatYen(stats.total),
     note: `${stats.orderCount}件`,
   });
@@ -227,9 +233,6 @@ function buildSummaryShareCard(stats) {
     value: `${stats.shopCount}人`,
     note: stats.newShopCount > 0 ? `はじめて ${stats.newShopCount}人` : "",
   });
-  if (stats.boost > 0) {
-    card.stats.push({ label: "BOOSTの上乗せ", value: formatYen(stats.boost), note: "" });
-  }
   card.list = stats.topShops.map((row, index) => ({
     rank: index + 1,
     name: row.name,
@@ -267,30 +270,34 @@ function drawCover(ctx, image, width, height) {
   ctx.drawImage(image, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
 }
 
-function drawShareCardBackground(ctx, background) {
+function drawShareCardBackground(ctx, background, width, height) {
   if (background) {
-    drawCover(ctx, background, SHARE_CARD_WIDTH, SHARE_CARD_HEIGHT);
+    drawCover(ctx, background, width, height);
     // どんな写真でも文字が読めるように暗く敷く。これが無いと明るい画像で白文字が消える
     ctx.fillStyle = "rgba(20, 16, 24, 0.58)";
-    ctx.fillRect(0, 0, SHARE_CARD_WIDTH, SHARE_CARD_HEIGHT);
+    ctx.fillRect(0, 0, width, height);
     return "dark";
   }
-  const gradient = ctx.createLinearGradient(0, 0, SHARE_CARD_WIDTH, SHARE_CARD_HEIGHT);
+  const gradient = ctx.createLinearGradient(0, 0, width, height);
   gradient.addColorStop(0, "#f6e6ff");
   gradient.addColorStop(1, "#ffffff");
   ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, SHARE_CARD_WIDTH, SHARE_CARD_HEIGHT);
+  ctx.fillRect(0, 0, width, height);
   return "light";
 }
 
+// 大きさは canvas から読む。縦横比を選べるので寸法を決め打ちしない
 function drawShareCard(ctx, card, background) {
-  const theme = SHARE_CARD_THEMES[drawShareCardBackground(ctx, background)];
+  const width = ctx.canvas.width;
+  const height = ctx.canvas.height;
+  const padding = Math.round(width * 0.06);
+  const theme = SHARE_CARD_THEMES[drawShareCardBackground(ctx, background, width, height)];
   ctx.textBaseline = "alphabetic";
   ctx.textAlign = "left";
 
-  const left = SHARE_CARD_PADDING;
-  const right = SHARE_CARD_WIDTH - SHARE_CARD_PADDING;
-  let y = SHARE_CARD_PADDING + 34;
+  const left = padding;
+  const right = width - padding;
+  let y = padding + 34;
 
   ctx.fillStyle = theme.muted;
   ctx.font = `24px ${SHARE_CARD_FONT}`;
@@ -308,26 +315,31 @@ function drawShareCard(ctx, card, background) {
   // 数字は横に並べる。段組にすると1項目のときに空白が目立つ
   if (card.stats.length > 0) {
     y += 96;
-    const columnWidth = (right - left) / card.stats.length;
+    // 横長なら1行に並べられるが、正方形や縦長では潰れるので2列で折り返す
+    const perRow = width >= 1100 ? card.stats.length : Math.min(2, card.stats.length);
+    const columnWidth = (right - left) / perRow;
     // 隣の数字とくっつかないよう、列の間を空けたぶんだけ使える幅を狭める
     const textWidth = columnWidth - 24;
+    const rowHeight = 132;
     card.stats.forEach((stat, index) => {
-      const x = left + columnWidth * index;
+      const x = left + columnWidth * (index % perRow);
+      const top = y + rowHeight * Math.floor(index / perRow);
+
       ctx.fillStyle = theme.muted;
       ctx.font = `24px ${SHARE_CARD_FONT}`;
-      ctx.fillText(fitText(ctx, stat.label, textWidth), x, y);
+      ctx.fillText(fitText(ctx, stat.label, textWidth), x, top);
 
       ctx.fillStyle = theme.fg;
       fitFontSize(ctx, stat.value, textWidth, [52, 44, 38, 32], "bold");
-      ctx.fillText(stat.value, x, y + 62);
+      ctx.fillText(stat.value, x, top + 62);
 
       if (stat.note) {
         ctx.fillStyle = theme.muted;
         ctx.font = `22px ${SHARE_CARD_FONT}`;
-        ctx.fillText(fitText(ctx, stat.note, textWidth), x, y + 98);
+        ctx.fillText(fitText(ctx, stat.note, textWidth), x, top + 98);
       }
     });
-    y += 120;
+    y += rowHeight * Math.ceil(card.stats.length / perRow) - 12;
   }
 
   if (card.list.length > 0) {
@@ -362,7 +374,7 @@ function drawShareCard(ctx, card, background) {
   }
 
   // 断り書きとハッシュタグは常に最下段。上の行数で位置が動くと落ち着かない
-  const bottom = SHARE_CARD_HEIGHT - SHARE_CARD_PADDING;
+  const bottom = height - padding;
   if (card.note) {
     ctx.fillStyle = theme.muted;
     ctx.font = `22px ${SHARE_CARD_FONT}`;

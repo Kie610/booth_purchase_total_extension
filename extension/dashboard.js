@@ -30,6 +30,8 @@ document.addEventListener("keydown", (event) => {
 });
 window.addEventListener("hashchange", () => {
   renderCurrentView();
+  // 別の画面へ移ったあとに前の共有の結果が残っていると、今の画面の話に見える
+  setShareCardStatus("");
   window.scrollTo(0, 0);
 });
 
@@ -215,10 +217,15 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && !sharePanel.hidden) closeSharePanel();
 });
 
+// 画像の縦横比。投稿先に合わせて選べるようにする
+shareRatioToggle.addEventListener("click", (event) => {
+  const btn = event.target.closest(".segmented-btn");
+  if (btn) setShareRatio(btn.dataset.ratio);
+});
+
 // 選んだ画像はこのタブの中だけで使う。ストレージへ入れると、
 // 画像1枚で保存できる注文データを圧迫しかねない
-shareBgFile.addEventListener("change", async () => {
-  const file = shareBgFile.files && shareBgFile.files[0];
+async function applyShareBackgroundFile(file) {
   if (!file) return;
   try {
     setShareBackground(await createImageBitmap(file), file.name);
@@ -227,8 +234,31 @@ shareBgFile.addEventListener("change", async () => {
     // 拡張子だけ画像で中身が違うファイルもある。黙って既定の背景に戻さない
     setShareCardStatus("この画像は読み込めませんでした。別の画像を選んでください。");
   }
+}
+
+shareBgFile.addEventListener("change", async () => {
+  await applyShareBackgroundFile(shareBgFile.files && shareBgFile.files[0]);
   // 同じファイルを選び直したときも change が起きるようにする
   shareBgFile.value = "";
+});
+
+// 投げ込みでも同じことができるようにする。ページ全体で既定の動作を止めないと、
+// 枠の外へ落としたときにブラウザが画像を開いてしまい、作りかけの共有が消える
+for (const type of ["dragover", "drop"]) {
+  window.addEventListener(type, (event) => event.preventDefault());
+}
+
+shareDropZone.addEventListener("dragover", () => shareDropZone.classList.add("over"));
+shareDropZone.addEventListener("dragleave", () => shareDropZone.classList.remove("over"));
+shareDropZone.addEventListener("drop", async (event) => {
+  shareDropZone.classList.remove("over");
+  const file = event.dataTransfer && event.dataTransfer.files[0];
+  if (!file) {
+    // 画像そのものではなくWebページ上の画像を投げると、ファイルが付いてこない
+    setShareCardStatus("画像ファイルを投げ込んでください。");
+    return;
+  }
+  await applyShareBackgroundFile(file);
 });
 
 shareBgClearBtn.addEventListener("click", () => {
@@ -273,6 +303,20 @@ shareOpenBtn.addEventListener("click", () => {
 // まとめる年の切り替え
 summaryYear.addEventListener("change", () => setSummaryYear(summaryYear.value));
 
+// 比較する2つの年の切り替え
+trendYear.addEventListener("change", () => setTrendYears(trendYear.value, trendBaseYear.value));
+trendBaseYear.addEventListener("change", () =>
+  setTrendYears(trendYear.value, trendBaseYear.value)
+);
+
+// 順位をクリックすると、そのショップで買った商品を開く
+for (const tbody of [rankingTableBody, summaryTopShopsBody]) {
+  tbody.addEventListener("click", (event) => {
+    const cell = event.target.closest("td.rank");
+    if (cell) toggleShopItems(cell.closest("tr.shop-row").dataset.shopKey);
+  });
+}
+
 // 金額編と購入数編の切り替え
 rankingSortToggle.addEventListener("click", (event) => {
   const btn = event.target.closest(".segmented-btn");
@@ -289,9 +333,10 @@ function openShareWindow(text) {
   const opened = window.open(url.toString(), "_blank");
   if (!opened) {
     // 収集を挟むとクリックから時間が空くため、ブラウザに止められることがある。
-    // 収集は済んでいるので、押し直せば今度はその場で開ける
+    // 収集は済んでいるので、押し直せば今度はその場で開ける。
+    // 押す先のボタンは開いている画面で文言が変わるので、そのまま引用する
     addNotice(
-      "ブラウザに新しいタブを止められました。もう一度「Xで共有」を押してください。"
+      `ブラウザに新しいタブを止められました。もう一度「${shareRetryLabel()}」を押してください。`
     );
     return;
   }

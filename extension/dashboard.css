@@ -295,15 +295,13 @@ button.primary:hover:not(:disabled) {
   background: #e03f42;
 }
 
-button.secondary,
-label.file-btn {
+button.secondary {
   background: #fff;
   color: var(--fg);
   border-color: var(--border-strong);
 }
 
-button.secondary:hover:not(:disabled),
-label.file-btn:hover {
+button.secondary:hover:not(:disabled) {
   background: var(--bg-hover);
 }
 
@@ -919,7 +917,7 @@ button.icon-btn:hover:not(:disabled) {
   color: var(--fg);
 }
 
-/* 実寸1200x675のcanvasを枠の幅に合わせて縮める */
+/* 実寸のcanvasを枠の幅に合わせて縮める。高さは縦横比のまま追従させる */
 .share-canvas {
   display: block;
   width: 100%;
@@ -935,11 +933,59 @@ button.icon-btn:hover:not(:disabled) {
   gap: 16px;
 }
 
-.share-bg-label {
+.share-field-label {
   display: block;
   margin-bottom: 6px;
   font-size: 12px;
   font-weight: 700;
+  color: var(--fg-muted);
+}
+
+.share-shape {
+  margin-bottom: 16px;
+}
+
+/* input[type=file] の見た目は揃えられないので、labelをボタンに見せて隠す。
+   寸法は button.small に合わせる。背景を選ぶのはこのパネルの主な操作なので、
+   白地のボタンに埋もれないよう primary と同じ色を使う */
+label.file-btn {
+  display: inline-block;
+  padding: 5px 12px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+label.file-btn:hover {
+  background: #e03f42;
+}
+
+/* ボタンのすぐ下を投げ込み先にする。何もしていないときは枠線だけの控えめな見た目 */
+.share-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 84px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 2px dashed var(--border-strong);
+  border-radius: 8px;
+  text-align: center;
+}
+
+.share-drop.over {
+  border-color: var(--accent);
+  background: #fff5f5;
+}
+
+.share-drop-text {
+  font-size: 12px;
   color: var(--fg-muted);
 }
 
@@ -948,17 +994,6 @@ button.icon-btn:hover:not(:disabled) {
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-}
-
-/* input[type=file] の見た目は揃えられないので、labelをボタンに見せて隠す。
-   寸法は button.small に合わせる */
-label.file-btn {
-  display: inline-block;
-  padding: 5px 12px;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  font-size: 12px;
-  cursor: pointer;
 }
 
 .share-text {
@@ -1038,8 +1073,55 @@ button.segmented-btn.current {
 
 .ranking-table th.rank,
 .ranking-table td.rank {
-  width: 64px;
+  width: 78px;
   text-align: center;
+}
+
+/* 順位をクリックすると買った商品が開く */
+.ranking-table td.rank {
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ranking-table td.rank .toggle {
+  margin-left: 4px;
+  color: var(--fg-muted);
+  font-size: 11px;
+}
+
+/* 編を切り替えると太字になる行が入れ替わり、中身の幅で決まる列は少し動く。
+   幅を決め打ちして、切り替えても数字の位置が変わらないようにする */
+.ranking-table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.ranking-table th.num,
+.ranking-table td.num {
+  width: 150px;
+}
+
+/* 幅を固定した分、長いショップ名は折り返して隣の数字にかぶらせない */
+.ranking-table td:nth-child(2) {
+  overflow-wrap: anywhere;
+}
+
+/* .data-table td の余白より詳しく書かないと効かない。
+   順位の列ぶん左を空けて、どのショップの中身かを見た目でつなぐ */
+.data-table td.shop-items {
+  padding: 6px 16px 14px 78px;
+  background: var(--bg-soft);
+}
+
+.shop-item-list {
+  margin: 0 0 4px;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+tr.shop-row:hover td {
+  background: var(--bg-soft);
 }
 
 /* 順位の数字。1〜3位はこの後ろに王冠を敷く */
