@@ -974,6 +974,59 @@ check("モーダルの後ろは操作できない", document.getElementById("vie
 check("保存するファイル名", shareCardFileName(), "booth-2026.png");
 // 開いている間にフッターの共有を押しても何も起きない。押せる見た目のままだと壊れて見える
 check("パネルを開いている間は共有ボタンを押せない", shareBtn.disabled, true);
+check("背景画像が無いと調整UIを使えない",
+  [shareScaleInput.disabled, shareCanvas.tabIndex, shareCanvas.getAttribute("aria-disabled")],
+  [true, -1, "true"]);
+
+// coverを基準に拡大し、ドラッグ方向へ画像そのものが動くこと
+const coverCalls = [];
+drawCover(
+  { drawImage: (...args) => coverCalls.push(args) },
+  { width: 200, height: 100 },
+  100,
+  100,
+  { scale: 2, x: 1, y: -1 }
+);
+check("背景の拡大と位置を描画へ反映する", coverCalls[0].slice(1), [0, -100, 400, 200]);
+
+const adjustableBackground = document.createElement("canvas");
+adjustableBackground.width = 200;
+adjustableBackground.height = 100;
+setShareBackground(adjustableBackground, "background.png");
+check("背景画像を選ぶと調整UIを使える",
+  [shareScaleInput.disabled, shareCanvas.tabIndex, shareCanvas.classList.contains("adjustable")],
+  [false, 0, true]);
+setShareBackgroundScale(175);
+check("拡大率を表示へ反映する",
+  [shareBackgroundTransform.scale, shareScaleInput.value, shareScaleValue.textContent],
+  [1.75, "175", "175%"]);
+const savedPointerCapture = shareCanvas.setPointerCapture;
+shareCanvas.setPointerCapture = () => {};
+shareCanvas.dispatchEvent(new PointerEvent("pointerdown", {
+  pointerId: 7, clientX: 10, clientY: 10, bubbles: true, cancelable: true,
+}));
+shareCanvas.dispatchEvent(new PointerEvent("pointermove", {
+  pointerId: 7, clientX: 40, clientY: 30, bubbles: true, cancelable: true,
+}));
+shareCanvas.dispatchEvent(new PointerEvent("pointerup", {
+  pointerId: 7, clientX: 40, clientY: 30, bubbles: true, cancelable: true,
+}));
+shareCanvas.setPointerCapture = savedPointerCapture;
+check("プレビューのドラッグで背景位置を動かす",
+  [shareBackgroundTransform.x > 0, shareBackgroundTransform.y > 0,
+   shareCanvas.classList.contains("dragging")], [true, true, false]);
+const beforeKeyboardMove = shareBackgroundTransform.x;
+shareCanvas.dispatchEvent(new KeyboardEvent("keydown", {
+  key: "ArrowLeft", bubbles: true, cancelable: true,
+}));
+check("方向キーでも背景位置を動かす", shareBackgroundTransform.x < beforeKeyboardMove, true);
+moveShareBackground(2, -2);
+check("背景位置は描画できる範囲に収める",
+  [shareBackgroundTransform.x, shareBackgroundTransform.y], [1, -1]);
+setShareBackground(null, "");
+check("背景を戻すと調整値も初期化する",
+  [shareBackgroundTransform, shareScaleInput.disabled, shareScaleValue.textContent],
+  [{ scale: 1, x: 0, y: 0 }, true, "100%"]);
 
 // 縦横比。canvasの大きさごと変える
 check("既定は16:9", [shareCanvas.width, shareCanvas.height], [1200, 675]);
@@ -1235,6 +1288,20 @@ check("Escで閉じる", navDrawer.hidden, true);
 menuBtn.click();
 navDrawer.querySelector('.nav-link[data-view="export"]').click();
 check("メニューから移動すると閉じる", navDrawer.hidden, true);
+check("ヘッダーにコピーライトを表示する",
+  document.querySelector(".copyright").textContent, "©2026 Kie工房");
+menuBtn.click();
+authorBtn.click();
+check("メニュー末尾から作者情報を開く",
+  [navDrawer.hidden, authorPanel.hidden, authorOverlay.hidden, document.activeElement === authorCloseBtn],
+  [true, false, false, true]);
+check("作者情報の後ろは操作できない", document.getElementById("view-report").inert, true);
+check("作者リンクを3件表示する",
+  [...authorPanel.querySelectorAll("a")].map((a) => a.href),
+  ["https://github.com/Kie610", "https://x.com/niconicokito", "https://x.com/NicoNicoKieVRC"]);
+document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+check("作者情報をEscで閉じる",
+  [authorPanel.hidden, authorOverlay.hidden, document.activeElement === menuBtn], [true, true, true]);
 location.hash = "#/report";
 renderCurrentView();
 
@@ -1809,6 +1876,18 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   check("メニューに追加した画面が並んでいる",
     [...dashboardDoc.querySelectorAll(".nav-link")].map((a) => a.getAttribute("href")),
     ["#/report", "#/ranking", "#/trends", "#/summary", "#/export", "#/backup"]);
+  check("作者情報はメニューの最後に置く",
+    dashboardDoc.getElementById("navDrawer").lastElementChild.id, "authorBtn");
+  check("ヘッダー右端にコピーライトを置く",
+    dashboardDoc.querySelector(".copyright").textContent, "©2026 Kie工房");
+  check("作者情報を正式なモーダルとして宣言",
+    [dashboardDoc.getElementById("authorPanel").getAttribute("role"),
+     dashboardDoc.getElementById("authorPanel").getAttribute("aria-modal")], ["dialog", "true"]);
+  check("作者情報に指定のリンクを載せる",
+    [...dashboardDoc.querySelectorAll(".author-links a")].map((a) => a.getAttribute("href")),
+    ["https://github.com/Kie610", "https://x.com/niconicokito", "https://x.com/NicoNicoKieVRC"]);
+  check("著者近影は外部通信せず同梱画像を使う",
+    dashboardDoc.getElementById("authorPortrait").getAttribute("src"), "icons/author-kie.png");
   // まとめの作者別金額もランキングと同じ商品合計なので、同じ断りを画面に出す
   check("まとめに合計と一致しない旨の断りがある",
     dashboardHtml.includes("足しても上の合計額とは一致しません"), true);
@@ -1851,6 +1930,10 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   check("色と模様を別々に選ばせる",
     [Boolean(dashboardDoc.getElementById("shareColors")),
      Boolean(dashboardDoc.getElementById("sharePatterns"))], [true, true]);
+  const scaleInput = dashboardDoc.getElementById("shareScale");
+  check("画像の形の横に拡大率を置く",
+    [scaleInput.closest(".share-shape") !== null, scaleInput.min, scaleInput.max, scaleInput.value],
+    [true, "100", "300", "100"]);
 
   // 読み込めなかったファイルを名指しできるよう、スクリプトの一覧と対応させる
   const harnessDoc = new DOMParser().parseFromString(await (await fetch("index.html")).text(), "text/html");
@@ -1918,6 +2001,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
 
   // 未リリースのうちは 0.x に留める。1.0.0 に上げるのはリリースを宣言するときだけ
   check("バージョンは 0.x(未リリース)", /^0\.\d+\.\d+$/.test(manifest.version), true);
+  check("今回の機能追加版", manifest.version, "0.29.0");
 
   check("manifestのiconsに4サイズを宣言", manifest.icons, expectedIcons);
   check("ツールバー用のdefault_iconも同じ4サイズ", manifest.action.default_icon, expectedIcons);
@@ -1933,6 +2017,8 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
     iconSizes.push(`${size}: ${bitmap.width}x${bitmap.height}`);
   }
   check("アイコンの実ファイルが宣言どおりの寸法", iconSizes, ICON_SIZES.map((s) => `${s}: ${s}x${s}`));
+  const authorImage = await createImageBitmap(await (await fetch("../extension/icons/author-kie.png")).blob());
+  check("著者近影の実ファイルを同梱", [authorImage.width, authorImage.height], [420, 420]);
 
   document.getElementById("out").textContent =
     lines.join("\n") + `\n\n---- ${failures === 0 ? "ALL PASS" : failures + " FAILED"} (${lines.length} checks) ----`;

@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="script-src 'self'; object-src 'self'">
 <title>dashboard test harness</title>
+<link rel="stylesheet" href="../extension/dashboard.css">
 </head>
 <!-- dashboard.js の init() は保存データを非同期で state へ読み込む。
      テストは state を直接差し替えるので、走らせると競合する -->
@@ -16,6 +17,7 @@
 <!-- dashboard.html と同じ要素構成 -->
 <button id="menuBtn" aria-expanded="false"></button>
 <span id="viewTitle"></span>
+<span class="copyright">©2026 Kie工房</span>
 <div id="navOverlay" hidden></div>
 <nav id="navDrawer" hidden>
 <a class="nav-link" href="#/report" data-view="report">お買いものレポート</a>
@@ -24,7 +26,21 @@
 <a class="nav-link" href="#/summary" data-view="summary">今年のまとめ</a>
 <a class="nav-link" href="#/export" data-view="export">データ出力</a>
 <a class="nav-link" href="#/backup" data-view="backup">データの引っ越し</a>
+<button id="authorBtn" class="nav-author-btn">作者について</button>
 </nav>
+<div id="authorOverlay" class="author-overlay" hidden></div>
+<section id="authorPanel" class="author-panel" role="dialog" aria-modal="true" hidden>
+  <div class="author-panel-head"><h2>作者について</h2><button id="authorCloseBtn" class="icon-btn">×</button></div>
+  <div class="author-profile">
+    <img id="authorPortrait" class="author-portrait" src="../extension/icons/author-kie.png" alt="Kieの著者近影">
+    <div><p class="author-name">Kie <span>（きー）</span></p><p class="author-bio">BOOTHの「Kie工房」でVRChat向けアイテムを制作・公開しています。3Dプリンターやものづくりも楽しんでいます。</p></div>
+  </div>
+  <div class="author-links">
+    <a href="https://github.com/Kie610" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://x.com/niconicokito" target="_blank" rel="noopener">X 個人アカウント</a>
+    <a href="https://x.com/NicoNicoKieVRC" target="_blank" rel="noopener">X Kie工房アカウント</a>
+  </div>
+</section>
 
 <div id="pendingBanner" hidden><span id="pendingBannerText"></span><a href="#/report">お買いものレポートで収集する</a></div>
 
@@ -168,10 +184,12 @@
     <button class="segmented-btn" data-ratio="4:3" aria-pressed="false">4:3</button>
     <button class="segmented-btn" data-ratio="3:4" aria-pressed="false">3:4</button>
   </div>
+  <input type="range" id="shareScale" min="100" max="300" step="5" value="100" disabled>
+  <output id="shareScaleValue">100%</output>
   <div id="shareDropZone"></div>
   <div id="shareColors"></div>
   <div id="sharePatterns"></div>
-  <canvas id="shareCanvas" width="1200" height="675" role="img" aria-label="作成した共有カードのプレビュー"></canvas>
+  <canvas id="shareCanvas" width="1200" height="675" role="img" tabindex="-1" aria-label="作成した共有カードのプレビュー" aria-disabled="true"></canvas>
   <input type="file" id="shareBgFile">
   <button id="shareBgClearBtn" hidden></button>
   <span id="shareBgName"></span>

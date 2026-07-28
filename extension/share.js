@@ -503,18 +503,30 @@ function shareTemplate(colorId, patternId) {
   };
 }
 
-// 背景画像は縦横比を保ったまま全面を覆う(cover)。引き伸ばすと人物や絵が歪む
-function drawCover(ctx, image, width, height) {
-  const scale = Math.max(width / image.width, height / image.height);
+// 背景画像は縦横比を保ったまま全面を覆う(cover)。引き伸ばすと人物や絵が歪む。
+// scaleはcoverを100%とした追加の拡大率、x/yは余白の端から端までを-1〜1で表す。
+function drawCover(ctx, image, width, height, transform = {}) {
+  const zoom = Math.max(1, Number(transform.scale) || 1);
+  const scale = Math.max(width / image.width, height / image.height) * zoom;
   const drawWidth = image.width * scale;
   const drawHeight = image.height * scale;
-  ctx.drawImage(image, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
+  const roomX = Math.max(0, (drawWidth - width) / 2);
+  const roomY = Math.max(0, (drawHeight - height) / 2);
+  const x = Math.max(-1, Math.min(1, Number(transform.x) || 0));
+  const y = Math.max(-1, Math.min(1, Number(transform.y) || 0));
+  ctx.drawImage(
+    image,
+    (width - drawWidth) / 2 + x * roomX,
+    (height - drawHeight) / 2 + y * roomY,
+    drawWidth,
+    drawHeight
+  );
 }
 
 // アップロードした画像が最優先。次にテンプレート、どちらも無ければ既定の下地
-function drawShareCardBackground(ctx, background, width, height, template) {
+function drawShareCardBackground(ctx, background, width, height, template, backgroundTransform) {
   if (background) {
-    drawCover(ctx, background, width, height);
+    drawCover(ctx, background, width, height, backgroundTransform);
     // どんな写真でも文字が読めるように暗く敷く。これが無いと明るい画像で白文字が消える
     ctx.fillStyle = "rgba(20, 16, 24, 0.58)";
     ctx.fillRect(0, 0, width, height);
@@ -544,13 +556,15 @@ function shareCardLayout(width, height) {
 }
 
 // 大きさは canvas から読む。縦横比を選べるので寸法を決め打ちしない
-function drawShareCard(ctx, card, background, template) {
+function drawShareCard(ctx, card, background, template, backgroundTransform) {
   const width = ctx.canvas.width;
   const height = ctx.canvas.height;
   const padding = Math.round(width * 0.06);
   const layout = shareCardLayout(width, height);
   const theme =
-    SHARE_CARD_THEMES[drawShareCardBackground(ctx, background, width, height, template)];
+    SHARE_CARD_THEMES[
+      drawShareCardBackground(ctx, background, width, height, template, backgroundTransform)
+    ];
   ctx.textBaseline = "alphabetic";
   ctx.textAlign = "left";
 

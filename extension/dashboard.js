@@ -23,10 +23,25 @@ menuBtn.addEventListener("click", () => setDrawerOpen(!drawerIsOpen()));
 navOverlay.addEventListener("click", () => setDrawerOpen(false));
 navDrawer.addEventListener("click", (event) => {
   // リンクの既定動作でハッシュが変わり、hashchange 側で描画が切り替わる
-  if (event.target.closest(".nav-link")) setDrawerOpen(false);
+  if (event.target.closest(".nav-link[data-view]")) setDrawerOpen(false);
 });
+authorBtn.addEventListener("click", openAuthorPanel);
+authorCloseBtn.addEventListener("click", closeAuthorPanel);
+authorOverlay.addEventListener("click", closeAuthorPanel);
+authorPortrait.addEventListener("error", () => {
+  authorPortrait.src = "icons/icon128.png";
+}, { once: true });
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && drawerIsOpen()) setDrawerOpen(false);
+});
+document.addEventListener("keydown", (event) => {
+  if (authorPanel.hidden) return;
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeAuthorPanel();
+    return;
+  }
+  trapAuthorPanelFocus(event);
 });
 window.addEventListener("hashchange", () => {
   renderCurrentView();
@@ -231,6 +246,53 @@ document.addEventListener("keydown", (event) => {
 shareRatioToggle.addEventListener("click", (event) => {
   const btn = event.target.closest(".segmented-btn");
   if (btn) setShareRatio(btn.dataset.ratio);
+});
+
+shareScaleInput.addEventListener("input", () => setShareBackgroundScale(shareScaleInput.value));
+
+let shareDragPointer = null;
+let shareDragX = 0;
+let shareDragY = 0;
+
+shareCanvas.addEventListener("pointerdown", (event) => {
+  if (!shareBackground) return;
+  event.preventDefault();
+  shareDragPointer = event.pointerId;
+  shareDragX = event.clientX;
+  shareDragY = event.clientY;
+  shareCanvas.classList.add("dragging");
+  if (shareCanvas.setPointerCapture) shareCanvas.setPointerCapture(event.pointerId);
+});
+
+shareCanvas.addEventListener("pointermove", (event) => {
+  if (shareDragPointer !== event.pointerId) return;
+  const width = Math.max(1, shareCanvas.clientWidth);
+  const height = Math.max(1, shareCanvas.clientHeight);
+  moveShareBackground(
+    ((event.clientX - shareDragX) / width) * 2,
+    ((event.clientY - shareDragY) / height) * 2
+  );
+  shareDragX = event.clientX;
+  shareDragY = event.clientY;
+});
+
+function stopShareBackgroundDrag(event) {
+  if (shareDragPointer !== event.pointerId) return;
+  shareDragPointer = null;
+  shareCanvas.classList.remove("dragging");
+}
+
+shareCanvas.addEventListener("pointerup", stopShareBackgroundDrag);
+shareCanvas.addEventListener("pointercancel", stopShareBackgroundDrag);
+shareCanvas.addEventListener("lostpointercapture", stopShareBackgroundDrag);
+shareCanvas.addEventListener("keydown", (event) => {
+  if (!shareBackground || !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
+  event.preventDefault();
+  const step = event.shiftKey ? 0.15 : 0.04;
+  if (event.key === "ArrowLeft") moveShareBackground(-step, 0);
+  if (event.key === "ArrowRight") moveShareBackground(step, 0);
+  if (event.key === "ArrowUp") moveShareBackground(0, -step);
+  if (event.key === "ArrowDown") moveShareBackground(0, step);
 });
 
 // 選んだ画像はこのタブの中だけで使う。ストレージへ入れると、

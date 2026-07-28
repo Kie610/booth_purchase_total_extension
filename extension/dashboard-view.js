@@ -80,6 +80,11 @@ const errorBox = document.getElementById("errorBox");
 const menuBtn = document.getElementById("menuBtn");
 const navDrawer = document.getElementById("navDrawer");
 const navOverlay = document.getElementById("navOverlay");
+const authorBtn = document.getElementById("authorBtn");
+const authorOverlay = document.getElementById("authorOverlay");
+const authorPanel = document.getElementById("authorPanel");
+const authorCloseBtn = document.getElementById("authorCloseBtn");
+const authorPortrait = document.getElementById("authorPortrait");
 const viewTitle = document.getElementById("viewTitle");
 const exportEmpty = document.getElementById("exportEmpty");
 const exportArea = document.getElementById("exportArea");
@@ -113,6 +118,8 @@ const sharePanel = document.getElementById("sharePanel");
 const shareCloseBtn = document.getElementById("shareCloseBtn");
 const shareCanvas = document.getElementById("shareCanvas");
 const shareRatioToggle = document.getElementById("shareRatioToggle");
+const shareScaleInput = document.getElementById("shareScale");
+const shareScaleValue = document.getElementById("shareScaleValue");
 const shareDropZone = document.getElementById("shareDropZone");
 const shareColors = document.getElementById("shareColors");
 const sharePatterns = document.getElementById("sharePatterns");
@@ -198,20 +205,72 @@ function renderPendingBanner(current) {
     `${reasons.join("。")}。この画面の内容は実際より少なくなります。`;
 }
 
-function setDrawerOpen(open) {
+function setDrawerOpen(open, returnFocus = true) {
   navDrawer.hidden = !open;
   navOverlay.hidden = !open;
   menuBtn.setAttribute("aria-expanded", String(open));
   if (open) {
     const first = navDrawer.querySelector(".nav-link");
     if (first) first.focus();
-  } else {
+  } else if (returnFocus) {
     menuBtn.focus();
   }
 }
 
 function drawerIsOpen() {
   return !navDrawer.hidden;
+}
+
+let authorReturnFocus = null;
+
+function authorModalBackgroundElements() {
+  return Array.from(document.body.children).filter(
+    (element) => element !== authorOverlay && element !== authorPanel && element.tagName !== "SCRIPT"
+  );
+}
+
+function setAuthorModalBackgroundInert(inert) {
+  for (const element of authorModalBackgroundElements()) element.inert = inert;
+  document.body.classList.toggle("modal-open", inert);
+}
+
+function authorPanelFocusableElements() {
+  return Array.from(authorPanel.querySelectorAll('button:not([disabled]), a[href]')).filter(
+    (element) => element.getClientRects().length > 0 || document.body.dataset.noAutoInit !== undefined
+  );
+}
+
+function trapAuthorPanelFocus(event) {
+  if (event.key !== "Tab" || authorPanel.hidden) return;
+  const focusable = authorPanelFocusableElements();
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (!first || !last) return;
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
+function openAuthorPanel() {
+  authorReturnFocus = menuBtn;
+  setDrawerOpen(false, false);
+  authorOverlay.hidden = false;
+  authorPanel.hidden = false;
+  setAuthorModalBackgroundInert(true);
+  authorCloseBtn.focus();
+}
+
+function closeAuthorPanel() {
+  if (authorPanel.hidden) return;
+  authorOverlay.hidden = true;
+  authorPanel.hidden = true;
+  setAuthorModalBackgroundInert(false);
+  if (authorReturnFocus) authorReturnFocus.focus();
+  authorReturnFocus = null;
 }
 
 // 折りたたみ表で開いている年。再描画のたびに行を作り直すため、
@@ -1592,6 +1651,7 @@ function updateShareButton() {
 let sharePayload = null;
 // 選ばれた背景画像。タブの中だけで持ち、保存も送信もしない
 let shareBackground = null;
+let shareBackgroundTransform = { scale: 1, x: 0, y: 0 };
 
 // 選んでいる縦横比
 let shareRatio = DEFAULT_SHARE_RATIO;
@@ -1644,6 +1704,7 @@ function openSharePanel(payload) {
   sharePanel.hidden = false;
   setShareModalBackgroundInert(true);
   renderShareRatioToggle();
+  renderShareBackgroundControls();
   renderShareTemplates();
   drawSharePanelCard();
   // パネルを開いている間は、後ろの共有ボタンを押せないようにする
@@ -1672,6 +1733,33 @@ function setShareRatio(ratio) {
   drawSharePanelCard();
 }
 
+function renderShareBackgroundControls() {
+  const active = Boolean(shareBackground);
+  const percent = Math.round(shareBackgroundTransform.scale * 100);
+  shareScaleInput.disabled = !active;
+  shareScaleInput.value = String(percent);
+  shareScaleValue.textContent = `${percent}%`;
+  shareCanvas.classList.toggle("adjustable", active);
+  shareCanvas.setAttribute("aria-disabled", String(!active));
+  shareCanvas.tabIndex = active ? 0 : -1;
+}
+
+function setShareBackgroundScale(percent) {
+  if (!shareBackground) return;
+  const next = Math.max(100, Math.min(300, Number(percent) || 100)) / 100;
+  if (next === shareBackgroundTransform.scale) return;
+  shareBackgroundTransform.scale = next;
+  renderShareBackgroundControls();
+  drawSharePanelCard();
+}
+
+function moveShareBackground(deltaX, deltaY) {
+  if (!shareBackground) return;
+  shareBackgroundTransform.x = Math.max(-1, Math.min(1, shareBackgroundTransform.x + deltaX));
+  shareBackgroundTransform.y = Math.max(-1, Math.min(1, shareBackgroundTransform.y + deltaY));
+  drawSharePanelCard();
+}
+
 function renderShareRatioToggle() {
   shareRatioToggle.querySelectorAll(".segmented-btn").forEach((btn) => {
     const on = btn.dataset.ratio === shareRatio;
@@ -1690,13 +1778,24 @@ function drawSharePanelCard() {
   }
   const ctx = shareCanvas.getContext("2d");
   ctx.clearRect(0, 0, width, height);
-  drawShareCard(ctx, sharePayload.card, shareBackground, currentShareTemplate());
+  drawShareCard(
+    ctx,
+    sharePayload.card,
+    shareBackground,
+    currentShareTemplate(),
+    shareBackgroundTransform
+  );
 }
 
 function setShareBackground(image, name) {
+  if (shareBackground && shareBackground !== image && typeof shareBackground.close === "function") {
+    shareBackground.close();
+  }
   shareBackground = image;
+  shareBackgroundTransform = { scale: 1, x: 0, y: 0 };
   shareBgName.textContent = image ? name : "未選択（テンプレートを使います）";
   shareBgClearBtn.hidden = !image;
+  renderShareBackgroundControls();
   renderShareTemplates();
   drawSharePanelCard();
 }

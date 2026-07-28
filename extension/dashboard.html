@@ -11,6 +11,7 @@
       <button id="menuBtn" class="menu-btn" aria-label="メニュー" aria-expanded="false" aria-controls="navDrawer">☰</button>
       <h1>BOOTHお買いものレポート</h1>
       <span class="view-title" id="viewTitle"></span>
+      <span class="copyright">©2026 Kie工房</span>
     </div>
   </header>
 
@@ -22,7 +23,28 @@
     <a class="nav-link" href="#/summary" data-view="summary">今年のまとめ</a>
     <a class="nav-link" href="#/export" data-view="export">データ出力</a>
     <a class="nav-link" href="#/backup" data-view="backup">データの引っ越し</a>
+    <button type="button" id="authorBtn" class="nav-author-btn">作者について</button>
   </nav>
+
+  <div id="authorOverlay" class="author-overlay" hidden></div>
+  <section id="authorPanel" class="author-panel" role="dialog" aria-modal="true" aria-labelledby="authorPanelTitle" hidden>
+    <div class="author-panel-head">
+      <h2 id="authorPanelTitle">作者について</h2>
+      <button type="button" id="authorCloseBtn" class="icon-btn" aria-label="閉じる">×</button>
+    </div>
+    <div class="author-profile">
+      <img id="authorPortrait" class="author-portrait" src="icons/author-kie.png" alt="Kieの著者近影" width="120" height="120">
+      <div class="author-profile-main">
+        <p class="author-name">Kie <span>（きー）</span></p>
+        <p class="author-bio">BOOTHの「Kie工房」でVRChat向けアイテムを制作・公開しています。3Dプリンターやものづくりも楽しんでいます。</p>
+      </div>
+    </div>
+    <div class="author-links" aria-label="作者のリンク">
+      <a href="https://github.com/Kie610" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://x.com/niconicokito" target="_blank" rel="noopener">X 個人アカウント</a>
+      <a href="https://x.com/NicoNicoKieVRC" target="_blank" rel="noopener">X Kie工房アカウント</a>
+    </div>
+  </section>
 
   <main class="page">
     <!-- 通知は画面をまたいで出るので、切り替える区画の外に置く -->
@@ -528,15 +550,22 @@
 
     <div class="share-panel-body">
       <p id="sharePanelDescription" class="visually-hidden">共有画像をコピーまたは保存してから、投稿画面を開きます。</p>
-      <canvas id="shareCanvas" class="share-canvas" width="1200" height="675" role="img" aria-label="作成した共有カードのプレビュー"></canvas>
+      <canvas id="shareCanvas" class="share-canvas" width="1200" height="675" role="img" tabindex="-1" aria-label="作成した共有カードのプレビュー" aria-describedby="shareCanvasHelp" aria-disabled="true"></canvas>
+      <p id="shareCanvasHelp" class="hint share-canvas-help">背景画像を選ぶと、プレビューをドラッグして映す位置を調整できます。方向キーでも少しずつ動かせます。</p>
 
       <div class="share-shape">
-        <span class="share-field-label" id="shareRatioLabel">画像の形</span>
-        <div class="segmented" id="shareRatioToggle" role="group" aria-labelledby="shareRatioLabel">
-          <button type="button" class="segmented-btn" data-ratio="16:9" aria-pressed="true">16:9</button>
-          <button type="button" class="segmented-btn" data-ratio="1:1" aria-pressed="false">1:1</button>
-          <button type="button" class="segmented-btn" data-ratio="4:3" aria-pressed="false">4:3</button>
-          <button type="button" class="segmented-btn" data-ratio="3:4" aria-pressed="false">3:4</button>
+        <div class="share-shape-field">
+          <span class="share-field-label" id="shareRatioLabel">画像の形</span>
+          <div class="segmented" id="shareRatioToggle" role="group" aria-labelledby="shareRatioLabel">
+            <button type="button" class="segmented-btn" data-ratio="16:9" aria-pressed="true">16:9</button>
+            <button type="button" class="segmented-btn" data-ratio="1:1" aria-pressed="false">1:1</button>
+            <button type="button" class="segmented-btn" data-ratio="4:3" aria-pressed="false">4:3</button>
+            <button type="button" class="segmented-btn" data-ratio="3:4" aria-pressed="false">3:4</button>
+          </div>
+        </div>
+        <div class="share-scale-field">
+          <label class="share-field-label" for="shareScale">背景画像の拡大率 <output id="shareScaleValue" for="shareScale">100%</output></label>
+          <input type="range" id="shareScale" min="100" max="300" step="5" value="100" disabled>
         </div>
       </div>
 
