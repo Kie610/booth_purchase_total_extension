@@ -256,10 +256,7 @@ body.modal-open {
 }
 
 .step-no {
-  color: var(--fg);
-  background: var(--accent);
-  border-radius: 4px;
-  padding: 1px 5px;
+  color: var(--accent);
   margin-right: 4px;
 }
 
@@ -317,8 +314,7 @@ button.small {
 
 button.primary {
   background: var(--accent);
-  color: #111827;
-  font-weight: 700;
+  color: #fff;
 }
 
 button.primary:hover:not(:disabled) {
@@ -1293,10 +1289,6 @@ button.share-template.current {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 6px;
-  border: 1px solid #d68b8d;
-  border-radius: 8px;
-  background: #fff1f1;
 }
 
 button.share-media-btn {
@@ -1354,7 +1346,7 @@ button.segmented-btn:hover:not(.current) {
 /* 選ばれている側。表のどの列で並べているかと色をそろえる */
 button.segmented-btn.current {
   background: var(--accent);
-  color: #111827;
+  color: #fff;
   font-weight: 700;
 }
 

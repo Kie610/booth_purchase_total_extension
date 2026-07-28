@@ -1860,10 +1860,33 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
 
   const dashboardCss = await (await fetch("../extension/dashboard.css")).text();
   check("アクセント色は変更しない", dashboardCss.includes("--accent: #fc4d50"), true);
-  check("共有画像の操作を目立たせる", dashboardCss.includes("button.share-media-btn"), true);
+  check("共有画像の操作をボタン単位で目立たせる", dashboardCss.includes("button.share-media-btn"), true);
   const dashboardStyle = document.createElement("style");
   dashboardStyle.textContent = dashboardCss;
   document.head.appendChild(dashboardStyle);
+
+  const colorFixture = document.createElement("div");
+  colorFixture.innerHTML = `
+    <span class="step-no">①</span>
+    <button class="primary">実行</button>
+    <button class="segmented-btn current">選択中</button>
+    <div class="share-media-actions"><button class="secondary share-media-btn">画像をコピー</button></div>`;
+  document.body.appendChild(colorFixture);
+  const stepNoStyle = getComputedStyle(colorFixture.querySelector(".step-no"));
+  const primaryStyle = getComputedStyle(colorFixture.querySelector(".primary"));
+  const segmentedStyle = getComputedStyle(colorFixture.querySelector(".segmented-btn.current"));
+  const mediaActionsStyle = getComputedStyle(colorFixture.querySelector(".share-media-actions"));
+  check("手順番号は背景を付けずアクセント色で表示",
+    [stepNoStyle.color, stepNoStyle.backgroundColor], ["rgb(252, 77, 80)", "rgba(0, 0, 0, 0)"]);
+  check("主ボタンはアクセント背景に白文字",
+    [primaryStyle.backgroundColor, primaryStyle.color, primaryStyle.fontWeight],
+    ["rgb(252, 77, 80)", "rgb(255, 255, 255)", "400"]);
+  check("選択中の切り替えはアクセント背景に白文字",
+    [segmentedStyle.backgroundColor, segmentedStyle.color], ["rgb(252, 77, 80)", "rgb(255, 255, 255)"]);
+  check("共有画像ボタンの背面に枠や背景を付けない",
+    [mediaActionsStyle.borderTopWidth, mediaActionsStyle.backgroundColor, mediaActionsStyle.paddingTop],
+    ["0px", "rgba(0, 0, 0, 0)", "0px"]);
+  colorFixture.remove();
   const shareButtonStyle = getComputedStyle(shareBtn);
   check("共有ボタンの背景は黒", shareButtonStyle.backgroundColor, "rgb(0, 0, 0)");
   check("共有ボタンの文字は白", shareButtonStyle.color, "rgb(255, 255, 255)");
