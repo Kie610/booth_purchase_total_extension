@@ -1,6 +1,6 @@
 "use strict";
 
-// Chrome / Firefox 両対応のための簡易ラッパー
+// Chromiumを主対象にしつつ、Firefoxの一時読み込みでも使えるAPI名へ寄せる簡易ラッパー
 const ext = typeof browser !== "undefined" ? browser : chrome;
 
 // { [orderId]: { amount, gift, status, date, items: [{ shop, shopUrl, name, price, boost, gift }] } }
@@ -8,6 +8,7 @@ const CACHE_KEY = "boothOrderCache";
 const INDEX_KEY = "boothOrderIndex"; // { updatedAt, orders: [{ id, status, date }] }
 const SUMMARY_KEY = "boothSummary"; // 最後に完了した集計の要約(ポップアップ表示用)
 const RUN_STATE_KEY = "boothRunState"; // 実行中の進捗(ポップアップから覗くため)
+const RUN_LOCK_KEY = "boothRunLock"; // 複数タブから同時に収集しないための期限付きロック
 const DASHBOARD_TAB_KEY = "boothDashboardTab"; // 集計ページのタブID
 
 const STATUS_LABELS = {
@@ -514,6 +515,9 @@ function buildYearSummary(results, year) {
     else if (date.year < target) before.push(result);
   }
   const valid = inYear.filter((result) => typeof result.amount === "number");
+  // 金額が取れていても商品明細が無ければ、点数・作者数・ランキングは少なくなる。
+  // 金額の未収集と混ぜると何が不完全なのか分からないため、別の件数で返す。
+  const detailPendingCount = valid.filter((result) => !Array.isArray(result.items)).length;
 
   // その年より前に買ったことのある作者。未収集の注文は明細を持たないので
   // ここに現れず、「はじめて」を多めに数えてしまう。件数を返して画面で断る
@@ -573,6 +577,7 @@ function buildYearSummary(results, year) {
     orderCount: valid.length,
     // 金額を収集できていない注文。まとめは「その年の全部」を名乗るので必ず出す
     pendingCount: inYear.length - valid.length,
+    detailPendingCount,
     itemCount,
     giftItemCount,
     boost,
@@ -627,6 +632,7 @@ function saveSummary(summary) {
 // 永久に「実行中」を出し続けるため、しばらく更新のない進捗は動いていないとみなす。
 // 進捗は取得1件ごとに書き直されるので、1件の取得にかかる時間より十分長くとる
 const RUN_STATE_STALE_MS = 30_000;
+const RUN_LOCK_TTL_MS = 45_000;
 
 async function loadRunState() {
   const runState = await readStored(RUN_STATE_KEY, null);
@@ -641,8 +647,49 @@ function saveRunState(state) {
   return writeStored(RUN_STATE_KEY, { ...state, updatedAt: Date.now() });
 }
 
-function clearRunState() {
-  return ext.storage.local.remove(RUN_STATE_KEY);
+async function clearRunState(ownerId) {
+  if (ownerId === undefined) return ext.storage.local.remove(RUN_STATE_KEY);
+  const runState = await readStored(RUN_STATE_KEY, null);
+  if (runState && runState.ownerId === ownerId) {
+    await ext.storage.local.remove(RUN_STATE_KEY);
+  }
+}
+
+function runLockIsActive(lock, now = Date.now()) {
+  return Boolean(
+    lock &&
+      typeof lock.ownerId === "string" &&
+      lock.ownerId &&
+      typeof lock.expiresAt === "number" &&
+      lock.expiresAt > now
+  );
+}
+
+async function acquireRunLock(ownerId, now = Date.now()) {
+  const current = await readStored(RUN_LOCK_KEY, null);
+  if (runLockIsActive(current, now) && current.ownerId !== ownerId) return false;
+
+  await writeStored(RUN_LOCK_KEY, {
+    ownerId,
+    acquiredAt: current && current.ownerId === ownerId ? current.acquiredAt : now,
+    expiresAt: now + RUN_LOCK_TTL_MS,
+  });
+  const claimed = await readStored(RUN_LOCK_KEY, null);
+  return Boolean(claimed && claimed.ownerId === ownerId && claimed.expiresAt > now);
+}
+
+async function refreshRunLock(ownerId, now = Date.now()) {
+  const current = await readStored(RUN_LOCK_KEY, null);
+  if (!runLockIsActive(current, now) || current.ownerId !== ownerId) return false;
+  await writeStored(RUN_LOCK_KEY, { ...current, expiresAt: now + RUN_LOCK_TTL_MS });
+  return true;
+}
+
+async function releaseRunLock(ownerId) {
+  const current = await readStored(RUN_LOCK_KEY, null);
+  if (current && current.ownerId === ownerId) {
+    await ext.storage.local.remove(RUN_LOCK_KEY);
+  }
 }
 
 // 集計ページを開く。既に開いているタブがあればそれをフォーカスする

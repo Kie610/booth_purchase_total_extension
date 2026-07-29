@@ -257,6 +257,9 @@ const list = parseListPage(parse(listHtml));
 check("parseListPage 行の抽出(重複行はそのまま返る)", list.orders.map(o => o.id), ["1001", "1001", "1002"]);
 check("parseListPage 最大ページ数", list.maxPage, 7);
 check("parseListPage ページ送りの有無", list.pagerFound, true);
+check("通常の購入履歴は空状態ではない", list.emptyFound, false);
+const emptyList = parseListPage(parse("<html><body><p>購入履歴はありません</p></body></html>"));
+check("BOOTHの購入0件表示を判定する", [emptyList.orders.length, emptyList.emptyFound], [0, true]);
 check("注文IDでの重複除去", new Map(list.orders.map(o => [o.id, o])).size, 2);
 
 // --- ステータスの判定(取り違えるとキャンセルの除外が効かず合計が狂う) ---
@@ -276,6 +279,8 @@ check("バッジ自体が無ければ不明", extractStatusFromBadge(null), "unk
 // --- 一覧を読めていない兆候(読めていないのに「全期間取得済み」と出すと、
 //     少ない合計を正しい合計だと思わせてしまう) ---
 check("1件も読めなければ読み取り失敗とみなす", listPageLooksUnreadable({ orders: [], maxPage: 1, pagerFound: false }), true);
+check("正式な購入0件表示は正常とみなす",
+  listPageLooksUnreadable({ orders: [], maxPage: 1, pagerFound: false, emptyFound: true }), false);
 check("ページ送りがあるのに番号を読めなければ失敗とみなす", listPageLooksUnreadable({ orders: [{}], maxPage: 1, pagerFound: true }), true);
 check("ページ送りが無い1ページだけの履歴は正常", listPageLooksUnreadable({ orders: [{}], maxPage: 1, pagerFound: false }), false);
 check("複数ページを読めていれば正常", listPageLooksUnreadable({ orders: [{}], maxPage: 7, pagerFound: true }), false);
@@ -419,6 +424,8 @@ check("初期選択は未収集のある最新月", [rangeFrom.value, rangeTo.va
 // ▸ をクリックすると月別が開閉する
 monthYearRows[0].querySelector(".toggle").click();
 check("年の▸で展開", [...monthTableBody.querySelectorAll('tr.month-row[data-year-key="2026"]')].every(r => !r.hidden), true);
+check("表の開閉ボタンは状態を読み上げられる",
+  monthYearRows[0].querySelector(".table-toggle").getAttribute("aria-expanded"), "true");
 check("他の年は畳まれたまま", [...monthTableBody.querySelectorAll('tr.month-row[data-year-key="2025"]')].every(r => r.hidden), true);
 check("展開しても範囲は変わらない", [rangeFrom.value, rangeTo.value], ["2026-05", "2026-05"]);
 
@@ -426,11 +433,20 @@ check("展開しても範囲は変わらない", [rangeFrom.value, rangeTo.value
 monthYearRows[0].click();
 check("年クリックでその年が範囲", [rangeFrom.value, rangeTo.value], ["2026-03", "2026-05"]);
 check("年の行が強調される", [monthYearRows[0].classList.contains("in-range"), monthYearRows[1].classList.contains("in-range")], [true, false]);
+monthYearRows[1].focus();
+monthYearRows[1].dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true, cancelable: true }));
+check("年はキーボードでも範囲にできる", [rangeFrom.value, rangeTo.value], ["2025-12", "2025-12"]);
+monthYearRows[0].click();
 
 // 月の行をクリックするとその月だけが範囲になる
 const may = monthTableBody.querySelector('tr.month-row[data-month-key="2026-05"]');
 may.click();
 check("月クリックで単月が範囲", [rangeFrom.value, rangeTo.value], ["2026-05", "2026-05"]);
+const march = monthTableBody.querySelector('tr.month-row[data-month-key="2026-03"]');
+march.focus();
+march.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+check("月はキーボードでも範囲にできる", [rangeFrom.value, rangeTo.value], ["2026-03", "2026-03"]);
+may.click();
 check("範囲外の年は強調されない", monthYearRows[0].classList.contains("in-range"), false);
 check("選択された月だけ強調される", monthSubRows.map(r => r.classList.contains("in-range")), [true, false, false]);
 
@@ -458,29 +474,31 @@ render();
 setRange("2026-05", "2026-05"); // 以降の検証のため元の範囲へ戻す
 
 // 取得予定件数(ボタン横の表示)
-check("取得予定件数 未収集のみ", plannedCount.textContent, "取得予定: 1件");
+check("取得予定件数 未収集のみ", plannedCount.textContent, "取得予定: 1件 / 目安: 約1秒以上");
 check("取得予定が0でなければボタンは押せる", collectRangeBtn.disabled, false);
 setRange("2026-05", "2026-05");
-check("取得予定件数 収集済みを含む月", plannedCount.textContent, "取得予定: 1件");
+check("取得予定件数 収集済みを含む月", plannedCount.textContent, "取得予定: 1件 / 目安: 約1秒以上");
 forceRefreshRange.checked = true;
 forceRefreshRange.dispatchEvent(new Event("change"));
-check("強制再取得では収集済みも予定に入る", plannedCount.textContent, "取得予定: 2件");
+check("強制再取得では収集済みも予定に入る", plannedCount.textContent, "取得予定: 2件 / 目安: 約1秒以上");
 forceRefreshRange.checked = false;
 setRange("2025-12", "2025-12");
-check("取得失敗の残る月は予定に入る", plannedCount.textContent, "取得予定: 1件");
+check("取得失敗の残る月は予定に入る", plannedCount.textContent, "取得予定: 1件 / 目安: 約1秒以上");
 
 // 未収集のある範囲をまとめて選択(取得失敗の残る月も未収集として拾う)
 selectPendingBtn.click();
 check("未収集のある範囲を選択", [rangeFrom.value, rangeTo.value], ["2025-12", "2026-05"]);
-check("範囲選択で予定件数も更新される", plannedCount.textContent, "取得予定: 3件");
+check("範囲選択で予定件数も更新される", plannedCount.textContent, "取得予定: 3件 / 目安: 約1秒以上");
+check("収集時間の目安を分表示できる", collectionTimeEstimate(1000), "約5分以上");
+check("一括集計にも時間の目安を出す", allPlannedCountEl.textContent.includes("目安:"), true);
 
 // 年別・月別の集計(収集済みのみ)
 const yearRows = [...periodTableBody.querySelectorAll(".year-row")];
 check("年行の数", yearRows.length, 2);
 // 金額との間隔はCSSのマージンなので、テキスト上は連結される
-check("2026年の収集済み合計", [...yearRows[0].cells].map(c => c.textContent.trim()), ["▸ 2026年", "1件", "ギフト ¥400¥1,000"]);
+check("2026年の収集済み合計", [...yearRows[0].cells].map(c => c.textContent.trim()), ["▸2026年", "1件", "ギフト ¥400¥1,000"]);
 check("ギフトは金額の左に置く", yearRows[0].cells[2].firstElementChild.className, "gift");
-check("2025年はギフト情報が無いので出さない", [...yearRows[1].cells].map(c => c.textContent.trim()), ["▸ 2025年", "1件", "¥3,000"]);
+check("2025年はギフト情報が無いので出さない", [...yearRows[1].cells].map(c => c.textContent.trim()), ["▸2025年", "1件", "¥3,000"]);
 check("初期状態で月行は畳まれている", [...periodTableBody.querySelectorAll(".month-row")].every(r => r.hidden), true);
 yearRows[0].querySelector(".toggle").click();
 check("年行クリックで展開", [...periodTableBody.querySelectorAll('.month-row[data-year-key="2026"]')].every(r => !r.hidden), true);
@@ -583,19 +601,44 @@ check("比較年を渡せる", buildSpendingTrend([
 
 // 注文ごとの内訳
 const orderRows = [...orderTableBody.querySelectorAll("tr")];
-check("内訳は日付の降順(日付不明は末尾)", orderRows.map(tr => tr.cells[3].textContent), ["a2", "a1", "b1", "c2", "c1", "e1"]);
-check("未収集の表示", orderRows.find(tr => tr.cells[3].textContent === "a2").cells[2].textContent, "未収集");
-check("内訳のギフト併記", orderRows.find(tr => tr.cells[3].textContent === "a1").cells[2].textContent, "ギフト ¥400¥1,000");
-check("ギフトが無い注文は金額のみ", orderRows.find(tr => tr.cells[3].textContent === "c1").cells[2].textContent, "¥3,000");
-check("取得失敗の表示", orderRows.find(tr => tr.cells[3].textContent === "c2").cells[2].textContent, "取得失敗");
-check("ステータス日本語化", orderRows.find(tr => tr.cells[3].textContent === "a2").cells[1].textContent, "支払済み");
+check("内訳は日付の降順(日付不明は末尾)", orderRows.map(tr => tr.cells[4].textContent), ["a2", "a1", "b1", "c2", "c1", "e1"]);
+check("未収集の表示", orderRows.find(tr => tr.cells[4].textContent === "a2").cells[3].textContent, "未収集");
+check("内訳のギフト併記", orderRows.find(tr => tr.cells[4].textContent === "a1").cells[3].textContent, "ギフト ¥400¥1,000");
+check("ギフトが無い注文は金額のみ", orderRows.find(tr => tr.cells[4].textContent === "c1").cells[3].textContent, "¥3,000");
+check("取得失敗の表示", orderRows.find(tr => tr.cells[4].textContent === "c2").cells[3].textContent, "取得失敗");
+check("ステータス日本語化", orderRows.find(tr => tr.cells[4].textContent === "a2").cells[1].textContent, "支払済み");
+check("内訳にショップ列を出す", orderRows.find(tr => tr.cells[4].textContent === "a1").cells[2].textContent, "SOUR FLAVOR");
+check("内訳のショップからBOOTHを開ける",
+  orderRows.find(tr => tr.cells[4].textContent === "a1").cells[2].querySelector("a").getAttribute("href"),
+  "https://sourflavor.booth.pm/");
+
+orderSearch.value = "べつのショップ";
+renderOrderTable(buildResults());
+check("ショップ名で内訳を検索できる",
+  [...orderTableBody.querySelectorAll("tr")].map(tr => tr.cells[4].textContent), ["c1"]);
+orderSearch.value = "";
+orderStatusFilter.value = "paid";
+renderOrderTable(buildResults());
+check("ステータスで内訳を絞り込める",
+  [...orderTableBody.querySelectorAll("tr")].map(tr => tr.cells[4].textContent), ["a2"]);
+orderStatusFilter.value = "";
+orderSort.value = "date-asc";
+renderOrderTable(buildResults());
+check("日付の昇順でも日付不明は末尾",
+  [...orderTableBody.querySelectorAll("tr")].at(-1).cells[4].textContent, "e1");
+orderSort.value = "amount-desc";
+renderOrderTable(buildResults());
+check("金額で内訳を並べ替えられる",
+  [...orderTableBody.querySelectorAll("tr")].slice(0, 2).map(tr => tr.cells[4].textContent), ["c1", "a1"]);
+orderSort.value = "date-desc";
+renderOrderTable(buildResults());
 
 // 金額は読めたが商品明細を読めなかった注文。月別表では未収集として数えているので、
 // 内訳でも黙って収集済みには見せない
 state.cache.b1 = { amount: 700, gift: 0, status: "completed", date: "2026年3月1日 10:00", items: null };
 render();
 check("明細を読めなかった注文は内訳で分かる",
-  [...orderTableBody.querySelectorAll("tr")].find(tr => tr.cells[3].textContent === "b1").cells[2].textContent,
+  [...orderTableBody.querySelectorAll("tr")].find(tr => tr.cells[4].textContent === "b1").cells[3].textContent,
   "明細なし¥700");
 check("明細なしは未収集として数える", buildMonthStats(targetOrders(), state.cache).find(s => s.key === "2026-03").pending, 1);
 delete state.cache.b1;
@@ -606,7 +649,7 @@ render();
 state.cache.b1 = { amount: 700, gift: 0, status: "completed", date: "2026年3月1日 10:00", items: [item("何か", 700)] };
 render();
 check("以前の版の注文は内訳で分かる",
-  [...orderTableBody.querySelectorAll("tr")].find(tr => tr.cells[3].textContent === "b1").cells[2].textContent,
+  [...orderTableBody.querySelectorAll("tr")].find(tr => tr.cells[4].textContent === "b1").cells[3].textContent,
   "要再取得¥700");
 check("以前の版は未収集として数える", buildMonthStats(targetOrders(), state.cache).find(s => s.key === "2026-03").pending, 1);
 check("以前の版は取得予定に入る", pendingTargets(ordersInRange("2026-03", "2026-03"), false).map(o => o.id), ["b1"]);
@@ -681,8 +724,11 @@ check("全部表示できるときは件数だけ出す", rankingStats.textConte
 const firstShopKey = [...rankingTableBody.querySelectorAll("tr.shop-row")][0].dataset.shopKey;
 const firstItemsRow = () => rankingTableBody.querySelector(`tr.shop-items-row[data-shop-key="${CSS.escape(firstShopKey)}"]`);
 check("商品の行は最初は閉じている", firstItemsRow().hidden, true);
+const firstRankToggle = rankingTableBody.querySelector("tr.shop-row .rank-toggle");
+check("順位の開閉はキーボードで押せるボタン", [firstRankToggle.tagName, firstRankToggle.type], ["BUTTON", "button"]);
 toggleShopItems(firstShopKey);
 check("順位を押すと商品が開く", firstItemsRow().hidden, false);
+check("順位の開閉状態を読み上げられる", firstRankToggle.getAttribute("aria-expanded"), "true");
 check("開いたことを三角で示す",
   rankingTableBody.querySelector("tr.shop-row .toggle").textContent, "▾");
 check("商品名を並べる", [...firstItemsRow().querySelectorAll("li")].map(li => li.textContent).length > 0, true);
@@ -766,6 +812,13 @@ const yearSummary = buildYearSummary(summaryRows, 2026);
 check("その年の支払いだけを合計する", [yearSummary.total, yearSummary.orderCount], [3800, 2]);
 // 未収集を黙って落とすと、実際より少ない額を「その年の全部」として見せてしまう
 check("未収集の件数を持つ", yearSummary.pendingCount, 1);
+// 金額だけ読めて商品明細が無い注文は、合計には入れられるが点数・作者数が欠ける
+const detailPendingSummary = buildYearSummary([
+  { id: "d", date: "2026年4月1日 00:00", amount: 700, gift: 0, items: null },
+], 2026);
+check("金額があっても明細なしを別に数える",
+  [detailPendingSummary.total, detailPendingSummary.pendingCount, detailPendingSummary.detailPendingCount],
+  [700, 0, 1]);
 check("ギフト額はその年の分だけ", yearSummary.gift, 500);
 check("点数は数量ぶん数える", [yearSummary.itemCount, yearSummary.giftItemCount], [4, 1]);
 check("支援した作者の数", yearSummary.shopCount, 2);
@@ -800,6 +853,17 @@ check("この年の推し作者を並べる",
   [...summaryTopShopsBody.querySelectorAll("tr.shop-row")].map(tr => tr.cells[1].textContent), ["SOUR FLAVOR", "べつのショップ"]);
 check("過去に未収集が無ければ断らない", summaryNewShopWarn.hidden, true);
 
+// 支払額だけ取得できた注文も、点数や作者数については未収集だと分かるようにする
+const savedSummaryItems = state.cache.s2.items;
+state.cache.s2.items = null;
+render();
+check("まとめに商品明細の未収集件数を添える",
+  summaryCards.querySelector(".stat-note").textContent.includes("商品明細未収集1件"), true);
+check("商品明細未収集はまとめの数字のずれを警告する",
+  summaryNewShopWarn.textContent.includes("点数・作者数・推し作者は実際より少なくなる"), true);
+state.cache.s2.items = savedSummaryItems;
+render();
+
 // まとめの共有(ボタンには年が入る。何年分が出るのか押す前に分かる必要がある)
 location.hash = "#/summary";
 renderCurrentView();
@@ -808,8 +872,11 @@ check("まとめの共有文面", buildSummaryShareText(summaryShareStats),
   "2026年のBOOTHお買いもの🛍️\n\n合計額 ¥3,800（2件）\n買ったもの 4点\n支援した作者 2人\nうちはじめて 1人\nいちばん買った月 2026年2月\n\n推し作者\n🥇 SOUR FLAVOR\n🥈 べつのショップ\n\n#BOOTHお買いものレポート");
 // 未収集があると数字がずれるので、出す前に断る
 check("まとめの共有 未収集を断る", summaryShareIssues(summaryShareStats), ["2026年に未収集の注文が1件あります"]);
+check("まとめの共有 商品明細の未収集を断る",
+  summaryShareIssues({ ...summaryShareStats, pendingCount: 0, detailPendingCount: 2, beforePending: 0 }),
+  ["2026年に商品明細を未収集の注文が2件あります"]);
 check("まとめの共有 揃っていれば断らない",
-  summaryShareIssues({ ...summaryShareStats, pendingCount: 0, beforePending: 0 }), []);
+  summaryShareIssues({ ...summaryShareStats, pendingCount: 0, detailPendingCount: 0, beforePending: 0 }), []);
 // 「はじめて」が0人なら、過去が未収集でもずれようがない
 check("まとめの共有 はじめてが0人なら過去の未収集を断らない",
   summaryShareIssues({ ...summaryShareStats, pendingCount: 0, beforePending: 3, newShopCount: 0 }), []);
@@ -899,11 +966,67 @@ fitFontSize(testCtx, "¥100", 300, [52, 44, 38, 32], "bold");
 check("収まる金額は大きいまま", testCtx.font.includes("52px"), true);
 
 // パネルの開閉(背景を選び直しても同じ数字で描き直せるよう、押した時点の中身を持つ)
+shareBtn.focus();
 openSharePanel({ name: "booth-2026", text: "本文", card: summaryShareCard });
 check("パネルを開くと本文を出す", [sharePanel.hidden, shareOverlay.hidden, shareText.value], [false, false, "本文"]);
+check("モーダルを開くと閉じるボタンへ移動", document.activeElement === shareCloseBtn, true);
+check("モーダルの後ろは操作できない", document.getElementById("view-report").inert, true);
 check("保存するファイル名", shareCardFileName(), "booth-2026.png");
 // 開いている間にフッターの共有を押しても何も起きない。押せる見た目のままだと壊れて見える
 check("パネルを開いている間は共有ボタンを押せない", shareBtn.disabled, true);
+check("背景画像が無いと調整UIを使えない",
+  [shareScaleInput.disabled, shareCanvas.tabIndex, shareCanvas.getAttribute("aria-disabled")],
+  [true, -1, "true"]);
+
+// coverを基準に拡大し、ドラッグ方向へ画像そのものが動くこと
+const coverCalls = [];
+drawCover(
+  { drawImage: (...args) => coverCalls.push(args) },
+  { width: 200, height: 100 },
+  100,
+  100,
+  { scale: 2, x: 1, y: -1 }
+);
+check("背景の拡大と位置を描画へ反映する", coverCalls[0].slice(1), [0, -100, 400, 200]);
+
+const adjustableBackground = document.createElement("canvas");
+adjustableBackground.width = 200;
+adjustableBackground.height = 100;
+setShareBackground(adjustableBackground, "background.png");
+check("背景画像を選ぶと調整UIを使える",
+  [shareScaleInput.disabled, shareCanvas.tabIndex, shareCanvas.classList.contains("adjustable")],
+  [false, 0, true]);
+setShareBackgroundScale(175);
+check("拡大率を表示へ反映する",
+  [shareBackgroundTransform.scale, shareScaleInput.value, shareScaleValue.textContent],
+  [1.75, "175", "175%"]);
+const savedPointerCapture = shareCanvas.setPointerCapture;
+shareCanvas.setPointerCapture = () => {};
+shareCanvas.dispatchEvent(new PointerEvent("pointerdown", {
+  pointerId: 7, clientX: 10, clientY: 10, bubbles: true, cancelable: true,
+}));
+shareCanvas.dispatchEvent(new PointerEvent("pointermove", {
+  pointerId: 7, clientX: 40, clientY: 30, bubbles: true, cancelable: true,
+}));
+shareCanvas.dispatchEvent(new PointerEvent("pointerup", {
+  pointerId: 7, clientX: 40, clientY: 30, bubbles: true, cancelable: true,
+}));
+shareCanvas.setPointerCapture = savedPointerCapture;
+check("プレビューのドラッグで背景位置を動かす",
+  [shareBackgroundTransform.x > 0, shareBackgroundTransform.y > 0,
+   shareCanvas.classList.contains("dragging")], [true, true, false]);
+const beforeKeyboardMove = shareBackgroundTransform.x;
+shareCanvas.dispatchEvent(new KeyboardEvent("keydown", {
+  key: "ArrowLeft", bubbles: true, cancelable: true,
+}));
+check("方向キーでも背景位置を動かす", shareBackgroundTransform.x < beforeKeyboardMove, true);
+moveShareBackground(2, -2);
+check("背景位置は描画できる範囲に収める",
+  [shareBackgroundTransform.x, shareBackgroundTransform.y], [1, -1]);
+setShareBackground(null, "");
+check("背景を戻すと調整値も初期化する",
+  [shareBackgroundTransform, shareScaleInput.disabled, shareScaleValue.textContent],
+  [{ scale: 1, x: 0, y: 0 }, true, "100%"]);
 
 // 縦横比。canvasの大きさごと変える
 check("既定は16:9", [shareCanvas.width, shareCanvas.height], [1200, 675]);
@@ -1085,9 +1208,15 @@ check("状態表示を出す", shareCardStatus.textContent, "画像を保存し�
 setShareCardStatus("");
 check("空を渡すと消える", shareCardStatus.textContent, "");
 
+shareOpenBtn.focus();
+document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
+check("Tabキーはモーダル内を循環する", document.activeElement === shareCloseBtn, true);
+
 closeSharePanel();
 check("閉じると中身を捨てる", [sharePanel.hidden, sharePayload], [true, null]);
 check("閉じると共有ボタンが戻る", shareBtn.disabled, false);
+check("閉じると元のボタンへ戻る", document.activeElement === shareBtn, true);
+check("閉じると後ろを操作できる", document.getElementById("view-report").inert, false);
 
 // --- CSV出力(データ出力の画面) ---
 check("csvField そのまま", csvField("髪型A"), "髪型A");
@@ -1159,6 +1288,20 @@ check("Escで閉じる", navDrawer.hidden, true);
 menuBtn.click();
 navDrawer.querySelector('.nav-link[data-view="export"]').click();
 check("メニューから移動すると閉じる", navDrawer.hidden, true);
+check("ヘッダーにコピーライトを表示する",
+  document.querySelector(".copyright").textContent, "©2026 Kie (Kie工房)");
+menuBtn.click();
+authorBtn.click();
+check("メニュー末尾から作者情報を開く",
+  [navDrawer.hidden, authorPanel.hidden, authorOverlay.hidden, document.activeElement === authorCloseBtn],
+  [true, false, false, true]);
+check("作者情報の後ろは操作できない", document.getElementById("view-report").inert, true);
+check("作者リンクを3件表示する",
+  [...authorPanel.querySelectorAll("a")].map((a) => a.href),
+  ["https://github.com/Kie610", "https://x.com/niconicokito", "https://x.com/NicoNicoKieVRC"]);
+document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+check("作者情報をEscで閉じる",
+  [authorPanel.hidden, authorOverlay.hidden, document.activeElement === menuBtn], [true, true, true]);
 location.hash = "#/report";
 renderCurrentView();
 
@@ -1225,11 +1368,38 @@ check("読み込み JSONでない", parseBackup("これはJSONではない").ok,
 check("読み込み 別のJSON", parseBackup('{"foo":1}').message,
   "このファイルはBOOTHお買いものレポートのバックアップではありません。");
 check("読み込み 配列", parseBackup("[1,2]").ok, false);
+const backupEnvelope = {
+  format: "booth-purchase-report",
+  version: 1,
+  exportedAt: "2026-07-05T00:00:00.000Z",
+  index: null,
+  cache: {},
+};
+check("読み込み 未対応バージョンを拒否",
+  parseBackup(JSON.stringify({ ...backupEnvelope, version: 2 })).message,
+  "このバックアップのバージョン(2)には対応していません。");
+check("読み込み 書き出し日時が壊れている",
+  parseBackup(JSON.stringify({ ...backupEnvelope, exportedAt: "not-a-date" })).message,
+  "バックアップの書き出し日時が壊れています。");
 check("読み込み 注文履歴が壊れている",
-  parseBackup('{"format":"booth-purchase-report","index":{"orders":"x"}}').message,
+  parseBackup(JSON.stringify({ ...backupEnvelope, index: { orders: "x" } })).message,
+  "バックアップの注文履歴が壊れています。");
+check("読み込み 注文の型が壊れている",
+  parseBackup(JSON.stringify({ ...backupEnvelope, index: {
+    orders: [{ id: 123, status: "completed", date: "2026年1月1日" }],
+  } })).message,
   "バックアップの注文履歴が壊れています。");
 check("読み込み 金額データが壊れている",
-  parseBackup('{"format":"booth-purchase-report","cache":[]}').message,
+  parseBackup(JSON.stringify({ ...backupEnvelope, cache: [] })).message,
+  "バックアップの金額データが壊れています。");
+check("読み込み 金額の型が壊れている",
+  parseBackup(JSON.stringify({ ...backupEnvelope, cache: { x: { amount: "500" } } })).message,
+  "バックアップの金額データが壊れています。");
+check("読み込み 商品明細の型が壊れている",
+  parseBackup(JSON.stringify({ ...backupEnvelope, cache: { x: {
+    amount: 500,
+    items: [{ shop: "S", name: "商品", price: 500, gift: "false" }],
+  } } })).message,
   "バックアップの金額データが壊れています。");
 const restored = parseBackup(JSON.stringify(backup));
 check("読み込み 書き出したものを読み戻せる",
@@ -1352,8 +1522,10 @@ check("待機中は進捗を出さない", [document.getElementById("progress").
 setProgress("金額を収集中... (18/40件)", 0.45);
 check("進捗表示中はフッター拡張のクラスが付く", [document.getElementById("progress").hidden, document.body.classList.contains("has-progress")], [false, true]);
 check("進捗バーの幅", document.getElementById("progressFill").style.width, "45%");
+check("進捗率を読み上げられる", document.getElementById("progress").getAttribute("aria-valuenow"), "45");
 setRunning(false);
 check("終了で進捗表示とクラスが戻る", [document.getElementById("progress").hidden, document.body.classList.contains("has-progress")], [true, false]);
+check("終了時は進捗率を残さない", document.getElementById("progress").hasAttribute("aria-valuenow"), false);
 
 // --- ①注文履歴の取得: 既知の注文への到達と、取得できた範囲の記録 ---
 
@@ -1464,7 +1636,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   state.index = { updatedAt: "2026-07-26T00:00:00.000Z", complete: true, orders: [{ id: "<img src=x onerror=alert(1)>", status: "completed", date: "2024年1月1日 00:00" }] };
   state.cache = {};
   render();
-  check("HTMLエスケープ", orderTableBody.querySelector("tr").cells[3].querySelector("img"), null);
+  check("HTMLエスケープ", orderTableBody.querySelector("tr").cells[4].querySelector("img"), null);
 
   // --- 進捗の残骸(タブが不意に閉じられると clearRunState が間に合わないことがある) ---
   await saveRunState({ phase: "金額の収集", current: 1, total: 10 });
@@ -1475,10 +1647,35 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   check("時刻を持たない旧形式の進捗も無視する", await loadRunState(), null);
   await clearRunState();
 
+  // --- 複数タブの同時実行を防ぐ期限付きロック ---
+  await removeStored(RUN_LOCK_KEY);
+  check("実行ロックを取得できる", await acquireRunLock("owner-a", 1000), true);
+  check("期限内の実行ロックは別タブが奪えない", await acquireRunLock("owner-b", 1001), false);
+  const firstLock = await readStored(RUN_LOCK_KEY, null);
+  check("実行ロックに有効期限を持つ", firstLock.expiresAt, 1000 + RUN_LOCK_TTL_MS);
+  check("所有者は実行ロックを延長できる", await refreshRunLock("owner-a", 2000), true);
+  check("別の所有者は実行ロックを解除できない", await releaseRunLock("owner-b"), undefined);
+  check("誤った所有者の解除後もロックが残る",
+    (await readStored(RUN_LOCK_KEY, null)).ownerId, "owner-a");
+  await writeStored(RUN_LOCK_KEY, { ownerId: "owner-a", expiresAt: 999 });
+  check("期限切れの実行ロックは取得し直せる", await acquireRunLock("owner-b", 1000), true);
+  await releaseRunLock("owner-b");
+  check("所有者が解除すると実行ロックを消す", await readStored(RUN_LOCK_KEY, null), null);
+
+  check("通常リクエストの待機時間は250msから始まる", requestIntervalMs(() => 0), 250);
+  check("通常リクエストの待機時間は350msを超えない", requestIntervalMs(() => 0.999999), 350);
+
   // --- ①注文履歴の取得を、BOOTHへのアクセスを差し替えて実際に動かす ---
   // BOOTH以外(manifestやアイコン)への fetch は本物のまま通す
   const realFetch = window.fetch;
   const okResponse = (path, html) => ({ ok: true, status: 200, url: path, text: () => Promise.resolve(html) });
+  const errorResponse = (path, status, retryAfter) => ({
+    ok: false,
+    status,
+    url: path,
+    headers: { get: (name) => name === "Retry-After" ? retryAfter : null },
+    text: () => Promise.resolve(""),
+  });
   let routes = {};
   // ルートは HTML文字列(そのまま200で返す)か、応答を組み立てる関数で指定する
   window.fetch = (url, init) => {
@@ -1518,6 +1715,29 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   routes = { [ORDERS_URL]: "<html><body></body></html>" };
   await runTask((signal) => fetchIndexTask(signal, false));
   check("1件も読めなければ全期間扱いにしない", state.index.complete, false);
+
+  // BOOTHが明示した購入0件は、構造変更による読み取り失敗とは分ける
+  resetIndex();
+  routes = { [ORDERS_URL]: "<html><body><p>購入履歴はありません</p></body></html>" };
+  await runTask((signal) => fetchIndexTask(signal, false));
+  check("購入0件は全期間を確認済みとして記録", [state.index.complete, state.index.orders.length], [true, 0]);
+  check("購入0件は空状態として案内", noticeBox.textContent.includes("集計する注文はありません"), true);
+  render();
+  check("購入0件は金額収集でも正式な空状態を表示",
+    monthEmpty.textContent, "購入履歴はありませんでした。集計する注文はありません。");
+
+  // 1ページ目が正常でも、途中のページだけログイン画面などへ変わることがある
+  resetIndex();
+  routes = {
+    [ORDERS_URL]: `<html><body>${orderLink("p1", "2026年5月3日 12:34")}
+      <div class="pager"><a href="/orders?page=2">2</a></div></body></html>`,
+    [`${ORDERS_URL}?page=2`]: "<html><body></body></html>",
+  };
+  await runTask((signal) => fetchIndexTask(signal, false));
+  check("後続ページを読めなければ全期間扱いにしない", state.index.complete, false);
+  check("後続ページより前に読めた注文は残す", state.index.orders.map(o => o.id), ["p1"]);
+  check("後続ページの読み取り失敗も警告する",
+    noticeBox.textContent.includes("読み取れませんでした"), true);
 
   // --- 中断で途中までしか取れていない索引は、次の取得で抜けた範囲まで辿り直す ---
   // (既知の注文で打ち切ると、その先に残った抜けを永久に拾えない)
@@ -1559,6 +1779,24 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   check("揃っていれば2ページ目は見に行かない", seenWhenComplete.length, 0);
   check("停止しても全期間のまま", state.index.complete, true);
 
+  // 増分取得では古い状態を確認し直さない代わりに、利用者が明示的に全件再取得を
+  // 完了したときだけ、キャンセル済み・履歴外の詳細キャッシュを整理する
+  resetIndex();
+  state.cache = {
+    keep: { amount: 100, items: [] },
+    cancelled: { amount: 200, items: [] },
+    missing: { amount: 300, items: [] },
+  };
+  routes = {
+    [ORDERS_URL]: `<html><body>${orderLink("keep", "2026年5月3日 12:34")}` +
+      `${orderLink("cancelled", "2026年4月3日 12:34").replace("completed", "cancelled")}</body></html>`,
+  };
+  await runTask((signal) => fetchIndexTask(signal, true));
+  check("全件再取得ではキャンセル状態を索引に反映する",
+    state.index.orders.map(o => [o.id, o.status]), [["keep", "completed"], ["cancelled", "cancelled"]]);
+  check("全件再取得の完了時だけ集計対象外のキャッシュを消す",
+    Object.keys(state.cache), ["keep"]);
+
   // 全件再取得を中断しても、収集済みの金額は消さない。
   // 消してしまうと「ここまでに取得した金額は保存されている」という案内が嘘になる
   resetIndex();
@@ -1582,8 +1820,13 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   });
   // 未収集のときに落ちず FAIL として出るよう、取り出しは防御的にする
   const cachedAmount = (id) => (state.cache[id] ? state.cache[id].amount : undefined);
-  const savedRetryWait = fetchRetryWaitMs;
-  fetchRetryWaitMs = 1; // 待ち時間はテストでは詰める
+  check("再試行は指数バックオフする",
+    [fetchRetryWaitMs({ status: 500 }, 0), fetchRetryWaitMs({ status: 500 }, 1)], [2000, 4000]);
+  check("再試行するHTTP状態を限定する",
+    [408, 429, 500, 503, 404].map((status) => isRetryableFetchError({ status, name: "HttpError" })),
+    [true, true, true, true, false]);
+  const savedRetryWait = fetchRetryBaseWaitMs;
+  fetchRetryBaseWaitMs = 1; // 待ち時間はテストでは詰める
 
   // 1回失敗しても試し直して拾える
   state.index = indexOf2("ok1", "flaky");
@@ -1604,6 +1847,36 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   // 版数を書き忘れると、収集した直後から未収集に戻り、毎回の実行で取り直し続ける
   check("収集したエントリに版数が入る", state.cache.ok1.v, CACHE_SCHEMA_VERSION);
   check("収集した直後は取り直しの対象にならない", needsCollect(state.cache.ok1), false);
+
+  // 429はサーバー指定のRetry-Afterを優先する
+  state.index = indexOf2("rate", "rate-ok");
+  state.cache = { "rate-ok": { v: CACHE_SCHEMA_VERSION, amount: 1, items: [] } };
+  let rateLimitTries = 0;
+  routes = {
+    [detailUrl("rate")]: (path) => {
+      rateLimitTries++;
+      return rateLimitTries === 1
+        ? errorResponse(path, 429, "0")
+        : okResponse(path, detailHtml(2100));
+    },
+  };
+  await runTask((signal) => collectAmounts(targetOrders(), false, signal));
+  check("HTTP 429はRetry-After後に試し直す", rateLimitTries, 2);
+  check("HTTP 429の再試行で収集できる", cachedAmount("rate"), 2100);
+
+  // 404は繰り返しても変わらないため再試行しない
+  state.index = indexOf2("missing-detail", "missing-ok");
+  state.cache = { "missing-ok": { v: CACHE_SCHEMA_VERSION, amount: 1, items: [] } };
+  let notFoundTries = 0;
+  routes = {
+    [detailUrl("missing-detail")]: (path) => {
+      notFoundTries++;
+      return errorResponse(path, 404, null);
+    },
+  };
+  await runTask((signal) => collectAmounts(targetOrders(), false, signal));
+  check("HTTP 404は再試行しない", notFoundTries, 1);
+  check("HTTP 404の注文は未収集のまま残す", cachedAmount("missing-detail"), undefined);
 
   // 試し直しても駄目な注文は飛ばして、残りの収集を続ける
   state.index = indexOf2("ok2", "broken");
@@ -1639,7 +1912,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   check("ログイン切れはその場で止める", state.cache.s2, undefined);
   check("ログイン切れは理由を出す", errorBox.textContent.includes("ログインが必要です"), true);
 
-  fetchRetryWaitMs = savedRetryWait;
+  fetchRetryBaseWaitMs = savedRetryWait;
   window.fetch = realFetch;
   resetIndex();
 
@@ -1663,6 +1936,25 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   check("メニューに追加した画面が並んでいる",
     [...dashboardDoc.querySelectorAll(".nav-link")].map((a) => a.getAttribute("href")),
     ["#/report", "#/ranking", "#/trends", "#/summary", "#/export", "#/backup"]);
+  check("作者情報はメニューの最後に置く",
+    dashboardDoc.getElementById("navDrawer").lastElementChild.id, "authorBtn");
+  check("ヘッダー右端にコピーライトを置く",
+    dashboardDoc.querySelector(".copyright").textContent, "©2026 Kie (Kie工房)");
+  check("作者情報を正式なモーダルとして宣言",
+    [dashboardDoc.getElementById("authorPanel").getAttribute("role"),
+     dashboardDoc.getElementById("authorPanel").getAttribute("aria-modal")], ["dialog", "true"]);
+  check("作者情報に指定のリンクを載せる",
+    [...dashboardDoc.querySelectorAll(".author-links a")].map((a) => a.getAttribute("href")),
+    ["https://github.com/Kie610", "https://x.com/niconicokito", "https://x.com/NicoNicoKieVRC"]);
+  check("著者近影は外部通信せず同梱画像を使う",
+    dashboardDoc.getElementById("authorPortrait").getAttribute("src"), "icons/author-kie.png");
+  check("作者情報に非公式の断りを載せる",
+    dashboardDoc.querySelector(".author-disclaimer").textContent.includes("ピクシブ株式会社およびBOOTHとは関係ありません"), true);
+  check("作者情報に無料版と支援版の関係を載せる",
+    dashboardDoc.querySelector(".author-support-note").textContent.includes("支援版に含まれる拡張機能は無料版と同一です"), true);
+  check("共有画面に非公式と比較価格の断りを載せる",
+    [dashboardDoc.querySelector(".share-legal-note").textContent.includes("非公式"),
+     dashboardDoc.querySelector(".share-legal-note").textContent.includes("2026年7月時点の概算")], [true, true]);
   // まとめの作者別金額もランキングと同じ商品合計なので、同じ断りを画面に出す
   check("まとめに合計と一致しない旨の断りがある",
     dashboardHtml.includes("足しても上の合計額とは一致しません"), true);
@@ -1676,6 +1968,27 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   // 一括集計はこの画面で最初に押すボタンなので、他と同じ白地だと見つけられない
   check("一括集計は目立つ色にする",
     dashboardDoc.getElementById("runAllBtn").className, "primary");
+  const collectionOptions = dashboardDoc.querySelector("details.collection-options");
+  check("個別収集は実態に即した名前で畳む",
+    [collectionOptions.querySelector("summary").textContent.trim(), collectionOptions.hasAttribute("open")],
+    ["個別に収集する", false]);
+  check("個別収集の中に注文履歴と金額収集を置く",
+    [Boolean(collectionOptions.querySelector("#fetchIndexBtn")), Boolean(collectionOptions.querySelector("#collectRangeBtn"))],
+    [true, true]);
+  check("CSVとバックアップに機密性の警告を出す",
+    dashboardDoc.querySelectorAll(".sensitive-note strong").length, 2);
+  check("復元ファイルに明示的なラベルがある",
+    dashboardDoc.querySelector('label[for="restoreFile"]').textContent.trim(), "読み込むバックアップ");
+  check("共有文面に明示的なラベルがある",
+    dashboardDoc.querySelector('label[for="shareText"]').textContent.trim(), "投稿する文面");
+  check("共有カードを正式なモーダルとして宣言",
+    [dashboardDoc.getElementById("sharePanel").getAttribute("role"),
+     dashboardDoc.getElementById("sharePanel").getAttribute("aria-modal")], ["dialog", "true"]);
+  check("通知とエラーに読み上げ用の役割がある",
+    [dashboardDoc.getElementById("noticeBox").getAttribute("role"),
+     dashboardDoc.getElementById("errorBox").getAttribute("role")], ["status", "alert"]);
+  check("進捗をprogressbarとして宣言",
+    dashboardDoc.getElementById("progress").getAttribute("role"), "progressbar");
 
   // 共有パネルは「テンプレートを選ぶ→無ければ画像を持ってくる」の順に読ませる。
   // 手持ちの画像が要るように見えると、その場で作れることに気付けない
@@ -1684,6 +1997,10 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   check("色と模様を別々に選ばせる",
     [Boolean(dashboardDoc.getElementById("shareColors")),
      Boolean(dashboardDoc.getElementById("sharePatterns"))], [true, true]);
+  const scaleInput = dashboardDoc.getElementById("shareScale");
+  check("画像の形の横に拡大率を置く",
+    [scaleInput.closest(".share-shape") !== null, scaleInput.min, scaleInput.max, scaleInput.value],
+    [true, "100", "300", "100"]);
 
   // 読み込めなかったファイルを名指しできるよう、スクリプトの一覧と対応させる
   const harnessDoc = new DOMParser().parseFromString(await (await fetch("index.html")).text(), "text/html");
@@ -1692,9 +2009,34 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
     REQUIRED_GLOBALS.map(([file]) => file));
 
   const dashboardCss = await (await fetch("../extension/dashboard.css")).text();
+  check("アクセント色は変更しない", dashboardCss.includes("--accent: #fc4d50"), true);
+  check("共有画像の操作をボタン単位で目立たせる", dashboardCss.includes("button.share-media-btn"), true);
   const dashboardStyle = document.createElement("style");
   dashboardStyle.textContent = dashboardCss;
   document.head.appendChild(dashboardStyle);
+
+  const colorFixture = document.createElement("div");
+  colorFixture.innerHTML = `
+    <span class="step-no">①</span>
+    <button class="primary">実行</button>
+    <button class="segmented-btn current">選択中</button>
+    <div class="share-media-actions"><button class="secondary share-media-btn">画像をコピー</button></div>`;
+  document.body.appendChild(colorFixture);
+  const stepNoStyle = getComputedStyle(colorFixture.querySelector(".step-no"));
+  const primaryStyle = getComputedStyle(colorFixture.querySelector(".primary"));
+  const segmentedStyle = getComputedStyle(colorFixture.querySelector(".segmented-btn.current"));
+  const mediaActionsStyle = getComputedStyle(colorFixture.querySelector(".share-media-actions"));
+  check("手順番号は背景を付けずアクセント色で表示",
+    [stepNoStyle.color, stepNoStyle.backgroundColor], ["rgb(252, 77, 80)", "rgba(0, 0, 0, 0)"]);
+  check("主ボタンはアクセント背景に白文字",
+    [primaryStyle.backgroundColor, primaryStyle.color, primaryStyle.fontWeight],
+    ["rgb(252, 77, 80)", "rgb(255, 255, 255)", "400"]);
+  check("選択中の切り替えはアクセント背景に白文字",
+    [segmentedStyle.backgroundColor, segmentedStyle.color], ["rgb(252, 77, 80)", "rgb(255, 255, 255)"]);
+  check("共有画像ボタンの背面に枠や背景を付けない",
+    [mediaActionsStyle.borderTopWidth, mediaActionsStyle.backgroundColor, mediaActionsStyle.paddingTop],
+    ["0px", "rgba(0, 0, 0, 0)", "0px"]);
+  colorFixture.remove();
   const shareButtonStyle = getComputedStyle(shareBtn);
   check("共有ボタンの背景は黒", shareButtonStyle.backgroundColor, "rgb(0, 0, 0)");
   check("共有ボタンの文字は白", shareButtonStyle.color, "rgb(255, 255, 255)");
@@ -1726,9 +2068,36 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
 
   // 未リリースのうちは 0.x に留める。1.0.0 に上げるのはリリースを宣言するときだけ
   check("バージョンは 0.x(未リリース)", /^0\.\d+\.\d+$/.test(manifest.version), true);
+  check("今回の機能追加版", manifest.version, "0.31.0");
 
   check("manifestのiconsに4サイズを宣言", manifest.icons, expectedIcons);
   check("ツールバー用のdefault_iconも同じ4サイズ", manifest.action.default_icon, expectedIcons);
+
+  const readmeText = await (await fetch("../README.md")).text();
+  const handoffText = await (await fetch("../HANDOFF.md")).text();
+  const supportDistributionNotice = "本拡張機能は無料でダウンロード・利用できます。BOOTHには任意の支援版も用意しますが、支援版に含まれる拡張機能は無料版と同一です。支援版の購入およびBOOSTは作者への任意の支援であり、支援の有無や金額による機能・利用条件・サポート内容の違いはありません。";
+  check("無料版と支援版の説明をREADME・作者情報・HANDOFFで統一",
+    [readmeText.includes(supportDistributionNotice),
+     dashboardDoc.querySelector(".author-support-note").textContent.trim() === supportDistributionNotice,
+     handoffText.includes(supportDistributionNotice)], [true, true, true]);
+  check("Firefoxは一時読み込みのみ確認済みと明記",
+    readmeText.includes("Firefoxは**開発時の一時読み込みのみ確認済み**です"), true);
+  check("Chromeウェブストアへ公開しない方針を明記",
+    readmeText.includes("Chromeウェブストアには公開せず"), true);
+
+  const releaseScript = await (await fetch("../tools/release.ps1")).text();
+  check("リリーススクリプトはZIPとSHA-256を作る",
+    [releaseScript.includes("Compress-Archive"), releaseScript.includes("Get-FileHash")], [true, true]);
+  check("リリースZIPは拡張本体と法務文書を同梱する",
+    ["packageExtensionPath", "LICENSE", "CREDIT.md", "PRIVACY.md"].every((text) => releaseScript.includes(text)), true);
+
+  const privacyText = await (await fetch("../PRIVACY.md")).text();
+  const creditText = await (await fetch("../CREDIT.md")).text();
+  check("プライバシー文書に保存先とX共有の例外を明記",
+    [privacyText.includes("storage.local"), privacyText.includes("x.com/intent/post")], [true, true]);
+  check("著者近影の4アセットと撮影ワールドをクレジット",
+    ["6571299", "6727248", "8036193", "8052440", "wrld_6b3d1145-7c3d-42b2-b822-bc4ba30b402e"]
+      .every((id) => creditText.includes(id)), true);
 
   const iconSizes = [];
   for (const size of ICON_SIZES) {
@@ -1741,6 +2110,8 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
     iconSizes.push(`${size}: ${bitmap.width}x${bitmap.height}`);
   }
   check("アイコンの実ファイルが宣言どおりの寸法", iconSizes, ICON_SIZES.map((s) => `${s}: ${s}x${s}`));
+  const authorImage = await createImageBitmap(await (await fetch("../extension/icons/author-kie.png")).blob());
+  check("縮小した著者近影の実ファイルを同梱", [authorImage.width, authorImage.height], [240, 240]);
 
   document.getElementById("out").textContent =
     lines.join("\n") + `\n\n---- ${failures === 0 ? "ALL PASS" : failures + " FAILED"} (${lines.length} checks) ----`;

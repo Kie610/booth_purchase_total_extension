@@ -20,6 +20,7 @@ const rangeTo = document.getElementById("rangeTo");
 const selectPendingBtn = document.getElementById("selectPendingBtn");
 const collectRangeBtn = document.getElementById("collectRangeBtn");
 const plannedCountEl = document.getElementById("plannedCount");
+const allPlannedCountEl = document.getElementById("allPlannedCount");
 const forceRefreshRange = document.getElementById("forceRefreshRange");
 const unknownArea = document.getElementById("unknownArea");
 const unknownCount = document.getElementById("unknownCount");
@@ -38,6 +39,10 @@ const progressFill = document.getElementById("progressFill");
 const summarySection = document.getElementById("summarySection");
 const breakdownSection = document.getElementById("breakdownSection");
 const orderRowCountEl = document.getElementById("orderRowCount");
+const orderSearch = document.getElementById("orderSearch");
+const orderStatusFilter = document.getElementById("orderStatusFilter");
+const orderSort = document.getElementById("orderSort");
+const orderFilterCount = document.getElementById("orderFilterCount");
 const footTotal = document.getElementById("footTotal");
 const footTotalCount = document.getElementById("footTotalCount");
 const footYearLabel = document.getElementById("footYearLabel");
@@ -75,6 +80,11 @@ const errorBox = document.getElementById("errorBox");
 const menuBtn = document.getElementById("menuBtn");
 const navDrawer = document.getElementById("navDrawer");
 const navOverlay = document.getElementById("navOverlay");
+const authorBtn = document.getElementById("authorBtn");
+const authorOverlay = document.getElementById("authorOverlay");
+const authorPanel = document.getElementById("authorPanel");
+const authorCloseBtn = document.getElementById("authorCloseBtn");
+const authorPortrait = document.getElementById("authorPortrait");
 const viewTitle = document.getElementById("viewTitle");
 const exportEmpty = document.getElementById("exportEmpty");
 const exportArea = document.getElementById("exportArea");
@@ -108,6 +118,8 @@ const sharePanel = document.getElementById("sharePanel");
 const shareCloseBtn = document.getElementById("shareCloseBtn");
 const shareCanvas = document.getElementById("shareCanvas");
 const shareRatioToggle = document.getElementById("shareRatioToggle");
+const shareScaleInput = document.getElementById("shareScale");
+const shareScaleValue = document.getElementById("shareScaleValue");
 const shareDropZone = document.getElementById("shareDropZone");
 const shareColors = document.getElementById("shareColors");
 const sharePatterns = document.getElementById("sharePatterns");
@@ -193,14 +205,14 @@ function renderPendingBanner(current) {
     `${reasons.join("。")}。この画面の内容は実際より少なくなります。`;
 }
 
-function setDrawerOpen(open) {
+function setDrawerOpen(open, returnFocus = true) {
   navDrawer.hidden = !open;
   navOverlay.hidden = !open;
   menuBtn.setAttribute("aria-expanded", String(open));
   if (open) {
     const first = navDrawer.querySelector(".nav-link");
     if (first) first.focus();
-  } else {
+  } else if (returnFocus) {
     menuBtn.focus();
   }
 }
@@ -208,6 +220,8 @@ function setDrawerOpen(open) {
 function drawerIsOpen() {
   return !navDrawer.hidden;
 }
+
+// 作者情報ダイアログの表示は dashboard-author-view.js に分離。
 
 // 折りたたみ表で開いている年。再描画のたびに行を作り直すため、
 // 開閉状態はDOMではなくこちらで持つ(表ごとに1つ)
@@ -238,8 +252,12 @@ function td(text, className) {
 // 折りたたみの三角印を添えた見出しセル
 function toggleCell(label, expanded) {
   const cell = td("");
-  cell.appendChild(el("span", "toggle", expanded ? "▾" : "▸"));
-  cell.appendChild(document.createTextNode(` ${label}`));
+  const button = el("button", "table-toggle");
+  button.type = "button";
+  button.setAttribute("aria-expanded", String(expanded));
+  button.appendChild(el("span", "toggle", expanded ? "▾" : "▸"));
+  button.appendChild(el("span", "table-toggle-label", label));
+  cell.appendChild(button);
   return cell;
 }
 
@@ -262,12 +280,19 @@ function renderCollapsibleTable(tbody, years, expandedKeys, buildYearRow, buildM
     if (year.key !== null) yearRow.dataset.yearKey = year.key;
     tbody.appendChild(yearRow);
 
-    for (const month of year.months) {
+    const controlledIds = [];
+    for (const [monthIndex, month] of year.months.entries()) {
       const monthRow = buildMonthRow(month, year);
       if (!monthRow) continue;
       monthRow.dataset.yearKey = year.key;
+      monthRow.id = `${tbody.id}-${year.key || "unknown"}-${monthIndex}`;
+      controlledIds.push(monthRow.id);
       monthRow.hidden = !expanded;
       tbody.appendChild(monthRow);
+    }
+    const toggle = yearRow.querySelector(".table-toggle");
+    if (toggle && controlledIds.length > 0) {
+      toggle.setAttribute("aria-controls", controlledIds.join(" "));
     }
   }
 }
@@ -282,7 +307,9 @@ function toggleYearRow(tbody, expandedKeys, yearRow) {
   } else {
     expandedKeys.add(key);
   }
-  yearRow.querySelector(".toggle").textContent = expanded ? "▸" : "▾";
+  const button = yearRow.querySelector(".table-toggle");
+  button.querySelector(".toggle").textContent = expanded ? "▸" : "▾";
+  button.setAttribute("aria-expanded", String(!expanded));
   tbody
     .querySelectorAll(`tr.month-row[data-year-key="${key}"]`)
     .forEach((row) => {
@@ -294,6 +321,8 @@ function toggleYearRow(tbody, expandedKeys, yearRow) {
 
 // 実行中は操作を止める。running そのものは dashboard.js が持つ
 function renderRunningState(isRunning) {
+  const main = document.querySelector("main");
+  if (main) main.setAttribute("aria-busy", String(isRunning));
   ACTION_BUTTONS.forEach((btn) => {
     btn.disabled = isRunning;
   });
@@ -307,6 +336,7 @@ function renderRunningState(isRunning) {
   abortBtn.disabled = !isRunning;
   if (!isRunning) {
     progressBox.hidden = true;
+    progressBox.removeAttribute("aria-valuenow");
     document.body.classList.remove("has-progress");
   }
 }
@@ -344,7 +374,11 @@ function setProgress(text, ratio) {
   document.body.classList.add("has-progress");
   progressText.textContent = text;
   if (typeof ratio === "number") {
-    progressFill.style.width = `${Math.min(100, Math.max(0, ratio * 100))}%`;
+    const percent = Math.min(100, Math.max(0, ratio * 100));
+    progressFill.style.width = `${percent}%`;
+    progressBox.setAttribute("aria-valuenow", String(Math.round(percent)));
+  } else {
+    progressBox.removeAttribute("aria-valuenow");
   }
 }
 
@@ -366,592 +400,7 @@ function render() {
   renderCurrentView();
 }
 
-// ---- 推し作者ランキング ------------------------------------------------
-
-// 上位何位まで出すか。王冠を付ける順位と、太字にする順位
-const RANKING_LIMIT = 10;
-const RANKING_CROWNS = 3;
-const RANKING_BOLD = 5;
-
-// 金額編・購入数編のどちらで並べているか。再描画で作り直す表には残せないので
-// ここで持つ(開いている年の集合と同じ扱い)
-let rankingSort = DEFAULT_SHOP_SORT;
-
-function setRankingSort(sort) {
-  if (!SHOP_SORTS[sort] || sort === rankingSort) return;
-  rankingSort = sort;
-  renderRankingArea();
-  updateShareButton();
-}
-
-// 数量の左に小さく添えるギフト表記。金額のセルと置き方をそろえる
-function countCell(count, giftCount) {
-  const cell = td("", "num");
-  if (giftCount > 0) cell.appendChild(el("span", "gift", giftCountText(giftCount)));
-  cell.appendChild(document.createTextNode(`${count}点`));
-  return cell;
-}
-
-// ショップ名。BOOTHのショップURLが取れていればリンクにする
-// (URLは取得したHTML由来なので、booth.pm のものだけを通す)
-const SHOP_URL_PATTERN = /^https:\/\/[\w-]+\.booth\.pm\/?$/;
-
-function shopNameCell(row) {
-  const cell = td("");
-  if (SHOP_URL_PATTERN.test(row.url)) {
-    const link = el("a", null, row.name);
-    link.href = row.url;
-    link.target = "_blank";
-    link.rel = "noopener";
-    cell.appendChild(link);
-  } else {
-    cell.textContent = row.name;
-  }
-  return cell;
-}
-
-function rankCell(rank, expanded) {
-  const cell = td("", "rank");
-  const badge = el("span", "rank-badge", String(rank));
-  // 1〜3位は王冠を背景に敷く(金・銀・銅)
-  if (rank <= RANKING_CROWNS) badge.classList.add(`rank-crown-${rank}`);
-  cell.appendChild(badge);
-  // 何が買えるのか押す前に分かるよう、開閉できることを三角で示す
-  cell.appendChild(el("span", "toggle", expanded ? "▾" : "▸"));
-  return cell;
-}
-
-// 押されている基準のボタンと、その基準で並べている列に印を付ける
-function renderRankingSortToggle() {
-  rankingSortToggle.querySelectorAll(".segmented-btn").forEach((btn) => {
-    const on = btn.dataset.sort === rankingSort;
-    btn.classList.toggle("current", on);
-    btn.setAttribute("aria-pressed", String(on));
-  });
-  rankingTableBody
-    .closest("table")
-    .querySelectorAll("th[data-sort]")
-    .forEach((th) => th.classList.toggle("sorted", th.dataset.sort === rankingSort));
-}
-
-function renderRankingArea() {
-  const results = buildResults();
-  const shops = aggregateByShop(results, rankingSort);
-  renderRankingSortToggle();
-  rankingEmpty.hidden = shops.length > 0;
-  rankingArea.hidden = shops.length === 0;
-  // 共有できるのは画面に出している順位そのもの。取り違えが起きないよう、
-  // 描画に使ったものをそのまま共有側へ渡す
-  rankingShareStats = buildRankingShareStats(results, shops);
-  if (shops.length === 0) {
-    rankingTableBody.innerHTML = "";
-    return;
-  }
-
-  const shown = shops.slice(0, RANKING_LIMIT);
-  rankingStats.textContent =
-    `ショップ: ${shops.length}件` +
-    (shops.length > shown.length ? ` (上位${shown.length}件を表示)` : "");
-
-  // 金額を読めなかった商品を0として足すと、少ない額を正しい合計に見せてしまう
-  const unknown = shops.reduce((sum, row) => sum + row.unknown, 0);
-  rankingUnknown.hidden = unknown === 0;
-  if (unknown > 0) {
-    rankingUnknown.textContent =
-      `金額を読み取れなかった商品が${unknown}点あります。その分は合計額に入っていません。`;
-  }
-
-  renderShopRows(rankingTableBody, shown, RANKING_BOLD);
-}
-
-// 順位をクリックすると、そのショップで買った商品が下に開く。
-// 開いているショップは表を作り直しても保つ(並べ替えのたびに閉じると探し直しになる)
-const expandedShopKeys = new Set();
-
-// ランキングとまとめで同じ形の行を出す。片方だけ列や飾りが違うと、
-// 見比べたときに別のものを数えているように見える
-function renderShopRows(tbody, shops, boldUntil) {
-  tbody.innerHTML = "";
-  shops.forEach((row, index) => {
-    const expanded = expandedShopKeys.has(row.key);
-    const tr = el("tr", index < boldUntil ? "shop-row rank-top" : "shop-row");
-    tr.dataset.shopKey = row.key;
-    tr.appendChild(rankCell(index + 1, expanded));
-    tr.appendChild(shopNameCell(row));
-    tr.appendChild(countCell(row.count, row.giftCount));
-    tr.appendChild(amountCell(row.total, row.gift));
-    tbody.appendChild(tr);
-    tbody.appendChild(shopItemsRow(row, expanded));
-  });
-}
-
-// 同じ商品を複数の注文で買っていると重複するので、名前でまとめたものを出す
-// (集合にする側は aggregateByShop が担う)
-function shopItemsRow(row, expanded) {
-  const tr = el("tr", "shop-items-row");
-  tr.dataset.shopKey = row.key;
-  tr.hidden = !expanded;
-
-  const cell = td("", "shop-items");
-  cell.colSpan = 4;
-  if (row.items.length === 0) {
-    cell.appendChild(el("span", "hint", "商品の明細がありません"));
-  } else {
-    const list = el("ul", "shop-item-list");
-    for (const name of row.items) list.appendChild(el("li", "", name));
-    cell.appendChild(list);
-    cell.appendChild(el("span", "hint", `${row.items.length}種類`));
-  }
-  tr.appendChild(cell);
-  return tr;
-}
-
-// ランキングとまとめの両方に同じショップが出るので、開閉は表をまたいで反映する。
-// 片方だけ開くと、行き来したときに開いたはずのものが閉じて見える
-function toggleShopItems(key) {
-  const expanded = expandedShopKeys.has(key);
-  if (expanded) {
-    expandedShopKeys.delete(key);
-  } else {
-    expandedShopKeys.add(key);
-  }
-  const selector = `[data-shop-key="${CSS.escape(key)}"]`;
-  document.querySelectorAll(`tr.shop-items-row${selector}`).forEach((tr) => {
-    tr.hidden = expanded;
-  });
-  document.querySelectorAll(`tr.shop-row${selector} .toggle`).forEach((mark) => {
-    mark.textContent = expanded ? "▸" : "▾";
-  });
-}
-
-// ---- 今年のまとめ ------------------------------------------------------
-
-// 選んでいる年。注文の無い年は選べないので、描画のたびに実在する年へ寄せる
-let summarySelectedYear = null;
-
-function setSummaryYear(year) {
-  const value = Number(year);
-  if (!Number.isFinite(value) || value === summarySelectedYear) return;
-  summarySelectedYear = value;
-  renderYearSummary();
-  // 共有ボタンには年が入っているので、選び直したら文言も追従させる
-  updateShareButton();
-}
-
-// 1月に見ると去年を振り返りたいので、今年に注文が無ければ最も新しい年へ落とす
-function resolveSummaryYear(years) {
-  if (years.includes(summarySelectedYear)) return summarySelectedYear;
-  const thisYear = new Date().getFullYear();
-  return years.includes(thisYear) ? thisYear : years[0];
-}
-
-// 年を選ぶプルダウンは、まとめと支出推移の両方で使う。
-// 中身が同じなら作り直さない(開いたまま再描画すると選択が閉じてしまう)
-function renderYearOptions(select, years, selected) {
-  const same =
-    select.options.length === years.length &&
-    years.every((year, index) => select.options[index].value === String(year));
-  if (!same) {
-    select.innerHTML = "";
-    for (const year of years) {
-      select.appendChild(el("option", "", `${year}年`)).value = String(year);
-    }
-  }
-  select.value = String(selected);
-}
-
-function renderYearSummary() {
-  const results = buildResults();
-  const years = orderYears(results);
-  summaryEmpty.hidden = years.length > 0;
-  summaryArea.hidden = years.length === 0;
-  if (years.length === 0) {
-    summaryCards.innerHTML = "";
-    summaryTopShopsBody.innerHTML = "";
-    summaryShareStats = null;
-    return;
-  }
-
-  summarySelectedYear = resolveSummaryYear(years);
-  renderYearOptions(summaryYear, years, summarySelectedYear);
-  const stats = buildYearSummary(results, summarySelectedYear);
-  // 共有するのは画面に出したものそのもの。共有時に集計し直さない
-  summaryShareStats = stats;
-
-  // 未収集はまとめの数字を実際より少なくする。合計のすぐ横で断る
-  const totalNote = [`注文${stats.orderCount}件`];
-  if (stats.gift > 0) totalNote.push(`ギフト ${formatYen(stats.gift)}`);
-  if (stats.pendingCount > 0) totalNote.push(`未収集${stats.pendingCount}件`);
-
-  const cards = [
-    [`${stats.year}年の合計額`, formatYen(stats.total), totalNote.join(" / ")],
-    ["買ったもの", `${stats.itemCount}点`, giftCountText(stats.giftItemCount)],
-    [
-      "支援した作者",
-      `${stats.shopCount}人`,
-      stats.newShopCount > 0 ? `はじめて ${stats.newShopCount}人` : "",
-    ],
-  ];
-  if (stats.busiestMonth) {
-    cards.push([
-      "いちばん買った月",
-      monthLabel(stats.busiestMonth.key),
-      formatYen(stats.busiestMonth.total),
-    ]);
-  }
-  summaryCards.innerHTML = "";
-  for (const [label, value, note] of cards) {
-    summaryCards.appendChild(statCard(label, value, note));
-  }
-
-  // 過去の注文が未収集だと明細が無く、その作者を「はじめて」に数えてしまう
-  summaryNewShopWarn.hidden = stats.beforePending === 0;
-  if (stats.beforePending > 0) {
-    summaryNewShopWarn.textContent =
-      `${stats.year}年より前の注文に未収集が${stats.beforePending}件あります。` +
-      "その注文で買った作者は「はじめて」に数えてしまうことがあります。";
-  }
-
-  renderShopRows(summaryTopShopsBody, stats.topShops, stats.topShops.length);
-}
-
-function statCard(label, value, note, className) {
-  const card = el("div", `stat-card${className ? ` ${className}` : ""}`);
-  card.appendChild(el("span", "stat-label", label));
-  card.appendChild(el("strong", "stat-value", value));
-  if (note) card.appendChild(el("span", "stat-note", note));
-  return card;
-}
-
-function barHeight(amount, max) {
-  if (amount <= 0 || max <= 0) return 0;
-  return Math.max(3, (amount / max) * 100);
-}
-
-function svgEl(tag, attributes, text) {
-  const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
-  for (const [name, value] of Object.entries(attributes || {})) {
-    node.setAttribute(name, String(value));
-  }
-  if (text != null) node.textContent = text;
-  return node;
-}
-
-function trendPoints(months, key, max, limit = 12) {
-  const left = 48;
-  const top = 24;
-  const width = 640;
-  const height = 176;
-  const ceiling = max || 1;
-  return months
-    .slice(0, limit)
-    .map((month, index) => {
-      const x = left + (width * index) / 11;
-      const y = top + height - (height * month[key]) / ceiling;
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(" ");
-}
-
-function renderCumulativeChart(trend) {
-  cumulativeTrendChart.innerHTML = "";
-  cumulativeTrendChart.setAttribute(
-    "aria-label",
-    `${trend.year}年と${trend.baseYear}年の年間累計支出`
-  );
-  cumulativeTrendChart.appendChild(
-    svgEl("title", {}, `${trend.year}年と${trend.baseYear}年の年間累計支出`)
-  );
-
-  const gridValues = [0, 0.5, 1];
-  for (const ratio of gridValues) {
-    const y = 200 - 176 * ratio;
-    cumulativeTrendChart.appendChild(
-      svgEl("line", { x1: 48, y1: y, x2: 688, y2: y, class: "trend-grid-line" })
-    );
-    cumulativeTrendChart.appendChild(
-      svgEl(
-        "text",
-        { x: 42, y: y + 4, class: "trend-axis-value", "text-anchor": "end" },
-        formatYen(Math.round(trend.maxCumulative * ratio))
-      )
-    );
-  }
-
-  for (let index = 0; index < 12; index++) {
-    const x = 48 + (640 * index) / 11;
-    cumulativeTrendChart.appendChild(
-      svgEl("text", { x, y: 226, class: "trend-axis-month", "text-anchor": "middle" }, index + 1)
-    );
-  }
-
-  cumulativeTrendChart.appendChild(
-    svgEl("polyline", {
-      class: "trend-line previous",
-      points: trendPoints(trend.months, "previousCumulative", trend.maxCumulative),
-    })
-  );
-  cumulativeTrendChart.appendChild(
-    svgEl("polyline", {
-      class: "trend-line current",
-      points: trendPoints(
-        trend.months,
-        "currentCumulative",
-        trend.maxCumulative,
-        trend.throughMonth
-      ),
-    })
-  );
-}
-
-// 比較する2つの年。null は「まだ選んでいない(既定に任せる)」
-let trendSelectedYear = null;
-let trendSelectedBaseYear = null;
-
-// 既定は今年と前年。注文が無い年は選べないので、実在する年へ寄せる
-function resolveTrendYears(years, thisYear) {
-  const year = years.includes(trendSelectedYear)
-    ? trendSelectedYear
-    : years.includes(thisYear)
-      ? thisYear
-      : years[0];
-  const others = years.filter((candidate) => candidate !== year);
-  const base = others.includes(trendSelectedBaseYear)
-    ? trendSelectedBaseYear
-    : others.includes(year - 1)
-      ? year - 1
-      : others[0];
-  // 比べる相手が1つも無い(1年分しか買っていない)ときは前年を空として扱う
-  return [year, base === undefined ? year - 1 : base];
-}
-
-function setTrendYears(year, baseYear) {
-  trendSelectedYear = Number(year);
-  trendSelectedBaseYear = Number(baseYear);
-  renderSpendingTrends();
-}
-
-function renderSpendingTrends(now = new Date()) {
-  const results = buildResults();
-  const valid = results.filter((result) => typeof result.amount === "number");
-  trendsEmpty.hidden = valid.length > 0;
-  trendsArea.hidden = valid.length === 0;
-  if (valid.length === 0) {
-    trendSummary.innerHTML = "";
-    monthlyTrendChart.innerHTML = "";
-    cumulativeTrendChart.innerHTML = "";
-    trendPeriodTableBody.innerHTML = "";
-    return;
-  }
-
-  const years = orderYears(results);
-  const [year, baseYear] = resolveTrendYears(years, now.getFullYear());
-  renderYearOptions(trendYear, years, year);
-  // 同じ年どうしを比べても意味がないので、選んでいる年は相手側から外す
-  renderYearOptions(
-    trendBaseYear,
-    years.filter((candidate) => candidate !== year),
-    baseYear
-  );
-
-  // 今年は途中までしか買っていないので今月で切る。過ぎた年は12月まで見る
-  const throughMonth = year === now.getFullYear() ? now.getMonth() + 1 : 12;
-  const trend = buildSpendingTrend(results, year, throughMonth, baseYear);
-  trendCurrentYearLabel.textContent = `${trend.year}年`;
-  trendPreviousYearLabel.textContent = `${trend.baseYear}年`;
-
-  trendSummary.innerHTML = "";
-  trendSummary.appendChild(
-    statCard(
-      `${trend.year}年 1〜${trend.throughMonth}月`,
-      formatYen(trend.currentToDate),
-      "収集済みの合計額"
-    )
-  );
-  trendSummary.appendChild(
-    statCard(
-      `${trend.baseYear}年 同期間`,
-      formatYen(trend.previousToDate),
-      `${trend.baseYear}年の1月から同じ月まで`
-    )
-  );
-  const differenceClass =
-    trend.difference > 0 ? "increase" : trend.difference < 0 ? "decrease" : "";
-  const differenceText =
-    trend.difference > 0
-      ? `+${formatYen(trend.difference)}`
-      : trend.difference < 0
-        ? `-${formatYen(Math.abs(trend.difference))}`
-        : formatYen(0);
-  const rateText =
-    trend.rate === null
-      ? `${trend.baseYear}年の同期間が0円のため割合は算出できません`
-      : `同期間比 ${trend.rate > 0 ? "+" : ""}${trend.rate.toFixed(1)}%`;
-  trendSummary.appendChild(
-    statCard(`${trend.baseYear}年との差`, differenceText, rateText, differenceClass)
-  );
-
-  monthlyTrendChart.innerHTML = "";
-  monthlyTrendChart.setAttribute(
-    "aria-label",
-    `${trend.year}年と${trend.baseYear}年の月ごとの支出比較`
-  );
-  for (const month of trend.months) {
-    const group = el("div", "trend-month");
-    const bars = el("div", "trend-bar-pair");
-    for (const [key, label] of [
-      ["current", `${trend.year}年${month.month}月`],
-      ["previous", `${trend.baseYear}年${month.month}月`],
-    ]) {
-      const bar = el("span", `trend-bar ${key}`);
-      bar.style.height = `${barHeight(month[key], trend.maxMonthly)}%`;
-      bar.title = `${label}: ${formatYen(month[key])}`;
-      bar.setAttribute("aria-label", bar.title);
-      bars.appendChild(bar);
-    }
-    group.appendChild(bars);
-    group.appendChild(el("span", "trend-month-label", `${month.month}月`));
-    monthlyTrendChart.appendChild(group);
-  }
-
-  renderCumulativeChart(trend);
-  // 左で選んでいる年へ合わせてから描く
-  syncHeatmapToYear(trend.year);
-  renderHeatmap();
-  renderPeriodTableInto(
-    trendPeriodTableBody,
-    aggregateByPeriod(results),
-    expandedTrendPeriodYears
-  );
-}
-
-// ---- 買った曜日と時間帯 ------------------------------------------------
-
-// 選んでいる範囲。null は「全期間」
-let heatmapFromKey = null;
-let heatmapToKey = null;
-
-// **比較する年を切り替えたら、この区画も同じ期間へ合わせる。**
-// 別々に動くと、上のグラフが2025年なのに下は全期間、という食い違ったものを
-// 並べて見比べることになる。合わせたあとに範囲や「全期間」を選び直せば
-// そちらが残るので、年を切り替えたときだけ上書きする(同じ年での再描画では
-// 触らない。収集が進むたびに手で選んだ範囲が戻ってしまう)
-let heatmapSyncedYear = null;
-
-function syncHeatmapToYear(year) {
-  if (heatmapSyncedYear === year) return;
-  heatmapSyncedYear = year;
-  // **今年でも今月で切らず、1年間で見る。** ここで数えるのは曜日と時間帯の
-  // 傾向なので、月をそろえる意味がない(上の年比較は金額を足し合わせるため、
-  // 同じ月まででないと差が出てしまうので、あちらだけ今月で切る)。
-  // その年に注文の無い月は clampMonthKey が実在する範囲へ寄せる
-  heatmapFromKey = `${year}-01`;
-  heatmapToKey = `${year}-12`;
-}
-
-function setHeatmapRange(from, to) {
-  // 逆に選んでも同じ範囲として扱う(範囲指定の他の場所と同じ)
-  heatmapFromKey = from && to && from > to ? to : from;
-  heatmapToKey = from && to && from > to ? from : to;
-  renderHeatmap();
-}
-
-function heatmapMonthKeys(results) {
-  const keys = new Set();
-  for (const result of results) {
-    const key = monthKeyOf(result.date);
-    if (key) keys.add(key);
-  }
-  return Array.from(keys).sort();
-}
-
-// 選択肢には**注文のある月しか無い**。年に合わせて 1月〜12月 を指定しても
-// その月の注文が無ければ選べないので、範囲に入る最も近い月へ寄せる。
-// 寄せずに渡すと select の値が空になり、件数が0件として出てしまう
-function clampMonthKey(key, keys, edge) {
-  if (!key) return edge === "from" ? keys[0] : keys[keys.length - 1];
-  if (keys.includes(key)) return key;
-  const inside =
-    edge === "from"
-      ? keys.find((candidate) => candidate >= key)
-      : keys.filter((candidate) => candidate <= key).pop();
-  // 範囲の中に1か月も無いときは端へ倒す(年の選択肢は注文のある年だけなので
-  // 通常は起きないが、寄せ先が無いまま空を渡すよりは全期間の端が分かりやすい)
-  return inside || (edge === "from" ? keys[0] : keys[keys.length - 1]);
-}
-
-function renderHeatmapRangeOptions(keys) {
-  for (const [select, selected] of [
-    [heatmapFrom, clampMonthKey(heatmapFromKey, keys, "from")],
-    [heatmapTo, clampMonthKey(heatmapToKey, keys, "to")],
-  ]) {
-    const same =
-      select.options.length === keys.length &&
-      keys.every((key, index) => select.options[index].value === key);
-    if (!same) {
-      select.innerHTML = "";
-      for (const key of keys) {
-        select.appendChild(el("option", "", monthLabel(key))).value = key;
-      }
-    }
-    select.value = selected;
-  }
-}
-
-// 濃さは最大の回数を基準にする。1件でも薄く色を付けて、0件と見分けられるようにする
-function heatmapCellAlpha(count, max) {
-  if (count === 0) return 0;
-  return 0.15 + (count / max) * 0.85;
-}
-
-function renderHeatmap() {
-  const results = buildResults();
-  const keys = heatmapMonthKeys(results);
-  if (keys.length === 0) {
-    heatmapGrid.innerHTML = "";
-    heatmapEmpty.hidden = false;
-    heatmapStats.textContent = "";
-    heatmapSkipped.hidden = true;
-    return;
-  }
-  renderHeatmapRangeOptions(keys);
-
-  const stats = buildWeekdayHourStats(results, heatmapFrom.value, heatmapTo.value);
-  heatmapEmpty.hidden = stats.counted > 0;
-  heatmapGrid.hidden = stats.counted === 0;
-  heatmapStats.textContent = stats.counted > 0 ? `${stats.counted}件` : "";
-  heatmapSkipped.hidden = stats.skipped === 0;
-  if (stats.skipped > 0) {
-    heatmapSkipped.textContent =
-      `注文日時から曜日または時刻を読み取れなかった注文が${stats.skipped}件あります。` +
-      "この表には入っていません。";
-  }
-  if (stats.counted === 0) {
-    heatmapGrid.innerHTML = "";
-    return;
-  }
-
-  heatmapGrid.setAttribute(
-    "aria-label",
-    `曜日と時間帯ごとの注文件数(${monthLabel(heatmapFrom.value)}〜${monthLabel(heatmapTo.value)}、${stats.counted}件)`
-  );
-  heatmapGrid.innerHTML = "";
-  // 左上は曜日の列の見出し分
-  heatmapGrid.appendChild(el("span", "heatmap-corner"));
-  for (let hour = 0; hour < 24; hour += 1) {
-    // 24個すべて数字を出すと潰れるので、3時間おきに目印を置く
-    heatmapGrid.appendChild(el("span", "heatmap-hour", hour % 3 === 0 ? String(hour) : ""));
-  }
-  stats.cells.forEach((row, weekday) => {
-    heatmapGrid.appendChild(el("span", "heatmap-weekday", WEEKDAY_LABELS[weekday]));
-    row.forEach((count, hour) => {
-      const cell = el("span", "heatmap-cell");
-      cell.style.backgroundColor = `rgba(252, 77, 80, ${heatmapCellAlpha(count, stats.max)})`;
-      cell.title = `${WEEKDAY_LABELS[weekday]}曜 ${hour}時台: ${count}件`;
-      heatmapGrid.appendChild(cell);
-    });
-  });
-}
+// ランキング・まとめ・支出推移の表示は dashboard-insights-view.js に分離。
 
 // 引っ越しの画面。何を持ち出せるのかが分かれば十分なので、件数と期間だけを出す
 function renderBackupArea() {
@@ -1096,7 +545,12 @@ function renderMonthArea() {
   const hasIndex = Boolean(state.index) && stats.length > 0;
   monthEmpty.hidden = hasIndex;
   monthArea.hidden = !hasIndex;
-  if (!hasIndex) return;
+  if (!hasIndex) {
+    monthEmpty.textContent = state.index && indexIsComplete(state.index)
+      ? "購入履歴はありませんでした。集計する注文はありません。"
+      : "先に「① 注文履歴を取得」を実行してください。";
+    return;
+  }
 
   renderCollapsibleTable(
     monthTableBody,
@@ -1109,12 +563,16 @@ function renderMonthArea() {
       // 年をクリックしたときに設定する範囲(その年に存在する月の最古〜最新)
       row.dataset.rangeFrom = year.months[year.months.length - 1].key;
       row.dataset.rangeTo = year.months[0].key;
+      row.tabIndex = 0;
+      row.setAttribute("aria-label", `${year.label}を収集範囲に設定`);
       return row;
     },
     (month, year) => {
       if (year.key === null) return null;
       const row = statRow(month, { className: "month-row", indent: true });
       row.dataset.monthKey = month.key;
+      row.tabIndex = 0;
+      row.setAttribute("aria-label", `${month.label}を収集範囲に設定`);
       return row;
     }
   );
@@ -1196,7 +654,26 @@ function setRange(from, to) {
 }
 
 // 選択範囲で実際に取得しにいく件数(キャッシュ無視の指定を反映する)
+function collectionTimeEstimate(count) {
+  if (count <= 0) return "";
+  // リクエスト間隔だけから出す最低目安。実際は通信時間も加わるため「以上」とする。
+  const seconds = Math.max(1, Math.ceil((count * REQUEST_INTERVAL_AVERAGE_MS) / 1000));
+  if (seconds < 60) return `約${seconds}秒以上`;
+  const minutes = Math.max(1, Math.round(seconds / 60));
+  return `約${minutes}分以上`;
+}
+
 function updatePlannedCount() {
+  if (!state.index) {
+    allPlannedCountEl.textContent = "所要時間は注文履歴の取得後に表示します";
+  } else {
+    const allPlanned = pendingTargets(targetOrders(), forceRefreshAll.checked).length;
+    allPlannedCountEl.textContent =
+      allPlanned > 0
+        ? `金額取得: ${allPlanned}件 / 目安: ${collectionTimeEstimate(allPlanned)}`
+        : "金額取得: なし（注文履歴のみ確認します）";
+  }
+
   const from = rangeFrom.value;
   const to = rangeTo.value;
   if (!from || !to) {
@@ -1208,7 +685,9 @@ function updatePlannedCount() {
     forceRefreshRange.checked
   ).length;
   plannedCountEl.textContent =
-    planned > 0 ? `取得予定: ${planned}件` : "取得予定: なし(収集済み)";
+    planned > 0
+      ? `取得予定: ${planned}件 / 目安: ${collectionTimeEstimate(planned)}`
+      : "取得予定: なし(収集済み)";
   if (!running) collectRangeBtn.disabled = planned === 0;
 }
 
@@ -1255,7 +734,6 @@ function renderResult() {
 
   renderPeriodTable(results);
   renderOrderTable(results);
-  orderRowCountEl.textContent = `(${results.length}件)`;
   highlightSelectedRange();
 
   summarySection.hidden = false;
@@ -1330,13 +808,105 @@ function collectNote(entry) {
   return "";
 }
 
+function orderShops(result) {
+  const shops = new Map();
+  if (!Array.isArray(result.items)) return [];
+  for (const item of result.items) {
+    const name = String(item.shop || "").trim();
+    const url = String(item.shopUrl || "").trim();
+    if (!name) continue;
+    shops.set(url || name, { name, url });
+  }
+  return Array.from(shops.values());
+}
+
+function orderShopsLabel(result) {
+  const names = orderShops(result).map((shop) => shop.name);
+  return names.length > 0 ? names.join("、") : "—";
+}
+
+function orderShopsCell(result) {
+  const cell = td("");
+  const shops = orderShops(result);
+  if (shops.length === 0) {
+    cell.textContent = "—";
+    return cell;
+  }
+  const links = el("div", "order-shop-links");
+  for (const shop of shops) {
+    if (SHOP_URL_PATTERN.test(shop.url)) {
+      const link = el("a", null, shop.name);
+      link.href = shop.url;
+      link.target = "_blank";
+      link.rel = "noopener";
+      links.appendChild(link);
+    } else {
+      links.appendChild(el("span", "", shop.name));
+    }
+  }
+  cell.appendChild(links);
+  return cell;
+}
+
+function renderOrderStatusOptions(results) {
+  const selected = orderStatusFilter.value;
+  const statuses = Array.from(new Set(results.map((result) => result.status))).sort((a, b) =>
+    (STATUS_LABELS[a] || a).localeCompare(STATUS_LABELS[b] || b, "ja")
+  );
+  orderStatusFilter.innerHTML = "";
+  const all = el("option", "", "すべて");
+  all.value = "";
+  orderStatusFilter.appendChild(all);
+  for (const status of statuses) {
+    const option = el("option", "", STATUS_LABELS[status] || status);
+    option.value = status;
+    orderStatusFilter.appendChild(option);
+  }
+  orderStatusFilter.value = statuses.includes(selected) ? selected : "";
+}
+
+function compareOrderRows(a, b, sort) {
+  if (sort === "date-asc") {
+    const aDate = orderSortKey(a);
+    const bDate = orderSortKey(b);
+    // 日付不明は「古い」とは言えないため、昇順でも末尾へ送る。
+    if (aDate < 0 || bDate < 0) {
+      if (aDate < 0 && bDate < 0) return 0;
+      return aDate < 0 ? 1 : -1;
+    }
+    return aDate - bDate;
+  }
+  if (sort === "shop-asc") {
+    return orderShopsLabel(a).localeCompare(orderShopsLabel(b), "ja") ||
+      orderSortKey(b) - orderSortKey(a);
+  }
+  if (sort === "amount-desc" || sort === "amount-asc") {
+    const aValid = typeof a.amount === "number";
+    const bValid = typeof b.amount === "number";
+    if (aValid !== bValid) return aValid ? -1 : 1;
+    if (aValid && a.amount !== b.amount) {
+      return sort === "amount-desc" ? b.amount - a.amount : a.amount - b.amount;
+    }
+  }
+  return orderSortKey(b) - orderSortKey(a);
+}
+
 function renderOrderTable(results) {
   orderTableBody.innerHTML = "";
-  const sorted = [...results].sort((a, b) => orderSortKey(b) - orderSortKey(a));
+  renderOrderStatusOptions(results);
+  const query = orderSearch.value.trim().toLocaleLowerCase("ja");
+  const status = orderStatusFilter.value;
+  const filtered = results.filter((result) => {
+    if (status && result.status !== status) return false;
+    if (!query) return true;
+    return `${result.id} ${orderShopsLabel(result)}`.toLocaleLowerCase("ja").includes(query);
+  });
+  const sorted = [...filtered].sort((a, b) => compareOrderRows(a, b, orderSort.value));
   for (const r of sorted) {
     const tr = el("tr");
     tr.appendChild(td(r.date));
     tr.appendChild(td(STATUS_LABELS[r.status] || r.status));
+    tr.appendChild(orderShopsCell(r));
     if (typeof r.amount === "number") {
       const cell = amountCell(r.amount, giftAmount(r));
       // 金額は読めたが取り直しの対象になっている注文。月別表では未収集として
@@ -1354,216 +924,12 @@ function renderOrderTable(results) {
     tr.appendChild(td(r.id));
     orderTableBody.appendChild(tr);
   }
+  orderRowCountEl.textContent = `(${filtered.length === results.length
+    ? `${results.length}件`
+    : `${filtered.length}/${results.length}件`})`;
+  orderFilterCount.textContent = filtered.length === results.length
+    ? `${results.length}件を表示`
+    : `${results.length}件中 ${filtered.length}件を表示`;
 }
 
-// ---- 共有 --------------------------------------------------------------
-
-// 描画に使った並びをそのまま持ち回る。共有のときに集計し直すと、
-// 画面に出ている順位と違うものを外に出しかねない
-function buildRankingShareStats(results, shops) {
-  return {
-    sort: rankingSort,
-    rows: shops.slice(0, RANKING_SHARE_LIMIT),
-    shopCount: shops.length,
-    // 順位が実際とずれる原因。共有の前に断るために持っておく
-    pending: results.filter((r) => needsCollect(state.cache[r.id])).length,
-    unknown: shops.reduce((sum, row) => sum + row.unknown, 0),
-    indexComplete: indexIsComplete(state.index),
-  };
-}
-
-// フッターの共有ボタンは開いている画面によって共有するものが変わる。
-// ボタンの文言も変えないと、何が投稿されるのか押すまで分からない
-function shareMode() {
-  const view = viewFromHash(location.hash);
-  return view === "ranking" || view === "summary" ? view : "total";
-}
-
-function updateShareButton() {
-  // パネルが開いている間は押しても何も起きない。押せる見た目のまま反応しないと
-  // 壊れているように見えるので、閉じるまで無効にする
-  if (!sharePanel.hidden) {
-    shareBtn.disabled = true;
-    return;
-  }
-  const mode = shareMode();
-  if (mode === "ranking") {
-    shareBtn.textContent = "𝕏でランキングを共有";
-    shareBtn.disabled = !rankingShareStats || rankingShareStats.rows.length === 0;
-    return;
-  }
-  if (mode === "summary") {
-    // 何年のまとめが出るのかは、押す前に分かる必要がある
-    shareBtn.textContent = summaryShareStats
-      ? `𝕏で${summaryShareStats.year}年のまとめを共有`
-      : "𝕏でまとめを共有";
-    shareBtn.disabled = !summaryShareStats || summaryShareStats.orderCount === 0;
-    return;
-  }
-  shareBtn.textContent = "𝕏で共有";
-  // 今年分に未収集があるなら、押したあとに収集してから共有できる
-  shareBtn.disabled =
-    !shareStats || (shareStats.count === 0 && shareStats.yearPendingCount === 0);
-}
-
-// ---- 共有カードのパネル ------------------------------------------------
-//
-// 𝕏の投稿画面(intent)には画像を添付できない。URLで渡せるのは文面だけなので、
-// 画像はここで作って保存かコピーをしてもらい、投稿画面へ本人に貼ってもらう。
-
-// 押した時点の中身。背景を差し替えても同じ数字で描き直せるよう持っておく
-let sharePayload = null;
-// 選ばれた背景画像。タブの中だけで持ち、保存も送信もしない
-let shareBackground = null;
-
-// 選んでいる縦横比
-let shareRatio = DEFAULT_SHARE_RATIO;
-
-function openSharePanel(payload) {
-  sharePayload = payload;
-  shareText.value = payload.text;
-  setShareCardStatus("");
-  shareOverlay.hidden = false;
-  sharePanel.hidden = false;
-  renderShareRatioToggle();
-  renderShareTemplates();
-  drawSharePanelCard();
-  // パネルを開いている間は、後ろの共有ボタンを押せないようにする
-  updateShareButton();
-  shareOpenBtn.focus();
-}
-
-function closeSharePanel() {
-  shareOverlay.hidden = true;
-  sharePanel.hidden = true;
-  sharePayload = null;
-  setShareCardStatus("");
-  updateShareButton();
-  shareBtn.focus();
-}
-
-function setShareRatio(ratio) {
-  if (!SHARE_RATIOS[ratio] || ratio === shareRatio) return;
-  shareRatio = ratio;
-  renderShareRatioToggle();
-  drawSharePanelCard();
-}
-
-function renderShareRatioToggle() {
-  shareRatioToggle.querySelectorAll(".segmented-btn").forEach((btn) => {
-    const on = btn.dataset.ratio === shareRatio;
-    btn.classList.toggle("current", on);
-    btn.setAttribute("aria-pressed", String(on));
-  });
-}
-
-function drawSharePanelCard() {
-  if (!sharePayload) return;
-  const { width, height } = SHARE_RATIOS[shareRatio];
-  // canvasは大きさを変えると中身が消えるので、変わったときだけ入れ替える
-  if (shareCanvas.width !== width || shareCanvas.height !== height) {
-    shareCanvas.width = width;
-    shareCanvas.height = height;
-  }
-  const ctx = shareCanvas.getContext("2d");
-  ctx.clearRect(0, 0, width, height);
-  drawShareCard(ctx, sharePayload.card, shareBackground, currentShareTemplate());
-}
-
-function setShareBackground(image, name) {
-  shareBackground = image;
-  shareBgName.textContent = image ? name : "未選択（テンプレートを使います）";
-  shareBgClearBtn.hidden = !image;
-  renderShareTemplates();
-  drawSharePanelCard();
-}
-
-// ---- 背景のテンプレート ------------------------------------------------
-//
-// 色と模様を別々に選び、その組み合わせが背景になる。どちらも必ず1つ選ばれて
-// いる状態にする(「選択なし」を作ると、下地の見た目がもう1種類増えるだけ)。
-
-let shareColor = DEFAULT_SHARE_COLOR;
-let sharePattern = DEFAULT_SHARE_PATTERN;
-
-function currentShareTemplate() {
-  return shareTemplate(shareColor, sharePattern);
-}
-
-function setShareColor(id) {
-  if (!shareColorById(id) || id === shareColor) return;
-  shareColor = id;
-  renderShareTemplates();
-  drawSharePanelCard();
-}
-
-function setSharePattern(id) {
-  if (!sharePatternById(id) || id === sharePattern) return;
-  sharePattern = id;
-  renderShareTemplates();
-  drawSharePanelCard();
-}
-
-// 見本は実際の描画関数で小さく描く。見本だけ別に持つと、実物と食い違っても
-// 気付けない。ただし**間隔だけは詰める**(実寸と同じ間隔だと模様が1つ2つしか
-// 入らず、何の模様なのか見て分からない)。
-// 色の見本には選んでいる模様を、模様の見本には選んでいる色を乗せる。
-// 組み合わせた結果がそのまま見えるので、選ぶ前に確かめられる
-function renderShareTemplateRow(container, items, selectedId, buildTemplate) {
-  container.textContent = "";
-  for (const item of items) {
-    const template = buildTemplate(item);
-    const button = el("button", "share-template");
-    button.type = "button";
-    button.dataset.templateId = item.id;
-    button.title = template.label;
-    button.setAttribute("aria-label", template.label);
-    button.setAttribute("aria-pressed", String(item.id === selectedId));
-    if (item.id === selectedId) button.classList.add("current");
-
-    const preview = document.createElement("canvas");
-    preview.width = 96;
-    preview.height = 54;
-    template.draw(preview.getContext("2d"), preview.width, preview.height, SHARE_PREVIEW_STEP);
-    button.appendChild(preview);
-    container.appendChild(button);
-  }
-}
-
-function renderShareTemplates() {
-  renderShareTemplateRow(shareColors, SHARE_TEMPLATE_COLORS, shareColor, (color) =>
-    shareTemplate(color.id, sharePattern)
-  );
-  renderShareTemplateRow(sharePatterns, SHARE_TEMPLATE_PATTERNS, sharePattern, (pattern) =>
-    shareTemplate(shareColor, pattern.id)
-  );
-  // 画像を選んでいる間はテンプレートが効かないので、そのことを見た目でも示す
-  for (const row of [shareColors, sharePatterns]) {
-    row.classList.toggle("disabled", Boolean(shareBackground));
-  }
-}
-
-// 状態表示は用が済んだら消す。前回の「保存しました」が残っていると、
-// いま押した操作の結果と見分けが付かない
-let shareCardStatusTimer = null;
-const SHARE_STATUS_MS = 5000;
-
-function setShareCardStatus(text) {
-  shareCardStatus.textContent = text;
-  clearTimeout(shareCardStatusTimer);
-  if (text) {
-    shareCardStatusTimer = setTimeout(() => {
-      shareCardStatus.textContent = "";
-    }, SHARE_STATUS_MS);
-  }
-}
-
-// 押し直してもらうボタンの文言。パネルが開いていればパネル側のボタン、
-// 閉じていればフッターのボタンを指す
-function shareRetryLabel() {
-  return sharePanel.hidden ? shareBtn.textContent : shareOpenBtn.textContent;
-}
-
-function shareCardFileName() {
-  return `${sharePayload ? sharePayload.name : "share"}.png`;
-}
+// 共有ボタンと共有カードの表示は dashboard-share-view.js に分離。

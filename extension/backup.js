@@ -28,6 +28,54 @@ function backupFileName(date) {
   return `booth-backup-${stamp}.json`;
 }
 
+function isObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isFiniteNumberOrNull(value) {
+  return value === null || (typeof value === "number" && Number.isFinite(value));
+}
+
+function validBackupOrder(order) {
+  return (
+    isObject(order) &&
+    typeof order.id === "string" &&
+    order.id.length > 0 &&
+    typeof order.status === "string" &&
+    typeof order.date === "string"
+  );
+}
+
+function validBackupItem(item) {
+  return (
+    isObject(item) &&
+    typeof item.shop === "string" &&
+    (item.shopUrl === undefined || typeof item.shopUrl === "string") &&
+    typeof item.name === "string" &&
+    isFiniteNumberOrNull(item.price) &&
+    (item.quantity === undefined ||
+      item.quantity === null ||
+      (Number.isInteger(item.quantity) && item.quantity >= 0)) &&
+    (item.boost === undefined || isFiniteNumberOrNull(item.boost)) &&
+    typeof item.gift === "boolean"
+  );
+}
+
+function validBackupCacheEntry(entry) {
+  return (
+    isObject(entry) &&
+    isFiniteNumberOrNull(entry.amount) &&
+    (entry.v === undefined || (Number.isInteger(entry.v) && entry.v >= 0)) &&
+    (entry.gift === undefined || isFiniteNumberOrNull(entry.gift)) &&
+    (entry.shipping === undefined || isFiniteNumberOrNull(entry.shipping)) &&
+    (entry.status === undefined || typeof entry.status === "string") &&
+    (entry.date === undefined || typeof entry.date === "string") &&
+    (entry.items === undefined ||
+      entry.items === null ||
+      (Array.isArray(entry.items) && entry.items.every(validBackupItem)))
+  );
+}
+
 // 読み込んだ内容をそのまま保存すると、壊れたデータでストレージを上書きしてしまう。
 // 形が合っているかをここで確かめ、駄目なら理由を返す
 function parseBackup(text) {
@@ -46,12 +94,30 @@ function parseBackup(text) {
       message: "このファイルはBOOTHお買いものレポートのバックアップではありません。",
     };
   }
-  if (data.index !== null && data.index !== undefined) {
-    if (typeof data.index !== "object" || !Array.isArray(data.index.orders)) {
+  if (data.version !== BACKUP_VERSION) {
+    return {
+      ok: false,
+      message: `このバックアップのバージョン(${String(data.version)})には対応していません。`,
+    };
+  }
+  if (typeof data.exportedAt !== "string" || Number.isNaN(Date.parse(data.exportedAt))) {
+    return { ok: false, message: "バックアップの書き出し日時が壊れています。" };
+  }
+  if (data.index !== null) {
+    if (
+      !isObject(data.index) ||
+      !Array.isArray(data.index.orders) ||
+      !data.index.orders.every(validBackupOrder) ||
+      (data.index.updatedAt !== undefined && typeof data.index.updatedAt !== "string") ||
+      (data.index.complete !== undefined && typeof data.index.complete !== "boolean")
+    ) {
       return { ok: false, message: "バックアップの注文履歴が壊れています。" };
     }
   }
-  if (data.cache !== undefined && (typeof data.cache !== "object" || data.cache === null || Array.isArray(data.cache))) {
+  if (
+    !isObject(data.cache) ||
+    Object.values(data.cache).some((entry) => !validBackupCacheEntry(entry))
+  ) {
     return { ok: false, message: "バックアップの金額データが壊れています。" };
   }
   return {

@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="script-src 'self'; object-src 'self'">
 <title>dashboard test harness</title>
+<link rel="stylesheet" href="../extension/dashboard.css">
 </head>
 <!-- dashboard.js の init() は保存データを非同期で state へ読み込む。
      テストは state を直接差し替えるので、走らせると競合する -->
@@ -16,6 +17,7 @@
 <!-- dashboard.html と同じ要素構成 -->
 <button id="menuBtn" aria-expanded="false"></button>
 <span id="viewTitle"></span>
+<span class="copyright">©2026 Kie (Kie工房)</span>
 <div id="navOverlay" hidden></div>
 <nav id="navDrawer" hidden>
 <a class="nav-link" href="#/report" data-view="report">お買いものレポート</a>
@@ -24,7 +26,23 @@
 <a class="nav-link" href="#/summary" data-view="summary">今年のまとめ</a>
 <a class="nav-link" href="#/export" data-view="export">データ出力</a>
 <a class="nav-link" href="#/backup" data-view="backup">データの引っ越し</a>
+<button id="authorBtn" class="nav-author-btn">作者について</button>
 </nav>
+<div id="authorOverlay" class="author-overlay" hidden></div>
+<section id="authorPanel" class="author-panel" role="dialog" aria-modal="true" hidden>
+  <div class="author-panel-head"><h2>作者について</h2><button id="authorCloseBtn" class="icon-btn">×</button></div>
+  <div class="author-profile">
+    <img id="authorPortrait" class="author-portrait" src="../extension/icons/author-kie.png" alt="Kie (Kie工房)の著者近影">
+    <div><p class="author-name">Kie (Kie工房) <span>（きー）</span></p><p class="author-bio">BOOTHの「Kie工房」でVRChat向けアイテムを制作・公開しています。3Dプリンターやものづくりも楽しんでいます。</p></div>
+  </div>
+  <div class="author-links">
+    <a href="https://github.com/Kie610" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://x.com/niconicokito" target="_blank" rel="noopener">X 個人アカウント</a>
+    <a href="https://x.com/NicoNicoKieVRC" target="_blank" rel="noopener">X Kie工房アカウント</a>
+  </div>
+  <p class="author-disclaimer">本拡張機能は非公式であり、ピクシブ株式会社およびBOOTHとは関係ありません。</p>
+  <p class="author-disclaimer author-support-note">本拡張機能は無料でダウンロード・利用できます。BOOTHには任意の支援版も用意しますが、支援版に含まれる拡張機能は無料版と同一です。支援版の購入およびBOOSTは作者への任意の支援であり、支援の有無や金額による機能・利用条件・サポート内容の違いはありません。</p>
+</section>
 
 <div id="pendingBanner" hidden><span id="pendingBannerText"></span><a href="#/report">お買いものレポートで収集する</a></div>
 
@@ -88,17 +106,17 @@
   <div id="backupStats"></div>
   <div id="backupCoverage" hidden></div>
   <button id="backupSaveBtn"></button>
-  <input type="file" id="restoreFile">
-  <div id="restoreStatus"></div>
+  <label for="restoreFile">読み込むバックアップ</label><input type="file" id="restoreFile">
+  <div id="restoreStatus" role="status"></div>
 </div>
 
-<div id="progress" hidden>
+<div id="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" hidden>
   <span id="progressText"></span>
   <button id="abortBtn"></button>
   <div><div id="progressFill"></div></div>
 </div>
-<div id="noticeBox" hidden></div>
-<div id="errorBox" hidden></div>
+<div id="noticeBox" role="status" hidden></div>
+<div id="errorBox" role="alert" hidden></div>
 
 <div id="summarySection" hidden>
   <span id="totalGift"></span><span id="totalAmount"></span><span id="totalCount"></span>
@@ -106,6 +124,7 @@
 </div>
 
 <button id="runAllBtn"></button>
+<span id="allPlannedCount"></span>
 <input type="checkbox" id="forceRefreshAll">
 
 <details class="accordion">
@@ -138,6 +157,16 @@
   <table><tbody id="periodTableBody"></tbody></table>
   <details class="accordion">
     <summary><h2>注文ごとの内訳<span id="orderRowCount"></span></h2></summary>
+    <label>注文番号・ショップを検索<input type="search" id="orderSearch"></label>
+    <label>ステータス<select id="orderStatusFilter"><option value="">すべて</option></select></label>
+    <label>並べ替え<select id="orderSort">
+      <option value="date-desc">注文日時が新しい順</option>
+      <option value="date-asc">注文日時が古い順</option>
+      <option value="amount-desc">金額が高い順</option>
+      <option value="amount-asc">金額が低い順</option>
+      <option value="shop-asc">ショップ名順</option>
+    </select></label>
+    <span id="orderFilterCount" role="status"></span>
     <div class="table-scroll"><table><tbody id="orderTableBody"></tbody></table></div>
   </details>
 </div>
@@ -149,7 +178,7 @@
 </div>
 
 <div id="shareOverlay" hidden></div>
-<div id="sharePanel" hidden>
+<div id="sharePanel" role="dialog" aria-modal="true" hidden>
   <button id="shareCloseBtn"></button>
   <div id="shareRatioToggle">
     <button class="segmented-btn" data-ratio="16:9" aria-pressed="true">16:9</button>
@@ -157,10 +186,12 @@
     <button class="segmented-btn" data-ratio="4:3" aria-pressed="false">4:3</button>
     <button class="segmented-btn" data-ratio="3:4" aria-pressed="false">3:4</button>
   </div>
+  <input type="range" id="shareScale" min="100" max="300" step="5" value="100" disabled>
+  <output id="shareScaleValue">100%</output>
   <div id="shareDropZone"></div>
   <div id="shareColors"></div>
   <div id="sharePatterns"></div>
-  <canvas id="shareCanvas" width="1200" height="675"></canvas>
+  <canvas id="shareCanvas" width="1200" height="675" role="img" tabindex="-1" aria-label="作成した共有カードのプレビュー" aria-disabled="true"></canvas>
   <input type="file" id="shareBgFile">
   <button id="shareBgClearBtn" hidden></button>
   <span id="shareBgName"></span>
@@ -179,6 +210,9 @@
 <script src="../extension/share.js"></script>
 <script src="../extension/dashboard-parse.js"></script>
 <script src="../extension/dashboard-view.js"></script>
+<script src="../extension/dashboard-author-view.js"></script>
+<script src="../extension/dashboard-insights-view.js"></script>
+<script src="../extension/dashboard-share-view.js"></script>
 <script src="../extension/dashboard.js"></script>
 
 <script src="loaded.js"></script>

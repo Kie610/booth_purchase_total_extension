@@ -11,6 +11,7 @@
       <button id="menuBtn" class="menu-btn" aria-label="メニュー" aria-expanded="false" aria-controls="navDrawer">☰</button>
       <h1>BOOTHお買いものレポート</h1>
       <span class="view-title" id="viewTitle"></span>
+      <span class="copyright">©2026 Kie (Kie工房)</span>
     </div>
   </header>
 
@@ -22,18 +23,43 @@
     <a class="nav-link" href="#/summary" data-view="summary">今年のまとめ</a>
     <a class="nav-link" href="#/export" data-view="export">データ出力</a>
     <a class="nav-link" href="#/backup" data-view="backup">データの引っ越し</a>
+    <button type="button" id="authorBtn" class="nav-author-btn">作者について</button>
   </nav>
+
+  <div id="authorOverlay" class="author-overlay" hidden></div>
+  <section id="authorPanel" class="author-panel" role="dialog" aria-modal="true" aria-labelledby="authorPanelTitle" hidden>
+    <div class="author-panel-head">
+      <h2 id="authorPanelTitle">作者について</h2>
+      <button type="button" id="authorCloseBtn" class="icon-btn" aria-label="閉じる">×</button>
+    </div>
+    <div class="author-profile">
+      <img id="authorPortrait" class="author-portrait" src="icons/author-kie.png" alt="Kie (Kie工房)の著者近影" width="120" height="120">
+      <div class="author-profile-main">
+        <p class="author-name">Kie (Kie工房) <span>（きー）</span></p>
+        <p class="author-bio">BOOTHの「Kie工房」でVRChat向けアイテムを制作・公開しています。3Dプリンターやものづくりも楽しんでいます。</p>
+      </div>
+    </div>
+    <div class="author-links" aria-label="作者のリンク">
+      <a href="https://github.com/Kie610" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://x.com/niconicokito" target="_blank" rel="noopener">X 個人アカウント</a>
+      <a href="https://x.com/NicoNicoKieVRC" target="_blank" rel="noopener">X Kie工房アカウント</a>
+    </div>
+    <p class="author-disclaimer">
+      本拡張機能は非公式であり、ピクシブ株式会社およびBOOTHとは関係ありません。
+    </p>
+    <p class="author-disclaimer author-support-note">本拡張機能は無料でダウンロード・利用できます。BOOTHには任意の支援版も用意しますが、支援版に含まれる拡張機能は無料版と同一です。支援版の購入およびBOOSTは作者への任意の支援であり、支援の有無や金額による機能・利用条件・サポート内容の違いはありません。</p>
+  </section>
 
   <main class="page">
     <!-- 通知は画面をまたいで出るので、切り替える区画の外に置く -->
-    <div id="noticeBox" class="notice" hidden></div>
-    <div id="errorBox" class="error" hidden></div>
+    <div id="noticeBox" class="notice" role="status" aria-live="polite" hidden></div>
+    <div id="errorBox" class="error" role="alert" aria-live="assertive" hidden></div>
 
     <!-- レポート以外の画面では、そこに出ている数字が実際より少ないことがあると伝える。
          収集はレポート画面でしか行えないので、そこへ戻る導線も添える -->
     <!-- .notice は white-space: pre-line なので、改行を入れるとそこで行が分かれる。
          案内とリンクは続けて読ませたいので同じ行に書く -->
-    <div id="pendingBanner" class="notice" hidden><span id="pendingBannerText"></span><a href="#/report">お買いものレポートで収集する</a></div>
+    <div id="pendingBanner" class="notice" role="status" aria-live="polite" hidden><span id="pendingBannerText"></span><a href="#/report">お買いものレポートで収集する</a></div>
 
    <div class="view" id="view-report">
     <p class="lead">
@@ -71,15 +97,20 @@
 
     <section class="step step-alt">
       <h2>まとめて一括集計</h2>
-      <p class="hint">①と②をまとめて実行します。注文数が多い場合は時間がかかります。</p>
+      <p class="hint">注文履歴と金額を続けて取得します。注文数が多い場合は時間がかかります。</p>
       <div class="step-controls">
         <button id="runAllBtn" class="primary">一括で集計を実行</button>
+        <span class="planned" id="allPlannedCount"></span>
         <label class="checkbox">
           <input type="checkbox" id="forceRefreshAll">
           キャッシュを無視して全件再取得
         </label>
       </div>
     </section>
+
+    <details class="panel accordion collection-options">
+      <summary><h2>個別に収集する</h2></summary>
+      <p class="hint">注文履歴の取得と金額の収集を分けたい場合や、収集する月を選びたい場合に使います。</p>
 
     <section class="step">
       <h2><span class="step-no">①</span> 注文履歴の取得</h2>
@@ -152,14 +183,37 @@
         <p id="outdatedArea" class="unknown-area" hidden><span id="outdatedCount"></span></p>
       </div>
     </section>
+    </details>
 
     <section id="breakdownSection" hidden>
       <details class="panel accordion">
         <summary><h2>注文ごとの内訳<span class="accordion-count" id="orderRowCount"></span></h2></summary>
+        <div class="order-tools" role="search" aria-label="注文内訳の検索と絞り込み">
+          <label class="order-tool-field">
+            注文番号・ショップを検索
+            <input type="search" id="orderSearch" autocomplete="off" placeholder="注文番号またはショップ名">
+          </label>
+          <label class="order-tool-field">
+            ステータス
+            <select id="orderStatusFilter"><option value="">すべて</option></select>
+          </label>
+          <label class="order-tool-field">
+            並べ替え
+            <select id="orderSort">
+              <option value="date-desc">注文日時が新しい順</option>
+              <option value="date-asc">注文日時が古い順</option>
+              <option value="amount-desc">金額が高い順</option>
+              <option value="amount-asc">金額が低い順</option>
+              <option value="shop-asc">ショップ名順</option>
+            </select>
+          </label>
+          <span class="status order-filter-count" id="orderFilterCount" role="status" aria-live="polite"></span>
+        </div>
         <div class="table-scroll">
           <table class="data-table">
+            <caption class="visually-hidden">注文ごとの内訳</caption>
             <thead>
-              <tr><th>注文日時</th><th>ステータス</th><th class="num">金額</th><th>注文番号</th></tr>
+              <tr><th>注文日時</th><th>ステータス</th><th>ショップ</th><th class="num">金額</th><th>注文番号</th></tr>
             </thead>
             <tbody id="orderTableBody"></tbody>
           </table>
@@ -387,6 +441,7 @@
          収集したデータをCSVで書き出します。Excelでそのまま開けるようUTF-8のBOM付きで保存します。
          金額の列は集計に使えるよう桁区切りを付けません。
        </p>
+       <p class="sensitive-note"><strong>CSVには注文番号・商品名・ショップ名・購入金額が含まれます。第三者へ共有せず、安全な場所で保管してください。</strong></p>
 
        <div id="exportEmpty" class="empty-note">
          まだ収集したデータがありません。「お買いものレポート」で収集してください。
@@ -424,6 +479,7 @@
          注文が多いとBOOTHからの再取得に数分かかるため、環境を移すときはこちらを使ってください。
          保存されるのは注文履歴と収集した金額だけで、BOOTHのログイン情報は含まれません。
        </p>
+       <p class="sensitive-note"><strong>バックアップには注文番号・商品名・ショップ名・購入金額が含まれます。第三者へ共有せず、安全な場所で保管してください。</strong></p>
 
        <div class="index-status">
          <div class="status" id="backupStats">まだ取得していません</div>
@@ -437,22 +493,23 @@
 
      <section class="step">
        <h2>バックアップから復元</h2>
-       <p class="hint">
+       <p class="hint" id="restoreDescription">
          今あるデータは消えません。読み込んだ内容と<b>併合</b>し、同じ注文があれば
          収集済みの方を残します。注文履歴の「取得済みの範囲」は、両方が全期間のときだけ
          全期間のままにします(片方でも途中までだと、つないだ結果に抜けが無いとは
          言い切れないため)。
        </p>
        <div class="step-controls">
-         <input type="file" id="restoreFile" accept="application/json,.json">
+         <label class="restore-field" for="restoreFile">読み込むバックアップ</label>
+         <input type="file" id="restoreFile" accept="application/json,.json" aria-describedby="restoreDescription">
        </div>
-       <div class="status" id="restoreStatus"></div>
+       <div class="status" id="restoreStatus" role="status" aria-live="polite"></div>
      </section>
    </div>
   </main>
 
   <footer class="app-footer">
-    <div id="progress" class="progress" hidden>
+    <div id="progress" class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-labelledby="progressText" hidden>
       <div class="progress-head">
         <span class="progress-text" id="progressText">準備中...</span>
         <button id="abortBtn" class="secondary small">中断</button>
@@ -489,22 +546,30 @@
   <!-- 共有カード。𝕏の投稿画面には画像を自動で添付できないため、
        ここで画像を作って保存またはコピーしてもらい、本人に貼ってもらう -->
   <div class="share-overlay" id="shareOverlay" hidden></div>
-  <div class="share-panel" id="sharePanel" role="dialog" aria-modal="true" aria-labelledby="sharePanelTitle" hidden>
+  <div class="share-panel" id="sharePanel" role="dialog" aria-modal="true" aria-labelledby="sharePanelTitle" aria-describedby="sharePanelDescription" hidden>
     <div class="share-panel-head">
       <h2 id="sharePanelTitle">共有カード</h2>
       <button type="button" id="shareCloseBtn" class="icon-btn" aria-label="閉じる">×</button>
     </div>
 
     <div class="share-panel-body">
-      <canvas id="shareCanvas" class="share-canvas" width="1200" height="675" role="img"></canvas>
+      <p id="sharePanelDescription" class="visually-hidden">共有画像をコピーまたは保存してから、投稿画面を開きます。</p>
+      <canvas id="shareCanvas" class="share-canvas" width="1200" height="675" role="img" tabindex="-1" aria-label="作成した共有カードのプレビュー" aria-describedby="shareCanvasHelp" aria-disabled="true"></canvas>
+      <p id="shareCanvasHelp" class="hint share-canvas-help">背景画像を選ぶと、プレビューをドラッグして映す位置を調整できます。方向キーでも少しずつ動かせます。</p>
 
       <div class="share-shape">
-        <span class="share-field-label">画像の形</span>
-        <div class="segmented" id="shareRatioToggle" role="group" aria-label="画像の縦横比">
-          <button type="button" class="segmented-btn" data-ratio="16:9" aria-pressed="true">16:9</button>
-          <button type="button" class="segmented-btn" data-ratio="1:1" aria-pressed="false">1:1</button>
-          <button type="button" class="segmented-btn" data-ratio="4:3" aria-pressed="false">4:3</button>
-          <button type="button" class="segmented-btn" data-ratio="3:4" aria-pressed="false">3:4</button>
+        <div class="share-shape-field">
+          <span class="share-field-label" id="shareRatioLabel">画像の形</span>
+          <div class="segmented" id="shareRatioToggle" role="group" aria-labelledby="shareRatioLabel">
+            <button type="button" class="segmented-btn" data-ratio="16:9" aria-pressed="true">16:9</button>
+            <button type="button" class="segmented-btn" data-ratio="1:1" aria-pressed="false">1:1</button>
+            <button type="button" class="segmented-btn" data-ratio="4:3" aria-pressed="false">4:3</button>
+            <button type="button" class="segmented-btn" data-ratio="3:4" aria-pressed="false">3:4</button>
+          </div>
+        </div>
+        <div class="share-scale-field">
+          <label class="share-field-label" for="shareScale">背景画像の拡大率 <output id="shareScaleValue" for="shareScale">100%</output></label>
+          <input type="range" id="shareScale" min="100" max="300" step="5" value="100" disabled>
         </div>
       </div>
 
@@ -512,7 +577,7 @@
            色と模様を別々に選び、その組み合わせが背景になる。
            見本を小さく詰めると何の模様か分からないので、幅いっぱいを使う -->
       <div class="share-template-box">
-        <span class="share-field-label">背景テンプレート</span>
+        <span class="share-field-label" id="shareTemplateLabel">背景テンプレート</span>
         <div class="share-template-row">
           <span class="share-template-kind">色</span>
           <div class="share-templates" id="shareColors" role="group" aria-label="背景の色"></div>
@@ -525,24 +590,26 @@
 
       <div class="share-controls">
         <div class="share-bg">
-          <span class="share-field-label">背景画像</span>
+          <span class="share-field-label" id="shareBgLabel">背景画像</span>
           <div class="share-bg-row">
             <label class="file-btn">
               画像を選ぶ
-              <input type="file" id="shareBgFile" accept="image/*" hidden>
+              <input type="file" id="shareBgFile" class="visually-hidden-file" accept="image/*" aria-labelledby="shareBgLabel" aria-describedby="shareBgDescription">
             </label>
             <button type="button" id="shareBgClearBtn" class="secondary small" hidden>元に戻す</button>
           </div>
           <!-- ボタンの下が空くので、そこをそのまま投げ込み先にする -->
           <div class="share-drop" id="shareDropZone">
             <span class="share-drop-text">ここに画像をドロップ</span>
+            <span class="hint" id="shareBgDescription">選んだ画像は共有カードの背景にだけ使われ、保存されません。</span>
             <span class="hint" id="shareBgName">未選択（テンプレートを使います）</span>
           </div>
         </div>
 
         <div class="share-text-box">
-          <span class="share-field-label">投稿する文面</span>
-          <textarea id="shareText" class="share-text" readonly></textarea>
+          <label class="share-field-label" for="shareText">投稿する文面</label>
+          <textarea id="shareText" class="share-text" readonly aria-describedby="shareTextDescription"></textarea>
+          <span class="visually-hidden" id="shareTextDescription">Xの投稿画面へ渡す文章です。</span>
         </div>
       </div>
 
@@ -550,11 +617,17 @@
         𝕏の投稿画面には画像を自動で添付できません。
         <strong>画像を保存またはコピーしてから、投稿画面に貼り付けてください。</strong>
       </p>
+      <p class="hint share-legal-note">
+        本拡張機能は非公式で、ピクシブ株式会社およびBOOTHとは関係ありません。
+        比較文の価格は2026年7月時点の概算で、掲載各社との提携・推奨関係はありません。
+      </p>
     </div>
 
     <div class="share-panel-foot">
-      <button type="button" id="shareCopyBtn" class="secondary">画像をコピー</button>
-      <button type="button" id="shareSaveBtn" class="secondary">画像を保存</button>
+      <div class="share-media-actions" aria-label="共有画像を用意する">
+        <button type="button" id="shareCopyBtn" class="secondary share-media-btn">画像をコピー</button>
+        <button type="button" id="shareSaveBtn" class="secondary share-media-btn">画像を保存</button>
+      </div>
       <button type="button" id="shareOpenBtn" class="share-btn">𝕏の投稿画面を開く</button>
     </div>
     <span class="hint" id="shareCardStatus" role="status"></span>
@@ -567,6 +640,9 @@
 <script src="share.js"></script>
 <script src="dashboard-parse.js"></script>
 <script src="dashboard-view.js"></script>
+<script src="dashboard-author-view.js"></script>
+<script src="dashboard-insights-view.js"></script>
+<script src="dashboard-share-view.js"></script>
 <script src="dashboard.js"></script>
 </body>
 </html>

@@ -1,19 +1,29 @@
 "use strict";
 
 // 集計ページの中枢。状態を持ち、イベントを受け取り、BOOTHから取得する。
-// ページの読み取りは dashboard-parse.js、画面への反映は dashboard-view.js。
-// この3つは classic script として同じグローバルを共有する(モジュールではない)。
+// ページの読み取りは dashboard-parse.js、画面への反映は dashboard-*-view.js。
+// これらは classic script として同じグローバルを共有する(モジュールではない)。
 
 const ORDERS_INDEX_URL = "https://accounts.booth.pm/orders";
 const ORDER_DETAIL_URL = "https://accounts.booth.pm/orders/";
-const REQUEST_INTERVAL_MS = 250; // サーバーへの負荷を抑えるための待機時間
+const REQUEST_INTERVAL_MIN_MS = 250;
+const REQUEST_INTERVAL_MAX_MS = 350;
+const REQUEST_INTERVAL_AVERAGE_MS =
+  (REQUEST_INTERVAL_MIN_MS + REQUEST_INTERVAL_MAX_MS) / 2;
 const CACHE_FLUSH_EVERY = 5; // 取得途中で中断されても失わないよう小まめに保存する
 const RUN_STATE_INTERVAL_MS = 400; // ポップアップへ進捗を渡す書き込みの間引き
+const RUN_LOCK_HEARTBEAT_MS = 10_000;
+const RUN_LOCK_WEB_NAME = "booth-purchase-total-collector";
 const EXCLUDED_STATUSES = new Set(["cancelled"]);
+const RUN_LOCK_OWNER_ID =
+  globalThis.crypto && typeof globalThis.crypto.randomUUID === "function"
+    ? globalThis.crypto.randomUUID()
+    : `${Date.now()}-${Math.random()}`;
 
 let running = false;
 let abortController = null;
 let lastRunStateWrite = 0;
+let runLockHeartbeatTimer = null;
 const state = { index: null, cache: {} };
 
 // ---- イベント配線 ------------------------------------------------------
@@ -23,10 +33,25 @@ menuBtn.addEventListener("click", () => setDrawerOpen(!drawerIsOpen()));
 navOverlay.addEventListener("click", () => setDrawerOpen(false));
 navDrawer.addEventListener("click", (event) => {
   // リンクの既定動作でハッシュが変わり、hashchange 側で描画が切り替わる
-  if (event.target.closest(".nav-link")) setDrawerOpen(false);
+  if (event.target.closest(".nav-link[data-view]")) setDrawerOpen(false);
 });
+authorBtn.addEventListener("click", openAuthorPanel);
+authorCloseBtn.addEventListener("click", closeAuthorPanel);
+authorOverlay.addEventListener("click", closeAuthorPanel);
+authorPortrait.addEventListener("error", () => {
+  authorPortrait.src = "icons/icon128.png";
+}, { once: true });
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && drawerIsOpen()) setDrawerOpen(false);
+});
+document.addEventListener("keydown", (event) => {
+  if (authorPanel.hidden) return;
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeAuthorPanel();
+    return;
+  }
+  trapAuthorPanelFocus(event);
 });
 window.addEventListener("hashchange", () => {
   renderCurrentView();
@@ -131,8 +156,12 @@ collectRangeBtn.addEventListener("click", () =>
 runAllBtn.addEventListener("click", () => runTask(runAllTask));
 
 forceRefreshRange.addEventListener("change", updatePlannedCount);
+forceRefreshAll.addEventListener("change", updatePlannedCount);
 rangeFrom.addEventListener("change", onRangeChanged);
 rangeTo.addEventListener("change", onRangeChanged);
+orderSearch.addEventListener("input", () => renderOrderTable(buildResults()));
+orderStatusFilter.addEventListener("change", () => renderOrderTable(buildResults()));
+orderSort.addEventListener("change", () => renderOrderTable(buildResults()));
 
 function onRangeChanged() {
   highlightSelectedRange();
@@ -214,13 +243,66 @@ function shareYearSummary() {
 shareCloseBtn.addEventListener("click", closeSharePanel);
 shareOverlay.addEventListener("click", closeSharePanel);
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && !sharePanel.hidden) closeSharePanel();
+  if (sharePanel.hidden) return;
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeSharePanel();
+    return;
+  }
+  trapSharePanelFocus(event);
 });
 
 // 画像の縦横比。投稿先に合わせて選べるようにする
 shareRatioToggle.addEventListener("click", (event) => {
   const btn = event.target.closest(".segmented-btn");
   if (btn) setShareRatio(btn.dataset.ratio);
+});
+
+shareScaleInput.addEventListener("input", () => setShareBackgroundScale(shareScaleInput.value));
+
+let shareDragPointer = null;
+let shareDragX = 0;
+let shareDragY = 0;
+
+shareCanvas.addEventListener("pointerdown", (event) => {
+  if (!shareBackground) return;
+  event.preventDefault();
+  shareDragPointer = event.pointerId;
+  shareDragX = event.clientX;
+  shareDragY = event.clientY;
+  shareCanvas.classList.add("dragging");
+  if (shareCanvas.setPointerCapture) shareCanvas.setPointerCapture(event.pointerId);
+});
+
+shareCanvas.addEventListener("pointermove", (event) => {
+  if (shareDragPointer !== event.pointerId) return;
+  const width = Math.max(1, shareCanvas.clientWidth);
+  const height = Math.max(1, shareCanvas.clientHeight);
+  moveShareBackground(
+    ((event.clientX - shareDragX) / width) * 2,
+    ((event.clientY - shareDragY) / height) * 2
+  );
+  shareDragX = event.clientX;
+  shareDragY = event.clientY;
+});
+
+function stopShareBackgroundDrag(event) {
+  if (shareDragPointer !== event.pointerId) return;
+  shareDragPointer = null;
+  shareCanvas.classList.remove("dragging");
+}
+
+shareCanvas.addEventListener("pointerup", stopShareBackgroundDrag);
+shareCanvas.addEventListener("pointercancel", stopShareBackgroundDrag);
+shareCanvas.addEventListener("lostpointercapture", stopShareBackgroundDrag);
+shareCanvas.addEventListener("keydown", (event) => {
+  if (!shareBackground || !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
+  event.preventDefault();
+  const step = event.shiftKey ? 0.15 : 0.04;
+  if (event.key === "ArrowLeft") moveShareBackground(-step, 0);
+  if (event.key === "ArrowRight") moveShareBackground(step, 0);
+  if (event.key === "ArrowUp") moveShareBackground(0, -step);
+  if (event.key === "ArrowDown") moveShareBackground(0, step);
 });
 
 // 選んだ画像はこのタブの中だけで使う。ストレージへ入れると、
@@ -334,8 +416,8 @@ trendBaseYear.addEventListener("change", () =>
 // 順位をクリックすると、そのショップで買った商品を開く
 for (const tbody of [rankingTableBody, summaryTopShopsBody]) {
   tbody.addEventListener("click", (event) => {
-    const cell = event.target.closest("td.rank");
-    if (cell) toggleShopItems(cell.closest("tr.shop-row").dataset.shopKey);
+    const button = event.target.closest("button.rank-toggle");
+    if (button) toggleShopItems(button.closest("tr.shop-row").dataset.shopKey);
   });
 }
 
@@ -408,7 +490,7 @@ monthTableBody.addEventListener("click", (event) => {
   const yearRow = event.target.closest("tr.year-row");
   if (yearRow) {
     // ▸ は開閉、それ以外の場所はその年をまとめて範囲に設定
-    if (event.target.closest(".toggle")) {
+    if (event.target.closest(".table-toggle")) {
       toggleYearRow(monthTableBody, expandedMonthYears, yearRow);
     } else {
       setRange(yearRow.dataset.rangeFrom, yearRow.dataset.rangeTo);
@@ -416,6 +498,17 @@ monthTableBody.addEventListener("click", (event) => {
     return;
   }
   const monthRow = event.target.closest("tr.month-row");
+  if (monthRow) setRange(monthRow.dataset.monthKey, monthRow.dataset.monthKey);
+});
+
+monthTableBody.addEventListener("keydown", (event) => {
+  if (running || (event.target !== event.currentTarget && event.target.closest(".table-toggle"))) return;
+  if (event.key !== "Enter" && event.key !== " ") return;
+  const yearRow = event.target.closest("tr.year-row");
+  const monthRow = event.target.closest("tr.month-row");
+  if (!yearRow && !monthRow) return;
+  event.preventDefault();
+  if (yearRow) setRange(yearRow.dataset.rangeFrom, yearRow.dataset.rangeTo);
   if (monthRow) setRange(monthRow.dataset.monthKey, monthRow.dataset.monthKey);
 });
 
@@ -561,10 +654,47 @@ function buildSummary(partial) {
 // (共有は、中断や失敗のあとに投稿画面を開かないようにするために使う)
 async function runTask(task) {
   if (running) return { aborted: false, failed: true };
+
+  const execute = () => runTaskWithLease(task);
+  if (
+    globalThis.navigator &&
+    globalThis.navigator.locks &&
+    typeof globalThis.navigator.locks.request === "function"
+  ) {
+    let result;
+    await globalThis.navigator.locks.request(
+      RUN_LOCK_WEB_NAME,
+      { mode: "exclusive", ifAvailable: true },
+      async (lock) => {
+        if (lock) result = await execute();
+      }
+    );
+    return result === undefined ? lockedRunResult() : result;
+  }
+  return execute();
+}
+
+function lockedRunResult() {
+  clearError();
+  showNotice(
+    "別の集計ページで収集を実行中です。完了するか、期限切れになるまでお待ちください。"
+  );
+  return { aborted: false, failed: true, locked: true };
+}
+
+async function runTaskWithLease(task) {
+  if (!(await acquireRunLock(RUN_LOCK_OWNER_ID))) return lockedRunResult();
   setRunning(true);
   clearError();
   clearNotice();
   abortController = new AbortController();
+  runLockHeartbeatTimer = setInterval(async () => {
+    try {
+      if (!(await refreshRunLock(RUN_LOCK_OWNER_ID))) abortController?.abort();
+    } catch (err) {
+      abortController?.abort();
+    }
+  }, RUN_LOCK_HEARTBEAT_MS);
   let aborted = false;
   let failed = false;
 
@@ -578,10 +708,18 @@ async function runTask(task) {
       showError(err.message || String(err));
     }
   } finally {
-    await saveCache(state.cache);
-    await clearRunState();
-    abortController = null;
-    setRunning(false);
+    try {
+      await saveCache(state.cache);
+    } finally {
+      if (runLockHeartbeatTimer !== null) clearInterval(runLockHeartbeatTimer);
+      runLockHeartbeatTimer = null;
+      await Promise.allSettled([
+        clearRunState(RUN_LOCK_OWNER_ID),
+        releaseRunLock(RUN_LOCK_OWNER_ID),
+      ]);
+      abortController = null;
+      setRunning(false);
+    }
   }
 
   render();
@@ -625,12 +763,18 @@ function sleep(ms, signal) {
   });
 }
 
+function requestIntervalMs(random = Math.random) {
+  return Math.floor(
+    REQUEST_INTERVAL_MIN_MS + random() * (REQUEST_INTERVAL_MAX_MS - REQUEST_INTERVAL_MIN_MS + 1)
+  );
+}
+
 // ポップアップ側で進捗を表示できるようにストレージへ書き出す(書き込み過多を避けて間引く)
 async function publishRunState(runState, force) {
   const now = Date.now();
   if (!force && now - lastRunStateWrite < RUN_STATE_INTERVAL_MS) return;
   lastRunStateWrite = now;
-  await saveRunState(runState);
+  await saveRunState({ ...runState, ownerId: RUN_LOCK_OWNER_ID });
 }
 
 // ---- 取得処理 ----------------------------------------------------------
@@ -645,9 +789,39 @@ function loginRequiredError() {
   return err;
 }
 
-// 繰り返しても結果が変わらない失敗(中断・ログイン切れ)かどうか
+// 繰り返しても結果が変わらない失敗か、同じセッションでは以降も失敗する
+// 認証・アクセス拒否かどうか。401/403で全注文を回り続けないよう、その場で止める。
 function isFatalFetchError(err) {
-  return err.name === "AbortError" || err.name === "LoginRequiredError";
+  return (
+    err.name === "AbortError" ||
+    err.name === "LoginRequiredError" ||
+    err.status === 401 ||
+    err.status === 403
+  );
+}
+
+function retryAfterMs(headers, now = Date.now()) {
+  if (!headers || typeof headers.get !== "function") return null;
+  const value = headers.get("Retry-After");
+  if (!value) return null;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;
+  const at = Date.parse(value);
+  return Number.isFinite(at) ? Math.max(0, at - now) : null;
+}
+
+function httpFetchError(res, url) {
+  const err = new Error(`ページの取得に失敗しました (HTTP ${res.status}): ${url}`);
+  err.name = "HttpError";
+  err.status = res.status;
+  err.retryAfterMs = retryAfterMs(res.headers);
+  return err;
+}
+
+function isRetryableFetchError(err) {
+  if (isFatalFetchError(err)) return false;
+  if (err instanceof TypeError || err.name === "TypeError") return true;
+  return err.status === 408 || err.status === 429 || (err.status >= 500 && err.status <= 599);
 }
 
 // 注意: 集計中、取得1件につき以下のCSP違反がコンソールに記録される。
@@ -668,7 +842,7 @@ async function fetchDoc(url, signal) {
     throw loginRequiredError();
   }
   if (!res.ok) {
-    throw new Error(`ページの取得に失敗しました (HTTP ${res.status}): ${url}`);
+    throw httpFetchError(res, url);
   }
   const html = await res.text();
   // DOMParserが生成する文書は不活性で、スクリプトは実行されず
@@ -682,9 +856,9 @@ async function fetchDoc(url, signal) {
 // 一覧ページを読めていないと分かる兆候。どちらの場合も、実際は取得できていない
 // 古い注文があるのに「全期間を取得済み」と表示してしまい、少ない合計を
 // 正しい合計だと思わせることになるため、完全とは記録しない
-function listPageLooksUnreadable({ orders, maxPage, pagerFound }) {
-  // 1ページ目から1件も取れない(行のセレクタが効いていない、または購入履歴が空)
-  if (orders.length === 0) return true;
+function listPageLooksUnreadable({ orders, maxPage, pagerFound, emptyFound = false }) {
+  // 1件も取れず、BOOTHの正式な空状態も見つからない(行のセレクタが効いていない疑い)
+  if (orders.length === 0) return !emptyFound;
   // ページ送りはあるのに、ページ番号を1つも読めない(ページャのセレクタが効いていない)
   return pagerFound && maxPage === 1;
 }
@@ -733,6 +907,19 @@ async function commitIndex(fetched, context) {
   return orders.filter((o) => !before.has(o.id)).length;
 }
 
+// 全件再取得を最後まで完了したときだけ、現在の集計対象に存在しないキャッシュを消す。
+// キャンセルになった注文や履歴から消えた注文の詳細を残すと、索引だけ削除した際に
+// 古いキャッシュから合計へ戻るため。増分取得や途中終了では既存データを守る。
+async function pruneCacheAfterFullIndexRefresh() {
+  const activeIds = new Set(targetOrders().map((order) => order.id));
+  const kept = Object.fromEntries(
+    Object.entries(state.cache).filter(([id]) => activeIds.has(id))
+  );
+  if (Object.keys(kept).length === Object.keys(state.cache).length) return;
+  state.cache = kept;
+  await saveCache(state.cache);
+}
+
 // ① 一覧ページを新しい順に巡回して注文の索引を作る
 async function fetchIndexTask(signal, force) {
   const known = new Set(
@@ -748,15 +935,17 @@ async function fetchIndexTask(signal, force) {
   let reachedKnown = false;
   let finishedAllPages = false;
   let unreadable = false;
+  let emptyHistory = false;
   let added = 0;
 
   try {
     setProgress("購入履歴の1ページ目を取得中...", 0);
     await publishRunState({ phase: "注文履歴の取得", current: 0, total: 0 }, true);
 
-    const firstDoc = await fetchDoc(ORDERS_INDEX_URL, signal);
+    const firstDoc = await fetchDocWithRetry(ORDERS_INDEX_URL, signal);
     const firstPage = parseListPage(firstDoc);
     const { orders: firstOrders, maxPage } = firstPage;
+    emptyHistory = firstOrders.length === 0 && firstPage.emptyFound;
     unreadable = listPageLooksUnreadable(firstPage);
     reachedKnown = appendUnknown(fetched, firstOrders, known, stopAtKnown);
 
@@ -770,11 +959,19 @@ async function fetchIndexTask(signal, force) {
         current: page,
         total: maxPage,
       });
-      await sleep(REQUEST_INTERVAL_MS, signal);
-      const doc = await fetchDoc(`${ORDERS_INDEX_URL}?page=${page}`, signal);
+      await sleep(requestIntervalMs(), signal);
+      const doc = await fetchDocWithRetry(`${ORDERS_INDEX_URL}?page=${page}`, signal);
+      const parsed = parseListPage(doc);
+      // 途中のページだけログイン画面や想定外のHTMLが返ることもある。
+      // 空のページを「最古まで取得できた」と扱うと、少ない合計を完全な結果として
+      // 保存してしまうため、1ページ目と同じ条件で必ず検証する。
+      if (listPageLooksUnreadable(parsed)) {
+        unreadable = true;
+        break;
+      }
       reachedKnown = appendUnknown(
         fetched,
-        parseListPage(doc).orders,
+        parsed.orders,
         known,
         stopAtKnown
       );
@@ -789,14 +986,17 @@ async function fetchIndexTask(signal, force) {
       finishedAllPages,
       previousComplete,
     });
+    if (force && finishedAllPages) await pruneCacheAfterFullIndexRefresh();
   }
 
   if (unreadable) {
     addNotice(
-      "購入履歴の一覧をうまく読み取れませんでした。BOOTHに購入履歴が無いか、" +
+      "購入履歴の一覧をうまく読み取れませんでした。ログイン状態または" +
         "ページの構造が変わっている可能性があります。" +
         "この場合すべての注文を取得できていないため、合計は実際より少なくなります。"
     );
+  } else if (emptyHistory) {
+    addNotice("購入履歴はありませんでした。集計する注文はありません。");
   } else if (reachedKnown) {
     addNotice(
       `取得済みの注文に到達したため、そこで停止しました(以降は読み込み済み)。新しく追加された注文: ${added}件。`
@@ -838,15 +1038,20 @@ function ordersInYear(year) {
 // 混雑している可能性があるので、通常の間隔より長めに待ってから試し直す。
 // テストから待ち時間を詰められるよう変数にしてある
 let fetchRetryCount = 2;
-let fetchRetryWaitMs = 2000;
+let fetchRetryBaseWaitMs = 2000;
+
+function fetchRetryWaitMs(err, attempt) {
+  if (err.status === 429 && typeof err.retryAfterMs === "number") return err.retryAfterMs;
+  return fetchRetryBaseWaitMs * 2 ** attempt;
+}
 
 async function fetchDocWithRetry(url, signal) {
   for (let attempt = 0; ; attempt++) {
     try {
       return await fetchDoc(url, signal);
     } catch (err) {
-      if (isFatalFetchError(err) || attempt >= fetchRetryCount) throw err;
-      await sleep(fetchRetryWaitMs, signal);
+      if (!isRetryableFetchError(err) || attempt >= fetchRetryCount) throw err;
+      await sleep(fetchRetryWaitMs(err, attempt), signal);
     }
   }
 }
@@ -895,7 +1100,7 @@ async function collectAmounts(orders, force, signal) {
       failed++;
     }
 
-    if (index + 1 < targets.length) await sleep(REQUEST_INTERVAL_MS, signal);
+    if (index + 1 < targets.length) await sleep(requestIntervalMs(), signal);
   }
 
   if (failed > 0) {
