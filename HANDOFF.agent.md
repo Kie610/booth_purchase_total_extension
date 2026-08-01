@@ -1,9 +1,9 @@
 # Agent handoff v1
 
-updated: 2026-08-02T02:55:34+09:00
+updated: 2026-08-02T02:57:14+09:00
 repo: https://github.com/Kie610/booth_purchase_total_extension
 work_branch: 1.0.0
-upstream: none
+upstream: origin/1.0.0
 base: origin/main@244e4d81f38b3e8a82b281f1c2903fb9e876bc90
 goal: BOOTHお買いものレポートv1.0.0の配布物を作成し、永続バージョンブランチへ公開する。
 
@@ -13,6 +13,7 @@ complete:
 - C: `1.0.0`ブランチを検証済みの`origin/main`先端から作成した。
 - C: manifest、README、テスト、ブランチ運用文書をv1.0.0へ更新した。
 - C: v1.0.0配布ZIPとSHA-256チェックサムを`dist/`へ作成した。
+- C: リリース準備コミット`90cd412e402742d6e91d6499a5ce1c145f39382e`を`origin/1.0.0`へpushし、追跡を設定した。
 
 verified:
 - C: 2026-08-02 — evidence: status=PASS; kind=compile; command=PowerShellでextensionとtestの全.jsへbundled node.exe --checkを実行; environment=Windows PowerShell、Node.js bundled runtime 26.731.11130; scope=JavaScript構文16ファイル; counts=passed=16, failed=0, skipped=0, not-run=0
@@ -32,9 +33,8 @@ not-run:
 
 ## Next
 
-1. 検証済み変更を`1.0.0`へcommit・pushする — blocked-by: none
-2. 配布時は`dist/booth-purchase-total-extension-v1.0.0.zip`と同名の`.sha256`を一緒に扱う — blocked-by: none
-3. 次の変更では規模に応じて新しい永続バージョンブランチを作る — blocked-by: none
+1. 配布時は`dist/booth-purchase-total-extension-v1.0.0.zip`と同名の`.sha256`を一緒に扱う — blocked-by: none
+2. 次の変更では規模に応じて新しい永続バージョンブランチを作る — blocked-by: none
 
 ## Paths
 
