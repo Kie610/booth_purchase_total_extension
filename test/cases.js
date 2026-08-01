@@ -2066,20 +2066,28 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   const manifest = await (await fetch("../extension/manifest.json")).json();
   const expectedIcons = Object.fromEntries(ICON_SIZES.map((s) => [String(s), `icons/icon${s}.png`]));
 
-  // 未リリースのうちは 0.x に留める。1.0.0 に上げるのはリリースを宣言するときだけ
-  check("バージョンは 0.x(未リリース)", /^0\.\d+\.\d+$/.test(manifest.version), true);
-  check("今回の機能追加版", manifest.version, "0.31.0");
+  // 正式リリース後はセマンティックバージョンを使い、配布対象のversionを固定して検証する
+  check("正式リリース版のセマンティックバージョン", /^[1-9]\d*\.\d+\.\d+$/.test(manifest.version), true);
+  check("今回の正式リリース版", manifest.version, "1.0.0");
 
   check("manifestのiconsに4サイズを宣言", manifest.icons, expectedIcons);
   check("ツールバー用のdefault_iconも同じ4サイズ", manifest.action.default_icon, expectedIcons);
 
   const readmeText = await (await fetch("../README.md")).text();
   const handoffText = await (await fetch("../HANDOFF.md")).text();
+  const handoffHistoryText = await (await fetch("../docs/handoff-history.md")).text();
+  const agentsText = await (await fetch("../AGENTS.md")).text();
+  check("1.0.0とバージョンブランチ運用を文書化",
+    [readmeText.includes("現在の正式リリースは **v1.0.0**"),
+     handoffText.includes("[Durable repository instructions](AGENTS.md)"),
+     agentsText.includes("現在の正式リリースと統合・配布ブランチは `1.0.0`"),
+     agentsText.includes("`main` へコミット・マージ・pushしない"),
+     agentsText.includes("バージョンブランチは削除しない")], [true, true, true, true, true]);
   const supportDistributionNotice = "本拡張機能は無料でダウンロード・利用できます。BOOTHには任意の支援版も用意しますが、支援版に含まれる拡張機能は無料版と同一です。支援版の購入およびBOOSTは作者への任意の支援であり、支援の有無や金額による機能・利用条件・サポート内容の違いはありません。";
   check("無料版と支援版の説明をREADME・作者情報・HANDOFFで統一",
     [readmeText.includes(supportDistributionNotice),
      dashboardDoc.querySelector(".author-support-note").textContent.trim() === supportDistributionNotice,
-     handoffText.includes(supportDistributionNotice)], [true, true, true]);
+     handoffHistoryText.includes(supportDistributionNotice)], [true, true, true]);
   check("Firefoxは一時読み込みのみ確認済みと明記",
     readmeText.includes("Firefoxは**開発時の一時読み込みのみ確認済み**です"), true);
   check("Chromeウェブストアへ公開しない方針を明記",

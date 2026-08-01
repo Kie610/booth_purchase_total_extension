@@ -3,6 +3,8 @@
 BOOTH ([accounts.booth.pm/orders](https://accounts.booth.pm/orders)) の購入履歴から、
 実際に支払った合計金額を **注文単位** で正確に集計するブラウザ拡張機能です。
 
+現在の正式リリースは **v1.0.0** です。
+
 > **非公式ツールです。** Kie (Kie工房) が個人で開発しており、ピクシブ株式会社および
 > BOOTHが提供、承認、協賛するものではありません。
 
@@ -45,7 +47,11 @@ tools/              開発用スクリプト
   make_icons.py     アイコンの生成(形や色を変えるときはここを直して再生成する)
   release.ps1       配布用ZIPとSHA-256チェックサムの作成
 test/               ブラウザ上で動く簡易テスト(test/README.md 参照)
-HANDOFF.md          開発を引き継ぐための資料(調査済みの事項と進め方)
+AGENTS.md            エージェント共通の開発・ブランチ運用ルール
+CLAUDE.md            Claude CodeからAGENTS.mdを参照するための橋渡し
+HANDOFF.md           引き継ぎ資料へのリンク索引
+HANDOFF.agent.md     現在の作業状態と検証結果
+docs/                詳細な開発手順と過去の引き継ぎ履歴
 LICENSE             MIT License
 CREDIT.md           著者近影で使用したアセットと撮影ワールドのクレジット
 PRIVACY.md          保存データ・外部通信・削除方法に関する説明
