@@ -37,6 +37,7 @@ not-run:
 
 1. 次の変更では規模に応じ、同期済み`main`から新しい永続バージョンブランチを作る — blocked-by: none
 2. 次回の正式リリースでも検証後にバージョンブランチ、`main`、リモートのSHAを一致させる — blocked-by: none
+3. `docs/improvement-plan.md`(2026-08-07レビュー)のP2→P1→P3→P4の順で改善タスクを委任する — blocked-by: ユーザーの着手判断
 
 ## Paths
 
@@ -45,6 +46,7 @@ not-run:
 - C: `AGENTS.md` — 永続的な開発・ブランチ運用ルール
 - C: `docs/versioning.md` — バージョン決定、正式リリース、main同期の詳細手順
 - C: `docs/handoff-history.md` — 旧HANDOFFの詳細手順と調査履歴
+- C: `docs/improvement-plan.md` — 2026-08-07レビューの指摘一覧と委任プロンプト
 
 ## Resume protocol
 
