@@ -186,28 +186,42 @@
 </div>
 
 <div id="shareOverlay" hidden></div>
+<!-- 本文と操作の入れ子は dashboard.html と同じにする(本文だけがスクロールし、
+     操作と状態表示はパネル下部に貼り付く) -->
 <div id="sharePanel" role="dialog" aria-modal="true" hidden>
-  <button id="shareCloseBtn"></button>
-  <div id="shareRatioToggle">
-    <button class="segmented-btn" data-ratio="16:9" aria-pressed="true">16:9</button>
-    <button class="segmented-btn" data-ratio="1:1" aria-pressed="false">1:1</button>
-    <button class="segmented-btn" data-ratio="4:3" aria-pressed="false">4:3</button>
-    <button class="segmented-btn" data-ratio="3:4" aria-pressed="false">3:4</button>
+  <div class="share-panel-head"><button id="shareCloseBtn"></button></div>
+  <div class="share-panel-body">
+    <canvas id="shareCanvas" width="1200" height="675" role="img" tabindex="-1" aria-label="作成した共有カードのプレビュー" aria-disabled="true"></canvas>
+    <div class="share-bg">
+      <input type="file" id="shareBgFile">
+      <button id="shareBgClearBtn" hidden></button>
+      <div id="shareDropZone"></div>
+      <span id="shareBgName"></span>
+      <input type="range" id="shareScale" min="100" max="300" step="5" value="100" disabled>
+      <output id="shareScaleValue">100%</output>
+    </div>
+    <div id="shareRatioToggle">
+      <button class="segmented-btn" data-ratio="16:9" aria-pressed="true">16:9</button>
+      <button class="segmented-btn" data-ratio="1:1" aria-pressed="false">1:1</button>
+      <button class="segmented-btn" data-ratio="4:3" aria-pressed="false">4:3</button>
+      <button class="segmented-btn" data-ratio="3:4" aria-pressed="false">3:4</button>
+    </div>
+    <details id="shareCustomize">
+      <summary>写真を使わない背景（色と模様）</summary>
+      <div id="shareColors"></div>
+      <div id="sharePatterns"></div>
+    </details>
+    <details id="shareTextDetails">
+      <summary>投稿する文面を確認する</summary>
+      <textarea id="shareText"></textarea>
+    </details>
   </div>
-  <input type="range" id="shareScale" min="100" max="300" step="5" value="100" disabled>
-  <output id="shareScaleValue">100%</output>
-  <div id="shareDropZone"></div>
-  <div id="shareColors"></div>
-  <div id="sharePatterns"></div>
-  <canvas id="shareCanvas" width="1200" height="675" role="img" tabindex="-1" aria-label="作成した共有カードのプレビュー" aria-disabled="true"></canvas>
-  <input type="file" id="shareBgFile">
-  <button id="shareBgClearBtn" hidden></button>
-  <span id="shareBgName"></span>
-  <textarea id="shareText"></textarea>
-  <button id="shareCopyBtn"></button>
-  <button id="shareSaveBtn"></button>
-  <button id="shareOpenBtn"></button>
-  <span id="shareCardStatus"></span>
+  <div class="share-panel-foot">
+    <button id="shareCopyBtn"></button>
+    <button id="shareSaveBtn"></button>
+    <button id="shareOpenBtn"></button>
+    <span id="shareCardStatus"></span>
+  </div>
 </div>
 
 <div id="confirmOverlay" hidden></div>

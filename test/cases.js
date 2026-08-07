@@ -1153,6 +1153,23 @@ check("方向キーでも背景位置を動かす", shareBackgroundTransform.x <
 moveShareBackground(2, -2);
 check("背景位置は描画できる範囲に収める",
   [shareBackgroundTransform.x, shareBackgroundTransform.y], [1, -1]);
+
+// C14 プレビューへのファイルドロップ。位置調整の pointer ドラッグとは別系統の
+// イベントなので、同じcanvasに載せても取り合いにならない
+const canvasDragOver = new DragEvent("dragover", { bubbles: true, cancelable: true });
+shareCanvas.dispatchEvent(canvasDragOver);
+check("プレビューへ重ねると受け取る合図を出す",
+  [shareCanvas.classList.contains("drop-over"), canvasDragOver.defaultPrevented], [true, true]);
+shareCanvas.dispatchEvent(new DragEvent("dragleave", { bubbles: true, cancelable: true }));
+check("プレビューから外れると合図を消す", shareCanvas.classList.contains("drop-over"), false);
+// Webページ上の画像を投げるとファイルが付いてこない。黙って何も起きないと壊れて見える
+shareCanvas.dispatchEvent(new DragEvent("drop", {
+  bubbles: true, cancelable: true, dataTransfer: new DataTransfer(),
+}));
+check("ファイルの無いドロップは案内を出す",
+  shareCardStatus.textContent, "画像ファイルを投げ込んでください。");
+setShareCardStatus("");
+
 setShareBackground(null, "");
 check("背景を戻すと調整値も初期化する",
   [shareBackgroundTransform, shareScaleInput.disabled, shareScaleValue.textContent],
@@ -1771,6 +1788,32 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   closeConfirmDialog(false);
   check("フォーカストラップの後始末", [await confirmTrapped, confirmPanel.hidden], [false, true]);
 
+  // C14 プレビューへ実際の画像ファイルを落とすと背景になる。
+  // 投げ込み先の枠だけでなく、絵そのものへ落としても同じことが起きる
+  const droppedPng = await new Promise((resolve) => {
+    const source = document.createElement("canvas");
+    source.width = 8;
+    source.height = 4;
+    const sourceCtx = source.getContext("2d");
+    sourceCtx.fillStyle = "#123456";
+    sourceCtx.fillRect(0, 0, source.width, source.height);
+    source.toBlob(resolve, "image/png");
+  });
+  const droppedTransfer = new DataTransfer();
+  droppedTransfer.items.add(new File([droppedPng], "photo.png", { type: "image/png" }));
+  shareCanvas.dispatchEvent(new DragEvent("drop", {
+    bubbles: true, cancelable: true, dataTransfer: droppedTransfer,
+  }));
+  // 読み込みは非同期。適用されるまで待つ(待たずに見ると必ず未設定に見える)
+  for (let i = 0; i < 100 && !shareBackground; i += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  check("プレビューへ落とした画像が背景になる",
+    [Boolean(shareBackground), shareBgName.textContent, shareBgClearBtn.hidden],
+    [true, "photo.png", false]);
+  setShareBackground(null, "");
+  setShareCardStatus("");
+
 
   // 増分取得: 既知に接続でき、以前が完全なら全体として完全なまま
   state.index = { updatedAt: "x", orders: OLD, complete: true };
@@ -2280,30 +2323,64 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   check("進捗をprogressbarとして宣言",
     dashboardDoc.getElementById("progress").getAttribute("role"), "progressbar");
 
-  // 共有パネルは「テンプレートを選ぶ→無ければ画像を持ってくる」の順に読ませる。
-  // 手持ちの画像が要るように見えると、その場で作れることに気付けない
-  check("テンプレートは背景画像より先に置く",
-    dashboardHtml.indexOf('id="shareColors"') < dashboardHtml.indexOf('id="shareBgFile"'), true);
+  // C12 写真を添えて共有する使い方が主なので、画像の指定を最短動線に置く。
+  // テンプレート(色と模様)は写真を使わない人向けの下地として畳んだ先へ回す
+  check("背景画像の指定はテンプレートより先に置く",
+    dashboardHtml.indexOf('id="shareBgFile"') < dashboardHtml.indexOf('id="shareColors"'), true);
   check("色と模様を別々に選ばせる",
     [Boolean(dashboardDoc.getElementById("shareColors")),
      Boolean(dashboardDoc.getElementById("sharePatterns"))], [true, true]);
   const scaleInput = dashboardDoc.getElementById("shareScale");
-  // 背景の作り込みは畳んでおく。既定ではプレビュー・文面・3つのボタンだけを見せる
   const shareCustomize = dashboardDoc.getElementById("shareCustomize");
-  check("背景の指定はアコーディオンへ畳む",
+  check("色と模様のテンプレートはアコーディオンへ畳む",
     [shareCustomize.tagName, shareCustomize.hasAttribute("open"),
      shareCustomize.querySelector("summary").textContent.trim()],
-    ["DETAILS", false, "背景をカスタマイズ"]);
-  check("テンプレート・画像・拡大率をその中へ入れる",
+    ["DETAILS", false, "写真を使わない背景（色と模様）"]);
+  check("畳むのはテンプレートだけにする",
     [Boolean(shareCustomize.querySelector("#shareColors")),
      Boolean(shareCustomize.querySelector("#sharePatterns")),
      Boolean(shareCustomize.querySelector("#shareBgFile")),
-     Boolean(shareCustomize.querySelector("#shareScale"))], [true, true, true, true]);
+     Boolean(shareCustomize.querySelector("#shareScale"))], [true, true, false, false]);
   check("拡大率の範囲は変えない", [scaleInput.min, scaleInput.max, scaleInput.value], ["100", "300", "100"]);
-  check("プレビューと文面とボタンは畳まない",
+  // 画像を選ぶ・投げ込む・拡大率・画像の形は、折りたたみの開閉に関係なく見える
+  check("画像の設定と画像の形は畳まない",
     [dashboardDoc.getElementById("shareCanvas").closest("details"),
-     dashboardDoc.getElementById("shareText").closest("details"),
-     dashboardDoc.getElementById("shareOpenBtn").closest("details")], [null, null, null]);
+     dashboardDoc.getElementById("shareBgFile").closest("details"),
+     dashboardDoc.getElementById("shareDropZone").closest("details"),
+     dashboardDoc.getElementById("shareScale").closest("details"),
+     dashboardDoc.getElementById("shareRatioToggle").closest("details"),
+     dashboardDoc.getElementById("shareOpenBtn").closest("details")],
+    [null, null, null, null, null, null]);
+  check("画像の指定はプレビューの真下に置く",
+    dashboardHtml.indexOf('id="shareCanvas"') < dashboardHtml.indexOf('id="shareBgFile"')
+      && dashboardHtml.indexOf('id="shareBgFile"') < dashboardHtml.indexOf('id="shareRatioToggle"'), true);
+
+  // C15 文面は𝕏の投稿画面で直せる。畳むが、何が渡るのかは開けば確かめられる
+  const shareTextDetails = dashboardDoc.getElementById("shareTextDetails");
+  check("投稿文面は畳んで下方へ置く",
+    [shareTextDetails.tagName, shareTextDetails.hasAttribute("open"),
+     dashboardDoc.getElementById("shareText").closest("details") === shareTextDetails,
+     dashboardHtml.indexOf('id="shareBgFile"') < dashboardHtml.indexOf('id="shareTextDetails"')],
+    ["DETAILS", false, true, true]);
+  check("文面が𝕏へ渡ることは畳んでも分かる",
+    [shareTextDetails.querySelector("summary").textContent.trim(),
+     shareTextDetails.querySelector(".share-text-note").textContent.includes("𝕏の投稿画面へ渡されます")],
+    ["投稿する文面を確認する", true]);
+
+  // C13 パネルは縦に長い。操作ボタンと状態表示は本文の外に出し、下部へ貼り付ける
+  const sharePanelNode = dashboardDoc.getElementById("sharePanel");
+  const sharePanelBody = sharePanelNode.querySelector(".share-panel-body");
+  const sharePanelFoot = sharePanelNode.querySelector(".share-panel-foot");
+  check("スクロールするのは本文だけにする",
+    [sharePanelBody !== null, sharePanelFoot !== null,
+     sharePanelBody.contains(sharePanelFoot),
+     sharePanelBody.contains(dashboardDoc.getElementById("shareCanvas"))],
+    [true, true, false, true]);
+  check("3つの操作と状態表示を下部へまとめる",
+    [Boolean(sharePanelFoot.querySelector("#shareCopyBtn")),
+     Boolean(sharePanelFoot.querySelector("#shareSaveBtn")),
+     Boolean(sharePanelFoot.querySelector("#shareOpenBtn")),
+     Boolean(sharePanelFoot.querySelector("#shareCardStatus"))], [true, true, true, true]);
 
   // 画面幅に合わせた表示。拡張タブでは実害が薄いが、モバイル系ブラウザでは
   // 指定が無いと980px仮想幅で描画される
@@ -2433,22 +2510,51 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   // このページの主役はメインの合計額。フッターの合計(20px)と差を付ける
   check("メイン合計額は36px以上",
     parseFloat(getComputedStyle(totalAmountEl).fontSize) >= 36, true);
-  // 背景の作り込みを畳んでも、開けば背景画像の区画と拡大率が使える。
-  // 畳んだ状態では中身に高さが無いことを、配るCSSとHTMLで実測する
-  const shareLayoutFixture = document.createElement("div");
-  shareLayoutFixture.style.width = "712px";
-  shareLayoutFixture.appendChild(
-    document.importNode(dashboardDoc.getElementById("shareCustomize"), true)
-  );
-  document.body.appendChild(shareLayoutFixture);
-  const customizeNode = shareLayoutFixture.querySelector("#shareCustomize");
+  // C12・C13 共有パネルの実寸を、配るCSSとHTMLのまま測る。
+  // 700px相当の窓でも、画像の設定は折りたたみの開閉に関係なく見え、
+  // 3つの操作ボタンは本文をスクロールせずに押せること。
+  // idはこのページの本物と重複するので、複製からは外す
+  const sharePanelFixture = document.importNode(dashboardDoc.getElementById("sharePanel"), true);
+  sharePanelFixture.removeAttribute("id");
+  for (const node of sharePanelFixture.querySelectorAll("[id]")) node.removeAttribute("id");
+  sharePanelFixture.hidden = false;
+  // このページは表示されない枠で走ることがあり、100vw/100vhが0になる。
+  // 幅と高さは実寸で与えて、窓の大きさに左右されないようにする
+  sharePanelFixture.style.top = "0";
+  sharePanelFixture.style.left = "0";
+  sharePanelFixture.style.transform = "none";
+  sharePanelFixture.style.width = "760px";
+  sharePanelFixture.style.maxHeight = "668px"; // 高さ700pxの窓から上下の余白32pxを引いた分
+  document.body.appendChild(sharePanelFixture);
+  const fixtureBody = sharePanelFixture.querySelector(".share-panel-body");
+  const fixtureFoot = sharePanelFixture.querySelector(".share-panel-foot");
+  const panelRect = sharePanelFixture.getBoundingClientRect();
+  check("本文が溢れてもパネルは窓の高さに収まる",
+    [fixtureBody.scrollHeight > fixtureBody.clientHeight, Math.round(panelRect.height) <= 668],
+    [true, true]);
+  const footRect = fixtureFoot.getBoundingClientRect();
+  check("3つの操作ボタンはスクロールせずに押せる",
+    [Math.round(footRect.bottom) <= Math.round(panelRect.bottom),
+     footRect.top >= panelRect.top,
+     [...fixtureFoot.querySelectorAll("button")].length,
+     [...fixtureFoot.querySelectorAll("button")].every((button) => {
+       const rect = button.getBoundingClientRect();
+       return rect.width > 0 && rect.top >= panelRect.top && rect.bottom <= panelRect.bottom + 1;
+     })],
+    [true, true, 3, true]);
+  // 画像の設定は畳んだ先ではなく、最初から高さを持って見えている
+  const fixtureBg = sharePanelFixture.querySelector(".share-bg");
+  const customizeNode = sharePanelFixture.querySelector(".share-customize");
+  check("画像の設定は折りたたみの外で見えている",
+    [fixtureBg.closest("details"), fixtureBg.getBoundingClientRect().height > 100, customizeNode.open],
+    [null, true, false]);
   // 畳んだ状態の高さは見出しの行だけ。開くと中身の分だけ伸びる
   const closedHeight = customizeNode.getBoundingClientRect().height;
   customizeNode.open = true;
   const openedHeight = customizeNode.getBoundingClientRect().height;
-  check("畳んだ背景設定は見出しの高さしか取らない", closedHeight < 60, true);
-  check("開けば背景画像と拡大率の分だけ伸びる", openedHeight > closedHeight + 150, true);
-  shareLayoutFixture.remove();
+  check("畳んだテンプレートは見出しの高さしか取らない", closedHeight < 60, true);
+  check("開けば色と模様の見本の分だけ伸びる", openedHeight > closedHeight + 30, true);
+  sharePanelFixture.remove();
 
   const trendLineFixture = svgEl("polyline", { class: "trend-line current" });
   cumulativeTrendChart.appendChild(trendLineFixture);

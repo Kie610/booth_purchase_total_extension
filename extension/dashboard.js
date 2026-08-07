@@ -405,17 +405,38 @@ for (const type of ["dragover", "drop"]) {
   window.addEventListener(type, (event) => event.preventDefault());
 }
 
-shareDropZone.addEventListener("dragover", () => shareDropZone.classList.add("over"));
-shareDropZone.addEventListener("dragleave", () => shareDropZone.classList.remove("over"));
-shareDropZone.addEventListener("drop", async (event) => {
-  shareDropZone.classList.remove("over");
-  const file = event.dataTransfer && event.dataTransfer.files[0];
+async function applyShareDroppedFile(event) {
+  const file = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0];
   if (!file) {
     // 画像そのものではなくWebページ上の画像を投げると、ファイルが付いてこない
     setShareCardStatus("画像ファイルを投げ込んでください。");
     return;
   }
   await applyShareBackgroundFile(file);
+}
+
+shareDropZone.addEventListener("dragover", () => shareDropZone.classList.add("over"));
+shareDropZone.addEventListener("dragleave", () => shareDropZone.classList.remove("over"));
+shareDropZone.addEventListener("drop", async (event) => {
+  shareDropZone.classList.remove("over");
+  await applyShareDroppedFile(event);
+});
+
+// プレビューへ直接投げても差し替えられるようにする。「ここに置けば変わる」と
+// 見当を付ける先はまず絵そのもので、枠の下の投げ込み先ではない。
+// canvasには背景位置を動かすpointerドラッグが載っているが、OSからのファイル
+// ドラッグは drag 系イベントなので、同時に起きても取り合いにならない
+shareCanvas.addEventListener("dragover", (event) => {
+  event.preventDefault();
+  // 「ここへコピーする」の見た目にする。既定のままだと禁止の印が出る環境がある
+  if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+  shareCanvas.classList.add("drop-over");
+});
+shareCanvas.addEventListener("dragleave", () => shareCanvas.classList.remove("drop-over"));
+shareCanvas.addEventListener("drop", async (event) => {
+  event.preventDefault();
+  shareCanvas.classList.remove("drop-over");
+  await applyShareDroppedFile(event);
 });
 
 // テンプレートの選択。色と模様を別々に選び、その組み合わせが背景になる

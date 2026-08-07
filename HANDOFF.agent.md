@@ -1,6 +1,6 @@
 # Agent handoff v1
 
-updated: 2026-08-07T13:00:00+09:00
+updated: 2026-08-07T15:30:00+09:00
 repo: https://github.com/Kie610/booth_purchase_total_extension
 work_branch: 1.1.0
 upstream: none (未push。pushはユーザー許可後)
@@ -84,8 +84,32 @@ complete:
   test/cases.js へ回帰テストを2件追加(725→727 checks)。harnessはページを読み込み直せず
   resultsMemo を未初期化へ戻せないため、(1)レポート以外のハッシュで描画経路が例外を出さないこと、
   (2)fetchしたdashboard.jsのソース上で宣言が早期呼び出しより前にあることの2つに分けて検証している。
+- C: P6(共有パネルの再設計)として improvement-plan の C12〜C15 を実装し`1.1.0`へ統合した。
+  背景=利用者層は写真を添えて共有することが多く、P1のC6「背景設定一式をアコーディオンへ」は
+  その動線に逆行していた。共有カードの描画ロジック(share.js)と確認フローは変更していない。
+  C12=背景画像の指定(画像を選ぶ+ドロップゾーン+ファイル名+拡大率スライダー)を
+  `#shareCustomize` から出し、プレビュー直下へ `.share-bg` として置いた。
+  アコーディオンには色・模様テンプレートだけを残し、見出しを
+  「写真を使わない背景（色と模様）」へ改めた。画像の形(縦横比)はプレビュー近くに維持。
+  併せて `.share-canvas` に `max-height:360px`(width/height:auto+max-width:100%)を入れた。
+  1:1や3:4のとき従来はプレビューだけで712〜949px使い、直下の画像設定を押し出していた。
+  窓の高さ由来の単位は、表示されない枠(高さ0)で潰れるため使わない。
+  C13=`.share-panel` を flex 縦並び+overflow:hidden にし、`.share-panel-body` だけをスクロール、
+  `.share-panel-foot` に3つの操作と `#shareCardStatus` をまとめて下部へ貼り付けた。
+  余白はパネルではなく head/body/foot が持つ(スクロールバーを内容の端へ出すため)。
+  C14=プレビューcanvasへの dragover/dragleave/drop を追加し、`.share-canvas.drop-over` で
+  枠と外周を光らせる。ファイル取り出しは `applyShareDroppedFile()` に切り出して
+  ドロップゾーンと共用。canvasの背景位置調整は pointer 系イベントなので競合しない。
+  C15=投稿文面を `#shareTextDetails`(既定は畳む)へ移し、𝕏へ渡ることが分かる補足を添えた。
+  test/index.html の共有パネル雛形も body/foot の入れ子へそろえ、
+  test/cases.js は C12〜C15 のテストへ差し替え・追加した(727→739 checks)。
+  差し替えたのは「テンプレートは背景画像より先に置く」(順序が逆になったため反転)と
+  アコーディオンの高さ実測(対象がテンプレートだけになったため、パネル全体の実測へ拡張)。
 
 verified:
+- C: 2026-08-07 — evidence: status=PASS; kind=compile; command=node --check をextensionとtestの全.jsへ実行(claude/p6-share-redesign、C12〜C15実装後); environment=Windows、Git Bash; scope=JavaScript構文16ファイル; counts=passed=16, failed=0, skipped=0, not-run=0
+- C: 2026-08-07 — evidence: status=PASS; kind=runtime; command=python -m http.server 8760 --bind 127.0.0.1 を起動しBrowserで/test/index.htmlを確認(claude/p6-share-redesign、C12〜C15実装+テスト更新後); environment=Windows、Claude Code Browser; scope=拡張機能のブラウザ全体テスト; counts=passed=739, failed=0, skipped=0, not-run=0
+- C: 2026-08-07 — evidence: status=PASS; kind=runtime; command=scratchpadのプレビュー複製(stub.js+seed.js注入)へ修正後のextensionのJS/CSS/HTMLを反映しport 8761で配信、1280x700で共有パネルを開いてDOM計測とイベントディスパッチで確認; environment=Windows、Claude Code Browser; scope=C12〜C14の実挙動とライト/ダークの配色; counts=(a)画像設定はアコーディオン外・`#shareCustomize`は閉じたまま「画像を選ぶ」まで見える、(b)パネル高さ668pxでフッターは589〜684pxに固定され3ボタンとも無スクロールで可視(本文は936pxを514pxの枠でスクロール)、(c)canvasへのdragoverで枠がアクセント色になりdefaultPrevented=true、Fileを載せたdropで背景適用・ファイル名表示・拡大率有効化まで到達、(d)ライト/ダークとも状態表示・ドロップ枠の文字・ファイル選択/画像ボタンのコントラストは4.8:1以上; failed=0
 - C: 2026-08-07 — evidence: status=PASS; kind=compile; command=node --check をextensionとtestの全.jsへ実行(claude/p3-tdz-hotfix、resultsMemo宣言移動+回帰テスト追加後); environment=Windows、Git Bash; scope=JavaScript構文16ファイル; counts=passed=16, failed=0, skipped=0, not-run=0
 - C: 2026-08-07 — evidence: status=PASS; kind=runtime; command=python -m http.server 8756 --bind 127.0.0.1 を起動しBrowserで/test/index.htmlを確認(claude/p3-tdz-hotfix); environment=Windows、Claude Code Browser; scope=拡張機能のブラウザ全体テスト; counts=passed=727, failed=0, skipped=0, not-run=0
 - C: 2026-08-07 — evidence: status=PASS; kind=runtime; command=scratchpadのプレビュー複製(stub.js+seed.js注入、注文90件)へ修正後のextensionの.jsを上書きしport 8757で配信、http://127.0.0.1:8757/dashboard.html#/ranking を直接開いてconsoleとDOMを確認; environment=Windows、Claude Code Browser; scope=レポート以外を初期ハッシュにした読み込みの実挙動; counts=ReferenceError=0件(consoleエラー0件)、ランキング6ショップ・合計¥375,300を描画、未収集5件のバナーも表示; failed=0
@@ -121,7 +145,7 @@ not-run:
 
 1. 次の変更では規模に応じ、同期済み`main`から新しい永続バージョンブランチを作る — blocked-by: none
 2. 次回の正式リリースでも検証後にバージョンブランチ、`main`、リモートのSHAを一致させる — blocked-by: none
-3. `docs/improvement-plan.md`(2026-08-07レビュー)の残りP4(機能)→P5(調査)を委任する — blocked-by: ユーザーの着手判断
+3. `docs/improvement-plan.md`(2026-08-07レビュー)の残りP5(調査)を委任する — blocked-by: ユーザーの着手判断
 
 ## Paths
 

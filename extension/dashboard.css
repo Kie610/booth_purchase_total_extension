@@ -1514,8 +1514,6 @@ span.amount-pending {
   transform: translate(-50%, -50%);
   width: min(760px, calc(100vw - 32px));
   max-height: calc(100vh - 32px);
-  overflow-y: auto;
-  padding: 20px 24px 24px;
   border-radius: 12px;
   background: var(--bg-elevated);
   box-shadow: 0 18px 48px var(--shadow-panel);
@@ -1523,6 +1521,17 @@ span.amount-pending {
 
 .author-panel {
   width: min(560px, calc(100vw - 32px));
+  overflow-y: auto;
+  padding: 20px 24px 24px;
+}
+
+/* 共有パネルは中身が縦に長い。パネルごと流すと操作ボタンが画面外へ出るので、
+   見出しと操作を上下へ貼り付け、本文だけを流す */
+.share-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 20px 0 0;
 }
 
 .share-panel-head,
@@ -1531,6 +1540,20 @@ span.amount-pending {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+.share-panel-head {
+  flex: 0 0 auto;
+  padding: 0 24px;
+}
+
+/* 縦に足りない分はここだけがスクロールする。左右の余白はパネルではなく
+   この枠が持つ(スクロールバーを内容の端に出すため) */
+.share-panel-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 24px;
 }
 
 .share-panel-head h2,
@@ -1551,12 +1574,17 @@ button.icon-btn:hover:not(:disabled) {
   color: var(--fg);
 }
 
-/* 実寸のcanvasを枠の幅に合わせて縮める。高さは縦横比のまま追従させる */
+/* 実寸のcanvasを枠に合わせて縮める。縦横比はcanvasの寸法から保たれる。
+   高さに上限を置かないと、1:1や3:4のときプレビューだけで画面が埋まり、
+   すぐ下に置いた背景画像の指定が押し出される。窓の高さで決めると
+   表示されない枠(高さ0)で潰れるので、実寸で上限を持つ */
 .share-canvas {
   display: block;
-  width: 100%;
+  width: auto;
   height: auto;
-  margin: 16px 0;
+  max-width: 100%;
+  max-height: 360px;
+  margin: 16px auto;
   border: 1px solid var(--border);
   border-radius: 8px;
 }
@@ -1575,14 +1603,15 @@ button.icon-btn:hover:not(:disabled) {
   cursor: grabbing;
 }
 
-.share-canvas-help {
-  margin: -10px 0 16px;
+/* プレビューへファイルを重ねている間の合図。枠だけだと縮小表示では気付きにくいので
+   外側へも光を回す */
+.share-canvas.drop-over {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
 }
 
-.share-controls {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 16px;
+.share-canvas-help {
+  margin: -10px 0 16px;
 }
 
 .share-field-label {
@@ -1601,14 +1630,17 @@ button.icon-btn:hover:not(:disabled) {
   margin-bottom: 16px;
 }
 
-/* 背景の作り込みは畳んでおく寄り道。既定ではプレビュー・文面・ボタンだけを見せる */
-.share-customize {
+/* 写真を使わない人向けの下地と、確認するだけの文面は畳んでおく寄り道。
+   既定ではプレビュー・背景画像の指定・操作ボタンだけを見せる */
+.share-customize,
+.share-text-details {
   margin-top: 16px;
   padding-top: 14px;
   border-top: 1px solid var(--border);
 }
 
-.share-customize > summary h3 {
+.share-customize > summary h3,
+.share-text-details > summary h3 {
   font-size: 13px;
   font-weight: 700;
   color: var(--fg-muted);
@@ -1618,8 +1650,13 @@ button.icon-btn:hover:not(:disabled) {
   margin-top: 14px;
 }
 
-.share-customize .share-scale-field {
+.share-text-details > .share-text-box {
   margin-top: 14px;
+}
+
+/* 拡大率は画像を選んだ直後に触るので、投げ込み先のすぐ下に置く */
+.share-bg .share-scale-field {
+  margin-top: 12px;
   max-width: 320px;
 }
 
@@ -1669,22 +1706,21 @@ label.file-btn:focus-within {
   outline-offset: 2px;
 }
 
-/* 背景画像の区画と文面の区画は、どちらが高くても下端をそろえる。
-   余った高さは、それぞれ投げ込み先と文面の枠に配る */
+/* プレビューの真下に置く一等地。ここが共有の主な入口になる */
 .share-bg {
   display: flex;
   flex-direction: column;
 }
 
-/* ボタンのすぐ下を投げ込み先にする。何もしていないときは枠線だけの控えめな見た目 */
+/* ボタンのすぐ下を投げ込み先にする。何もしていないときは枠線だけの控えめな見た目。
+   下に拡大率と画像の形が続くので、高さは詰める */
 .share-drop {
-  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 4px;
-  min-height: 84px;
+  min-height: 68px;
   margin-top: 10px;
   padding: 10px 12px;
   border: 2px dashed var(--border-strong);
@@ -1764,11 +1800,15 @@ button.share-template.current {
   gap: 8px;
 }
 
-/* 文面の枠は、隣の背景画像の区画と下端をそろえる。高さを行数で決めると
-   段差が出て、パネルの中で2つの区画がずれて見える */
+/* 文面は開いたときだけ見える確認用。𝕏の投稿画面で直せるので、
+   ここでは全文が読めれば足りる */
 .share-text-box {
   display: flex;
   flex-direction: column;
+}
+
+.share-text-note {
+  margin: 6px 0 0;
 }
 
 .share-text {
@@ -1794,13 +1834,25 @@ button.share-template.current {
   margin: 8px 0 0;
 }
 
+/* 本文がどれだけ流れても、操作と状態表示はここに残す。
+   本文と地続きに見えると押せる場所が分からないので、上端に区切り線を入れる */
 .share-panel-foot {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 12px 24px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-elevated);
+}
+
+.share-foot-actions {
   display: flex;
   justify-content: flex-end;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 16px;
 }
 
 .share-media-actions {

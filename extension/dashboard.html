@@ -612,7 +612,32 @@
     <div class="share-panel-body">
       <p id="sharePanelDescription" class="visually-hidden">共有画像をコピーまたは保存してから、投稿画面を開きます。</p>
       <canvas id="shareCanvas" class="share-canvas" width="1200" height="675" role="img" tabindex="-1" aria-label="作成した共有カードのプレビュー" aria-describedby="shareCanvasHelp" aria-disabled="true"></canvas>
-      <p id="shareCanvasHelp" class="hint share-canvas-help">背景画像を選ぶと、プレビューをドラッグして映す位置を調整できます。方向キーでも少しずつ動かせます。</p>
+      <p id="shareCanvasHelp" class="hint share-canvas-help">プレビューへ画像を直接ドロップしても背景を差し替えられます。背景画像を選ぶと、プレビューをドラッグして映す位置を調整できます。方向キーでも少しずつ動かせます。</p>
+
+      <!-- 写真を添えて共有する使い方が主なので、画像の指定はプレビューの真下に置く。
+           畳むと「自分の写真を使える」ことに気付けないため、ここは折りたたまない -->
+      <div class="share-bg">
+        <span class="share-field-label" id="shareBgLabel">背景画像</span>
+        <div class="share-bg-row">
+          <label class="file-btn">
+            画像を選ぶ
+            <input type="file" id="shareBgFile" class="visually-hidden-file" accept="image/*" aria-labelledby="shareBgLabel" aria-describedby="shareBgDescription">
+          </label>
+          <button type="button" id="shareBgClearBtn" class="secondary small" hidden>元に戻す</button>
+        </div>
+        <!-- ボタンの下が空くので、そこをそのまま投げ込み先にする -->
+        <div class="share-drop" id="shareDropZone">
+          <span class="share-drop-text">ここに画像をドロップ（プレビューへのドロップでも可）</span>
+          <span class="hint" id="shareBgDescription">選んだ画像は共有カードの背景にだけ使われ、保存されません。</span>
+          <span class="hint" id="shareBgName">未選択（テンプレートを使います）</span>
+        </div>
+
+        <!-- 拡大率は画像を選んだあとに続けて触る。畳んだ先に置くと辿り着けない -->
+        <div class="share-scale-field">
+          <label class="share-field-label" for="shareScale">背景画像の拡大率 <output id="shareScaleValue" for="shareScale">100%</output></label>
+          <input type="range" id="shareScale" min="100" max="300" step="5" value="100" disabled>
+        </div>
+      </div>
 
       <div class="share-shape">
         <div class="share-shape-field">
@@ -626,21 +651,12 @@
         </div>
       </div>
 
-      <div class="share-controls">
-        <div class="share-text-box">
-          <label class="share-field-label" for="shareText">投稿する文面</label>
-          <textarea id="shareText" class="share-text" readonly aria-describedby="shareTextDescription"></textarea>
-          <span class="visually-hidden" id="shareTextDescription">Xの投稿画面へ渡す文章です。</span>
-        </div>
-      </div>
-
-      <!-- 背景の作り込みは、そのままでも共有できる寄り道。既定では畳んでおき、
-           プレビュー・文面・3つのボタンだけが最初に目に入るようにする -->
+      <!-- 写真を使わない人向けの下地。手持ちの画像が無くても選べるよう、
+           その場で描く色と模様を並べる。使う人だけが開けばよいので畳んでおく -->
       <details class="accordion share-customize" id="shareCustomize">
-        <summary><h3>背景をカスタマイズ</h3></summary>
+        <summary><h3>写真を使わない背景（色と模様）</h3></summary>
 
-        <!-- 手持ちの画像が無くても選べるように、その場で描く下地を並べる。
-             色と模様を別々に選び、その組み合わせが背景になる。
+        <!-- 色と模様を別々に選び、その組み合わせが背景になる。
              見本を小さく詰めると何の模様か分からないので、幅いっぱいを使う -->
         <div class="share-template-box">
           <span class="share-field-label" id="shareTemplateLabel">背景テンプレート</span>
@@ -653,27 +669,17 @@
             <div class="share-templates" id="sharePatterns" role="group" aria-label="背景の模様"></div>
           </div>
         </div>
+      </details>
 
-        <div class="share-bg">
-          <span class="share-field-label" id="shareBgLabel">背景画像</span>
-          <div class="share-bg-row">
-            <label class="file-btn">
-              画像を選ぶ
-              <input type="file" id="shareBgFile" class="visually-hidden-file" accept="image/*" aria-labelledby="shareBgLabel" aria-describedby="shareBgDescription">
-            </label>
-            <button type="button" id="shareBgClearBtn" class="secondary small" hidden>元に戻す</button>
-          </div>
-          <!-- ボタンの下が空くので、そこをそのまま投げ込み先にする -->
-          <div class="share-drop" id="shareDropZone">
-            <span class="share-drop-text">ここに画像をドロップ</span>
-            <span class="hint" id="shareBgDescription">選んだ画像は共有カードの背景にだけ使われ、保存されません。</span>
-            <span class="hint" id="shareBgName">未選択（テンプレートを使います）</span>
-          </div>
-        </div>
-
-        <div class="share-scale-field">
-          <label class="share-field-label" for="shareScale">背景画像の拡大率 <output id="shareScaleValue" for="shareScale">100%</output></label>
-          <input type="range" id="shareScale" min="100" max="300" step="5" value="100" disabled>
+      <!-- 文面は𝕏の投稿画面でそのまま直せる。ここで場所を取ると画像の設定が
+           押し出されるので畳むが、何が渡るのかは開けば確かめられるようにする -->
+      <details class="accordion share-text-details" id="shareTextDetails">
+        <summary><h3>投稿する文面を確認する</h3></summary>
+        <div class="share-text-box">
+          <label class="share-field-label" for="shareText">投稿する文面</label>
+          <textarea id="shareText" class="share-text" readonly aria-describedby="shareTextDescription"></textarea>
+          <span class="visually-hidden" id="shareTextDescription">Xの投稿画面へ渡す文章です。</span>
+          <p class="hint share-text-note">この文面は𝕏の投稿画面へ渡されます。投稿前にそちらで書き直せます。</p>
         </div>
       </details>
 
@@ -687,14 +693,18 @@
       </p>
     </div>
 
+    <!-- パネルは縦に長い。スクロールの途中でも押せるよう、3つの操作と
+         状態表示はパネル下部に貼り付けたまま動かさない -->
     <div class="share-panel-foot">
-      <div class="share-media-actions" aria-label="共有画像を用意する">
-        <button type="button" id="shareCopyBtn" class="secondary share-media-btn">画像をコピー</button>
-        <button type="button" id="shareSaveBtn" class="secondary share-media-btn">画像を保存</button>
+      <div class="share-foot-actions">
+        <div class="share-media-actions" aria-label="共有画像を用意する">
+          <button type="button" id="shareCopyBtn" class="secondary share-media-btn">画像をコピー</button>
+          <button type="button" id="shareSaveBtn" class="secondary share-media-btn">画像を保存</button>
+        </div>
+        <button type="button" id="shareOpenBtn" class="share-btn">𝕏の投稿画面を開く</button>
       </div>
-      <button type="button" id="shareOpenBtn" class="share-btn">𝕏の投稿画面を開く</button>
+      <span class="hint" id="shareCardStatus" role="status"></span>
     </div>
-    <span class="hint" id="shareCardStatus" role="status"></span>
   </div>
 
   <!-- 取り消せない操作の確認。ネイティブの confirm() だと作者情報・共有カードの
