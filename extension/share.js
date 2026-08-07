@@ -75,8 +75,16 @@ function rankingShareValue(row, sort) {
   return sort === "count" ? `${row.count}点` : formatYen(row.total);
 }
 
+// 見出しに入れる「期間・基準」。期間を絞ったランキングを全期間のものとして
+// 外へ出さないよう、全期間でないときは必ず年を書く
+// (periodLabel を持たない呼び出しは全期間として扱う)
+function rankingShareCaption(stats) {
+  const period = stats.periodLabel ? `${stats.periodLabel}・` : "";
+  return `${period}${RANKING_SORT_LABELS[stats.sort]}`;
+}
+
 function buildRankingShareText(stats, hideNumbers) {
-  const label = RANKING_SORT_LABELS[stats.sort];
+  const label = rankingShareCaption(stats);
   return [
     `BOOTHの推し作者ランキング🛍️（${label}）`,
     "",
@@ -220,7 +228,7 @@ function buildTotalShareCard(stats) {
 
 function buildRankingShareCard(stats, hideNumbers) {
   const card = shareCardBase(
-    `推し作者ランキング（${RANKING_SORT_LABELS[stats.sort]}）`,
+    `推し作者ランキング（${rankingShareCaption(stats)}）`,
     "BOOTHお買いものレポート"
   );
   card.list = stats.rows.map((row, index) => ({

@@ -112,6 +112,7 @@ const summaryYear = document.getElementById("summaryYear");
 const summaryCards = document.getElementById("summaryCards");
 const summaryNewShopWarn = document.getElementById("summaryNewShopWarn");
 const summaryTopShopsBody = document.getElementById("summaryTopShopsBody");
+const rankingYear = document.getElementById("rankingYear");
 const rankingSortToggle = document.getElementById("rankingSortToggle");
 const rankingHideNumbers = document.getElementById("rankingHideNumbers");
 const pendingBanner = document.getElementById("pendingBanner");
@@ -1013,6 +1014,23 @@ function orderShopsCell(result) {
   return cell;
 }
 
+// 注文番号のセル。BOOTHの注文詳細ページへ開けるようにする。
+// 番号はBOOTH由来の文字列なので、数字だけのものしかURLにしない(orderDetailUrl)
+function orderIdCell(id) {
+  const cell = td("");
+  const url = orderDetailUrl(id);
+  if (!url) {
+    cell.textContent = id;
+    return cell;
+  }
+  const link = el("a", null, id);
+  link.href = url;
+  link.target = "_blank";
+  link.rel = "noopener";
+  cell.appendChild(link);
+  return cell;
+}
+
 function renderOrderStatusOptions(results) {
   const selected = orderStatusFilter.value;
   const statuses = Array.from(new Set(results.map((result) => result.status))).sort((a, b) =>
@@ -1098,7 +1116,7 @@ function renderOrderTable(results) {
     } else {
       tr.appendChild(td("未収集", "num amount-pending"));
     }
-    tr.appendChild(td(r.id));
+    tr.appendChild(orderIdCell(r.id));
     orderTableBody.appendChild(tr);
   }
   orderRowCountEl.textContent = `(${filtered.length === results.length

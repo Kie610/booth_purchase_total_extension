@@ -1,4 +1,12 @@
+/* 配色はすべてこの変数に集約する。暗い配色は下の
+   @media (prefers-color-scheme: dark) で :root を上書きするだけで切り替わるので、
+   個々の規則に色を直書きしないこと(直書きすると暗い配色でだけ読めなくなる)。
+   共有カード(canvas描画)と背景テンプレートの見本は share.js が持つ配色のままにする。
+   画像として外へ出るものが、見る人の端末設定で変わってはいけないため */
 :root {
+  /* ブラウザが用意する部品(入力欄・チェックボックス・スクロールバー)も
+     同じ明暗で描かせる。宣言しないと、暗い配色でも白地の部品が混ざる */
+  color-scheme: light;
   --fg: #2a2f36;
   --fg-muted: #6b7280;
   --border: #e2e5ea;
@@ -8,8 +16,110 @@
   --accent: #fc4d50;
   /* ブランド色は維持し、白背景上の小さな文字だけ読みやすい濃色を使う */
   --accent-text: #b42326;
+  --accent-hover: #e03f42;
+  /* 選ばれているものに敷く淡い光。アクセント色と同系でそろえる */
+  --accent-glow: rgba(252, 77, 80, 0.35);
+  /* アクセント色の上に載せる文字 */
+  --on-accent: #fff;
   --bg-soft: #f7f8fa;
+  /* ページの地色と、その上に浮かせる面(ヘッダー・フッター・パネル・表の見出し) */
+  --bg: #fff;
+  --bg-elevated: #fff;
+  --bg-track: #eceef1;
+  --overlay: rgba(0, 0, 0, 0.32);
+  --overlay-strong: rgba(0, 0, 0, 0.42);
+  --shadow-soft: rgba(0, 0, 0, 0.08);
+  --shadow-footer: rgba(0, 0, 0, 0.04);
+  --shadow-panel: rgba(0, 0, 0, 0.24);
+  --focus-ring: #111827;
+  --danger-text: #a3272a;
+  --success-text: #287246;
+  /* 比較する前年のグラフ */
+  --series-previous: #aeb4bd;
+  /* ヒートマップの濃さはこの色に不透明度を掛けて作る(JS側も同じ変数を使う) */
+  --heat-rgb: 252 77 80;
+  --range-bg: #fff1f1;
+  --range-bg-hover: #ffe6e6;
+  --notice-bg: #fff8e6;
+  --notice-border: #f2dfa8;
+  --notice-fg: #7a5d10;
+  --error-bg: #fdecec;
+  --error-border: #f3c4c4;
+  --error-fg: #a3272a;
+  --sensitive-bg: #fff1f1;
+  --sensitive-border: #c74346;
+  --sensitive-fg: #a3272a;
+  --file-btn-bg: #f3e8ff;
+  --file-btn-border: #d3b6ee;
+  --file-btn-fg: #6a3f9c;
+  --file-btn-hover: #ead9fb;
+  --share-media-bg: #fff;
+  --share-media-border: #b84c4f;
+  --share-media-fg: #7f1d1f;
+  --share-media-hover: #ffe3e3;
+  /* 𝕏のボタン。地色に沈まないよう、明暗で反転させる */
+  --share-btn-bg: #000;
+  --share-btn-fg: #fff;
+  --share-btn-hover: #242424;
+  --drop-over-bg: #fff5f5;
   --footer-height: 78px;
+}
+
+/* 端末の設定が暗い配色のときだけ、変数をまとめて差し替える。
+   本文・補足文と地色のコントラストは4.5:1(WCAG AA)以上を保つこと */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --fg: #e6e9ee;
+    --fg-muted: #a5adb8;
+    --border: #333941;
+    --border-strong: #4d545e;
+    --bg-hover: #262b31;
+    --accent: #fc4d50;
+    /* 暗い地色の上ではブランド色そのままで5.4:1あるが、リンクは一段明るくする */
+    --accent-text: #ff8f91;
+    --accent-hover: #ff6f71;
+    --accent-glow: rgba(252, 77, 80, 0.5);
+    --on-accent: #fff;
+    --bg-soft: #1c2026;
+    --bg: #14171b;
+    --bg-elevated: #191d22;
+    --bg-track: #2a3038;
+    --overlay: rgba(0, 0, 0, 0.55);
+    --overlay-strong: rgba(0, 0, 0, 0.66);
+    --shadow-soft: rgba(0, 0, 0, 0.5);
+    --shadow-footer: rgba(0, 0, 0, 0.4);
+    --shadow-panel: rgba(0, 0, 0, 0.6);
+    --focus-ring: #cbd5e1;
+    --danger-text: #ff9a9c;
+    --success-text: #6ed39d;
+    --series-previous: #767e8a;
+    /* 暗い地色の上では、薄い赤より明るい赤の方が濃淡を追える */
+    --heat-rgb: 255 122 124;
+    --range-bg: #3a2325;
+    --range-bg-hover: #48292c;
+    --notice-bg: #2c2617;
+    --notice-border: #5d4f22;
+    --notice-fg: #f0d896;
+    --error-bg: #341d1e;
+    --error-border: #6d3436;
+    --error-fg: #ffb3b4;
+    --sensitive-bg: #341d1e;
+    --sensitive-border: #8a4245;
+    --sensitive-fg: #ffb3b4;
+    --file-btn-bg: #2f2444;
+    --file-btn-border: #5c4083;
+    --file-btn-fg: #d9c2f5;
+    --file-btn-hover: #3a2c53;
+    --share-media-bg: #2a1c1d;
+    --share-media-border: #a05f62;
+    --share-media-fg: #ffc2c3;
+    --share-media-hover: #3a2526;
+    --share-btn-bg: #e6e9ee;
+    --share-btn-fg: #14171b;
+    --share-btn-hover: #cfd4db;
+    --drop-over-bg: #33201f;
+  }
 }
 
 * {
@@ -32,7 +142,7 @@ body {
   margin: 0;
   font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
   color: var(--fg);
-  background: #fff;
+  background: var(--bg);
   line-height: 1.6;
 }
 
@@ -42,7 +152,7 @@ body {
   position: sticky;
   top: 0;
   z-index: 10;
-  background: #fff;
+  background: var(--bg-elevated);
   border-bottom: 1px solid var(--border);
   /* 見出しの帯を画面左端まで伸ばすため、はみ出し分を隠す */
   overflow: hidden;
@@ -63,14 +173,14 @@ body {
   padding: 0 14px 0 0;
   border: 0;
   background: none;
-  color: #fff;
+  color: var(--on-accent);
   font-size: 20px;
   line-height: 1;
   cursor: pointer;
 }
 
 .menu-btn:focus-visible {
-  outline: 2px solid #fff;
+  outline: 2px solid var(--on-accent);
   outline-offset: -4px;
 }
 
@@ -96,7 +206,7 @@ body {
 /* 広い画面では水平タブの帯になる。狭い画面では中の引き出しが position: fixed
    なので、この枠自体は高さを持たない(帯の線も出ない) */
 .nav-bar {
-  background: #fff;
+  background: var(--bg-elevated);
 }
 
 body.nav-wide .nav-bar {
@@ -107,7 +217,7 @@ body.nav-wide .nav-bar {
   position: fixed;
   inset: 0;
   z-index: 20;
-  background: rgba(0, 0, 0, 0.32);
+  background: var(--overlay);
 }
 
 .nav-drawer {
@@ -118,9 +228,9 @@ body.nav-wide .nav-bar {
   z-index: 21;
   width: 260px;
   padding: 16px 0;
-  background: #fff;
+  background: var(--bg-elevated);
   border-right: 1px solid var(--border);
-  box-shadow: 2px 0 12px rgba(0, 0, 0, 0.08);
+  box-shadow: 2px 0 12px var(--shadow-soft);
 }
 
 .nav-link {
@@ -150,7 +260,7 @@ body.nav-wide .nav-bar {
   border: 0;
   border-top: 1px solid var(--border);
   border-radius: 0;
-  background: #fff;
+  background: var(--bg-elevated);
   color: var(--fg);
   text-align: left;
   font-size: 14px;
@@ -277,7 +387,7 @@ body.nav-wide .nav-bar {
   padding: 12px 20px 12px 0;
   font-size: 22px;
   font-weight: 700;
-  color: #fff;
+  color: var(--on-accent);
   background: var(--accent);
 }
 
@@ -321,9 +431,9 @@ a {
   justify-content: center;
   gap: 10px;
   padding: 0 24px;
-  background: #fff;
+  background: var(--bg-elevated);
   border-top: 1px solid var(--border);
-  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 -2px 8px var(--shadow-footer);
 }
 
 /* 実行中は進捗の分だけフッターを高くする(本文の下余白も追従する) */
@@ -460,15 +570,15 @@ button.small {
 
 button.primary {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 button.primary:hover:not(:disabled) {
-  background: #e03f42;
+  background: var(--accent-hover);
 }
 
 button.secondary {
-  background: #fff;
+  background: var(--bg-elevated);
   color: var(--fg);
   border-color: var(--border-strong);
 }
@@ -483,18 +593,18 @@ select:focus-visible,
 textarea:focus-visible,
 a:focus-visible,
 summary:focus-visible {
-  outline: 3px solid #111827;
+  outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
 button.share-btn {
-  background: #000;
-  color: #fff;
-  border-color: #000;
+  background: var(--share-btn-bg);
+  color: var(--share-btn-fg);
+  border-color: var(--share-btn-bg);
 }
 
 button.share-btn:hover:not(:disabled) {
-  background: #242424;
+  background: var(--share-btn-hover);
 }
 
 .checkbox {
@@ -533,7 +643,7 @@ button.share-btn:hover:not(:disabled) {
   padding: 6px 8px;
   border: 1px solid var(--border-strong);
   border-radius: 6px;
-  background: #fff;
+  background: var(--bg-elevated);
 }
 
 .range-sep {
@@ -566,7 +676,7 @@ button.share-btn:hover:not(:disabled) {
 .progress-bar {
   height: 8px;
   border-radius: 4px;
-  background: #eceef1;
+  background: var(--bg-track);
   overflow: hidden;
 }
 
@@ -588,24 +698,24 @@ button.share-btn:hover:not(:disabled) {
 }
 
 .notice {
-  background: #fff8e6;
-  border: 1px solid #f2dfa8;
-  color: #7a5d10;
+  background: var(--notice-bg);
+  border: 1px solid var(--notice-border);
+  color: var(--notice-fg);
 }
 
 .error {
-  background: #fdecec;
-  border: 1px solid #f3c4c4;
-  color: #a3272a;
+  background: var(--error-bg);
+  border: 1px solid var(--error-border);
+  color: var(--error-fg);
 }
 
 .sensitive-note {
   margin: 12px 0 0;
   padding: 10px 12px;
-  border: 1px solid #c74346;
+  border: 1px solid var(--sensitive-border);
   border-radius: 6px;
-  background: #fff1f1;
-  color: #a3272a;
+  background: var(--sensitive-bg);
+  color: var(--sensitive-fg);
   font-size: 13px;
   font-weight: 700;
 }
@@ -669,7 +779,7 @@ button.banner-close:hover:not(:disabled) {
   padding: 12px 14px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--bg-elevated);
 }
 
 .first-run-no {
@@ -816,11 +926,11 @@ button.banner-close:hover:not(:disabled) {
 }
 
 .stat-card.increase .stat-value {
-  color: #a3272a;
+  color: var(--danger-text);
 }
 
 .stat-card.decrease .stat-value {
-  color: #287246;
+  color: var(--success-text);
 }
 
 .block-section {
@@ -866,7 +976,7 @@ button.banner-close:hover:not(:disabled) {
 
 .legend-swatch.previous,
 .trend-bar.previous {
-  background: #aeb4bd;
+  background: var(--series-previous);
 }
 
 /* 縦軸と棒グラフを横に並べる。軸の目盛は棒の描画域(上余白14px〜188px)へ
@@ -959,7 +1069,7 @@ button.banner-close:hover:not(:disabled) {
   height: auto;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--bg-elevated);
 }
 
 .trend-grid-line {
@@ -979,7 +1089,7 @@ button.banner-close:hover:not(:disabled) {
 }
 
 .trend-line.previous {
-  stroke: #aeb4bd;
+  stroke: var(--series-previous);
 }
 
 .trend-axis-value,
@@ -1027,9 +1137,12 @@ button.banner-close:hover:not(:disabled) {
   padding-right: 6px;
 }
 
+/* 濃さ(--cell-alpha)はJSが件数から決め、色は変数から取る。
+   色をJS側で組み立てると、暗い配色のときに薄いマスが地色へ沈む */
 .heatmap-cell {
   height: 18px;
   border-radius: 2px;
+  background-color: rgb(var(--heat-rgb) / var(--cell-alpha, 0));
   /* 0件のマスも枠で存在を示す。空白だと表が欠けたように見える */
   box-shadow: inset 0 0 0 1px var(--border);
 }
@@ -1046,7 +1159,7 @@ button.banner-close:hover:not(:disabled) {
   width: 120px;
   height: 10px;
   border-radius: 2px;
-  background: linear-gradient(to right, rgba(252, 77, 80, 0.15), rgb(252, 77, 80));
+  background: linear-gradient(to right, rgb(var(--heat-rgb) / 0.15), rgb(var(--heat-rgb)));
 }
 
 @media (max-width: 620px) {
@@ -1158,11 +1271,11 @@ button.banner-close:hover:not(:disabled) {
 }
 
 .month-table .in-range {
-  background: #fff1f1;
+  background: var(--range-bg);
 }
 
 .month-table .in-range:hover {
-  background: #ffe6e6;
+  background: var(--range-bg-hover);
 }
 
 .month-table .year-row .toggle {
@@ -1219,7 +1332,7 @@ button.banner-close:hover:not(:disabled) {
 .month-table .in-range .range-pick {
   border-color: var(--accent);
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .month-table .in-range .range-pick::before {
@@ -1231,7 +1344,7 @@ button.banner-close:hover:not(:disabled) {
 }
 
 .status.warn {
-  color: #a3272a;
+  color: var(--danger-text);
 }
 
 /* ---- スクロールする表 ---- */
@@ -1248,7 +1361,7 @@ button.banner-close:hover:not(:disabled) {
   position: sticky;
   top: 0;
   z-index: 1;
-  background: #fff;
+  background: var(--bg-elevated);
   box-shadow: inset 0 -1px 0 var(--border);
 }
 
@@ -1286,7 +1399,7 @@ button.banner-close:hover:not(:disabled) {
   padding: 6px 9px;
   border: 1px solid var(--border-strong);
   border-radius: 6px;
-  background: #fff;
+  background: var(--bg-elevated);
   color: var(--fg);
   font: inherit;
   font-weight: 400;
@@ -1368,7 +1481,7 @@ button.table-toggle:hover:not(:disabled) {
 }
 
 .amount-failed {
-  color: #a3272a;
+  color: var(--danger-text);
 }
 
 .amount-pending {
@@ -1389,7 +1502,7 @@ span.amount-pending {
   position: fixed;
   inset: 0;
   z-index: 30;
-  background: rgba(0, 0, 0, 0.42);
+  background: var(--overlay-strong);
 }
 
 .share-panel,
@@ -1404,8 +1517,8 @@ span.amount-pending {
   overflow-y: auto;
   padding: 20px 24px 24px;
   border-radius: 12px;
-  background: #fff;
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.24);
+  background: var(--bg-elevated);
+  box-shadow: 0 18px 48px var(--shadow-panel);
 }
 
 .author-panel {
@@ -1449,7 +1562,7 @@ button.icon-btn:hover:not(:disabled) {
 }
 
 .share-canvas:focus-visible {
-  outline: 3px solid #111827;
+  outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -1529,17 +1642,17 @@ label.file-btn {
   position: relative;
   display: inline-block;
   padding: 5px 12px;
-  border: 1px solid #d3b6ee;
+  border: 1px solid var(--file-btn-border);
   border-radius: 6px;
-  background: #f3e8ff;
-  color: #6a3f9c;
+  background: var(--file-btn-bg);
+  color: var(--file-btn-fg);
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
 }
 
 label.file-btn:hover {
-  background: #ead9fb;
+  background: var(--file-btn-hover);
 }
 
 .visually-hidden-file {
@@ -1552,7 +1665,7 @@ label.file-btn:hover {
 }
 
 label.file-btn:focus-within {
-  outline: 3px solid #111827;
+  outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -1581,7 +1694,7 @@ label.file-btn:focus-within {
 
 .share-drop.over {
   border-color: var(--accent);
-  background: #fff5f5;
+  background: var(--drop-over-bg);
 }
 
 .share-drop-text {
@@ -1636,7 +1749,7 @@ button.share-template canvas {
 
 button.share-template.current {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(252, 77, 80, 0.35);
+  box-shadow: 0 0 0 2px var(--accent-glow);
 }
 
 /* 画像を選んでいる間はテンプレートが効かない */
@@ -1660,6 +1773,7 @@ button.share-template.current {
 
 .share-text {
   flex: 1;
+  color: var(--fg);
   min-height: 132px;
   width: 100%;
   padding: 8px 10px;
@@ -1696,14 +1810,14 @@ button.share-template.current {
 }
 
 button.share-media-btn {
-  border-color: #b84c4f;
-  background: #fff;
-  color: #7f1d1f;
+  border-color: var(--share-media-border);
+  background: var(--share-media-bg);
+  color: var(--share-media-fg);
   font-weight: 700;
 }
 
 button.share-media-btn:hover:not(:disabled) {
-  background: #ffe3e3;
+  background: var(--share-media-hover);
 }
 
 /* ---- 確認ダイアログ ---- */
@@ -1713,7 +1827,7 @@ button.share-media-btn:hover:not(:disabled) {
   position: fixed;
   inset: 0;
   z-index: 40;
-  background: rgba(0, 0, 0, 0.42);
+  background: var(--overlay-strong);
 }
 
 .confirm-panel {
@@ -1727,8 +1841,8 @@ button.share-media-btn:hover:not(:disabled) {
   overflow-y: auto;
   padding: 20px 24px 22px;
   border-radius: 12px;
-  background: #fff;
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.24);
+  background: var(--bg-elevated);
+  box-shadow: 0 18px 48px var(--shadow-panel);
 }
 
 .confirm-panel-head h2 {
@@ -1780,7 +1894,7 @@ button.segmented-btn {
   border-radius: 0;
   padding: 5px 14px;
   font-size: 13px;
-  background: #fff;
+  background: var(--bg-elevated);
   color: var(--fg-muted);
 }
 
@@ -1795,7 +1909,7 @@ button.segmented-btn:hover:not(.current) {
 /* 選ばれている側。表のどの列で並べているかと色をそろえる */
 button.segmented-btn.current {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   font-weight: 700;
 }
 
@@ -1877,7 +1991,7 @@ tr.shop-row {
 
 tr.shop-row:hover .toggle {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 /* 編を切り替えると太字になる行が入れ替わり、中身の幅で決まる列は少し動く。

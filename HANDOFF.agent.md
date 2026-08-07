@@ -53,8 +53,28 @@ complete:
   (上限50件は中断時の取り直しを約15秒ぶんに抑えるため)。
   B4=oldestCoveredOrder が暫定最古の sortKey を保持し parseOrderDate() の再計算をやめた。
   テストの追加・変更はなし(689 checksのままALL PASS)。
+- C: P4(機能追加)として improvement-plan の D1〜D5 を実装し`1.1.0`へ統合した。
+  D2=注文内訳の注文番号を注文詳細ページへのリンクにした(orderDetailUrl が /^\d+$/ を
+  通ったidだけURLにし、通らないものは文字のまま。target=_blank rel=noopener。
+  ORDER_DETAIL_URL は dashboard.js から common.js へ移した)、
+  D3=publishRunState と同じ時点で document.title へ
+  「(35/120) 金額の収集… - BOOTHお買いものレポート」を出し、runTaskWithLease の finally で
+  中断・失敗も含めて必ず元へ戻す(BASE_DOCUMENT_TITLE)、
+  D4=buildSummary に year/yearTotal/yearCount を追加し、ポップアップへ「今年の合計」行を足した。
+  年の項目を持たない旧 boothSummary では summaryYearLine() が null を返し行ごと隠す(後方互換)、
+  D1=dashboard.css・popup.css の色をすべて :root の変数へ寄せ、
+  @media (prefers-color-scheme: dark) で変数だけを差し替えた(color-scheme も宣言)。
+  ヒートマップのマスはJSが --cell-alpha だけを渡し、色はCSSの --heat-rgb から作る。
+  共有カード(canvas)と背景テンプレートの見本はライト配色のまま(画像出力はテーマ非依存)、
+  D5=ランキングに期間セレクト(全期間+注文のある年)を追加し、順位・断り書きの件数・
+  共有文面・共有カード・共有ボタンの文言をすべて選択期間で統一した
+  (全期間のときは従来の文面のまま。期間選択は空状態でも消えないよう #rankingArea の外に置いた)。
+  test/cases.js へ対応テストを追加(689→725 checks)。
 
 verified:
+- C: 2026-08-07 — evidence: status=PASS; kind=compile; command=node --check をextensionとtestの全.jsへ実行(claude/p4-features、D1〜D5実装後); environment=Windows、Git Bash; scope=JavaScript構文16ファイル; counts=passed=16, failed=0, skipped=0, not-run=0
+- C: 2026-08-07 — evidence: status=PASS; kind=runtime; command=python -m http.server 8752 --bind 127.0.0.1 を起動しBrowserで/test/index.htmlをライト・ダークの両方で確認(claude/p4-features、D1〜D5実装+テスト追加後); environment=Windows、Claude Code Browser; scope=拡張機能のブラウザ全体テスト; counts=passed=725, failed=0, skipped=0, not-run=0
+- C: 2026-08-07 — evidence: status=PASS; kind=runtime; command=scratchpadへ複製したextension一式(スタブ+デモデータ、注文66件・2024〜2026年)をport 8753で配信し、prefers-color-schemeをlight/darkへ切り替えてgetComputedStyleでコントラスト比を計測; environment=Windows、Claude Code Browser; scope=全6画面・共有パネル・確認ダイアログ・通知/エラー/注意書き・月別テーブル・ポップアップの文字と背景; counts=ダーク時の本文・補足・リンク・入力欄はいずれも6.4:1以上、ライト時は4.8:1以上、failed=0(白文字×ブランド赤のボタンは明暗とも3.3:1で従来どおり)
 - C: 2026-08-07 — evidence: status=PASS; kind=compile; command=node --check をextensionとtestの全.jsへ実行(claude/p3-efficiency、B1〜B4実装後); environment=Windows、Git Bash; scope=JavaScript構文16ファイル; counts=passed=16, failed=0, skipped=0, not-run=0
 - C: 2026-08-07 — evidence: status=PASS; kind=runtime; command=python -m http.server 8750 --bind 127.0.0.1 を起動しBrowserで/test/index.htmlを確認(claude/p3-efficiency、B1〜B4実装後); environment=Windows、Claude Code Browser; scope=拡張機能のブラウザ全体テスト; counts=passed=689, failed=0, skipped=0, not-run=0
 - C: 2026-08-07 — evidence: status=PASS; kind=runtime; command=注文1000件の合成データを注入した一時計測ページ(コミットせず削除済み)をport 8750で配信し、before(stash)/after で比較; environment=Windows、Claude Code Browser; scope=B1・B2の効果測定; counts=render()1回あたりのbuildResults呼び出し 7回→1回、検索入力10回ぶんの同期処理 29.1ms→0.2ms、shop-ascのソート 12.4ms→6.7ms、render()全体 28.9ms→28.4ms(DOM構築が支配的で差は誤差範囲)

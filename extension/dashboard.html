@@ -438,6 +438,12 @@
             すぐ横に置いて、表だけを見ても取り違えないようにする -->
        <div class="section-head">
          <h2>推し作者ランキング</h2>
+         <!-- 期間の選択は #rankingArea の外に置く。中に入れると、その年に明細が
+              1件も無いときに選択そのものが消えて戻せなくなる -->
+         <label class="summary-year">
+           対象の期間
+           <select id="rankingYear"></select>
+         </label>
          <div class="segmented" id="rankingSortToggle" role="group" aria-label="ランキングの基準">
            <button type="button" class="segmented-btn" data-sort="amount" aria-pressed="true">金額編</button>
            <button type="button" class="segmented-btn" data-sort="count" aria-pressed="false">購入数編</button>
@@ -445,7 +451,7 @@
        </div>
        <p class="hint">
          ショップごとに買った商品の点数と金額を集計します。金額編と購入数編を切り替えられます。
-         上位10ショップまで表示します。
+         上位10ショップまで表示します。対象の期間を選ぶと、その年に買ったものだけで順位を出します。
        </p>
 
        <div id="rankingEmpty" class="empty-note">

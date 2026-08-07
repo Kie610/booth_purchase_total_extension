@@ -11,6 +11,10 @@ const summaryBox = document.getElementById("summaryBox");
 const summaryLabel = document.getElementById("summaryLabel");
 const totalAmountEl = document.getElementById("totalAmount");
 const totalCountEl = document.getElementById("totalCount");
+const summaryYearBox = document.getElementById("summaryYearBox");
+const summaryYearLabel = document.getElementById("summaryYearLabel");
+const summaryYearTotal = document.getElementById("summaryYearTotal");
+const summaryYearCount = document.getElementById("summaryYearCount");
 const updatedAtEl = document.getElementById("updatedAt");
 const emptyBox = document.getElementById("emptyBox");
 
@@ -57,6 +61,14 @@ async function render() {
       failed.className = "failed";
       failed.textContent = counts.failed;
       totalCountEl.appendChild(failed);
+    }
+    // 古い要約(今年の項目を持たないもの)でも壊れないよう、無ければ行ごと隠す
+    const yearLine = summaryYearLine(summary);
+    summaryYearBox.hidden = !yearLine;
+    if (yearLine) {
+      summaryYearLabel.textContent = yearLine.label;
+      summaryYearTotal.textContent = yearLine.value;
+      summaryYearCount.textContent = yearLine.count;
     }
     updatedAtEl.textContent = `最終更新: ${formatTimestamp(summary.updatedAt)}`;
     summaryBox.hidden = false;

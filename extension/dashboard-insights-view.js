@@ -21,6 +21,60 @@ function setRankingSort(sort) {
   updateShareButton();
 }
 
+// ---- ランキングの対象期間 ----------------------------------------------
+//
+// 「今年の推し作者」をランキング画面でも見られるようにする。既定は全期間。
+// 年を選んだときは、順位も断り書きの件数もその年の注文だけで数える
+// (全期間の未収集件数をそのまま出すと、選んだ年の数字の確からしさを見誤る)。
+// 期間を絞ったことは共有の文面とカードにも必ず出す。全期間でない数字を
+// 全期間のものとして外へ出さないため。
+
+const RANKING_ALL_PERIOD = "all";
+let rankingSelectedYear = RANKING_ALL_PERIOD;
+
+function setRankingYear(value) {
+  const next = value === RANKING_ALL_PERIOD ? RANKING_ALL_PERIOD : Number(value);
+  if (next !== RANKING_ALL_PERIOD && !Number.isFinite(next)) return;
+  if (next === rankingSelectedYear) return;
+  rankingSelectedYear = next;
+  renderRankingArea();
+  // 共有ボタンの文言に期間が入るので、選び直したら追従させる
+  updateShareButton();
+}
+
+// 選んでいる期間の呼び名。全期間のときは空(共有文面で期間を足さない印にもなる)
+function rankingPeriodLabel(year = rankingSelectedYear) {
+  return year === RANKING_ALL_PERIOD ? "" : `${year}年`;
+}
+
+// 選んだ年の注文だけにする。日付を読み取れない注文はどの年にも入れない
+// (全期間では従来どおり対象に入る)
+function resultsInRankingPeriod(results, year = rankingSelectedYear) {
+  if (year === RANKING_ALL_PERIOD) return results;
+  return results.filter((result) => {
+    const date = parseOrderDate(result.date);
+    return date !== null && date.year === year;
+  });
+}
+
+// 選択肢は「全期間」と、注文のある年。中身が同じなら作り直さない
+// (開いたまま再描画すると選択が閉じてしまう)
+function renderRankingYearOptions(years) {
+  const values = [RANKING_ALL_PERIOD, ...years.map(String)];
+  const same =
+    rankingYear.options.length === values.length &&
+    values.every((value, index) => rankingYear.options[index].value === value);
+  if (!same) {
+    rankingYear.innerHTML = "";
+    for (const value of values) {
+      rankingYear.appendChild(
+        el("option", "", value === RANKING_ALL_PERIOD ? "全期間" : `${value}年`)
+      ).value = value;
+    }
+  }
+  rankingYear.value = String(rankingSelectedYear);
+}
+
 // 数量の左に小さく添えるギフト表記。金額のセルと置き方をそろえる
 function countCell(count, giftCount) {
   const cell = td("", "num");
@@ -78,21 +132,35 @@ function renderRankingSortToggle() {
 }
 
 function renderRankingArea(results = currentResults()) {
-  const shops = aggregateByShop(results, rankingSort);
+  const years = orderYears(results);
+  // 注文の無い年は選べない。保存していた選択が消えたら全期間へ戻す
+  if (rankingSelectedYear !== RANKING_ALL_PERIOD && !years.includes(rankingSelectedYear)) {
+    rankingSelectedYear = RANKING_ALL_PERIOD;
+  }
+  renderRankingYearOptions(years);
+
+  // 順位も断り書きの件数も、選んだ期間の注文だけで数える
+  const scoped = resultsInRankingPeriod(results);
+  const shops = aggregateByShop(scoped, rankingSort);
   renderRankingSortToggle();
   rankingEmpty.hidden = shops.length > 0;
   rankingArea.hidden = shops.length === 0;
   // 共有できるのは画面に出している順位そのもの。取り違えが起きないよう、
   // 描画に使ったものをそのまま共有側へ渡す
-  rankingShareStats = buildRankingShareStats(results, shops);
+  rankingShareStats = buildRankingShareStats(scoped, shops, rankingPeriodLabel());
   if (shops.length === 0) {
     rankingTableBody.innerHTML = "";
+    // 期間を絞った結果として空になったのか、そもそも何も無いのかを書き分ける
+    rankingEmpty.textContent =
+      rankingSelectedYear === RANKING_ALL_PERIOD
+        ? "まだ商品の明細がありません。「お買いものレポート」で金額を収集してください。"
+        : `${rankingPeriodLabel()}に商品の明細がある注文がありません。期間を選び直すか、「お買いものレポート」で金額を収集してください。`;
     return;
   }
 
   const shown = shops.slice(0, RANKING_LIMIT);
   rankingStats.textContent =
-    `ショップ: ${shops.length}件` +
+    `対象の期間: ${rankingPeriodLabel() || "全期間"} / ショップ: ${shops.length}件` +
     (shops.length > shown.length ? ` (上位${shown.length}件を表示)` : "");
 
   // 金額を読めなかった商品を0として足すと、少ない額を正しい合計に見せてしまう
@@ -583,6 +651,13 @@ function heatmapCellAlpha(count, max) {
   return 0.15 + (count / max) * 0.85;
 }
 
+// 色そのものはCSSに任せ、ここでは濃さ(不透明度)だけを渡す。色を直に書くと、
+// 暗い配色のときに薄いマスが地色へ沈んで濃淡を追えなくなる。
+// マスの背景色は .heatmap-cell の rgb(var(--heat-rgb) / var(--cell-alpha)) が作る
+function setHeatmapCellShade(cell, count, max) {
+  cell.style.setProperty("--cell-alpha", String(heatmapCellAlpha(count, max)));
+}
+
 function renderHeatmap(results = currentResults()) {
   const keys = heatmapMonthKeys(results);
   if (keys.length === 0) {
@@ -624,7 +699,7 @@ function renderHeatmap(results = currentResults()) {
     heatmapGrid.appendChild(el("span", "heatmap-weekday", WEEKDAY_LABELS[weekday]));
     row.forEach((count, hour) => {
       const cell = el("span", "heatmap-cell");
-      cell.style.backgroundColor = `rgba(252, 77, 80, ${heatmapCellAlpha(count, stats.max)})`;
+      setHeatmapCellShade(cell, count, stats.max);
       cell.title = `${WEEKDAY_LABELS[weekday]}曜 ${hour}時台: ${count}件`;
       heatmapGrid.appendChild(cell);
     });

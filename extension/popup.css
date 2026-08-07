@@ -1,9 +1,48 @@
+/* 色は変数へ集約し、暗い配色は :root の上書きだけで切り替える
+   (集計ページの dashboard.css と同じ組み立て方) */
+:root {
+  /* ブラウザが用意する部品も同じ明暗で描かせる */
+  color-scheme: light;
+  --fg: #2a2f36;
+  --fg-muted: #6b7280;
+  --bg: #ffffff;
+  --bg-soft: #f7f8fa;
+  --border: #e2e5ea;
+  --bg-track: #e4e6ea;
+  --accent: #fc4d50;
+  --accent-hover: #e03f42;
+  --on-accent: #ffffff;
+  /* 取得失敗だけは目に留まるように赤くする。11pxの小さな文字なので、
+     背景に対して4.5:1を下回らない範囲でいちばん薄い赤にしてある */
+  --danger-text: #c94c4f;
+  --hint: #9aa1ab;
+}
+
+/* 端末の設定が暗い配色のときだけ、変数をまとめて差し替える。
+   文字と背景のコントラストは4.5:1(WCAG AA)以上を保つ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --fg: #e6e9ee;
+    --fg-muted: #a5adb8;
+    --bg: #14171b;
+    --bg-soft: #1c2026;
+    --border: #333941;
+    --bg-track: #2a3038;
+    --accent: #fc4d50;
+    --accent-hover: #ff6f71;
+    --on-accent: #ffffff;
+    --danger-text: #ff9a9c;
+    --hint: #949ca6;
+  }
+}
+
 body {
   width: 300px;
   font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
   padding: 14px 16px 16px;
-  color: #2a2f36;
-  background: #ffffff;
+  color: var(--fg);
+  background: var(--bg);
   line-height: 1.5;
 }
 
@@ -16,39 +55,39 @@ h1 {
   margin-bottom: 14px;
   padding: 10px 12px;
   border-radius: 6px;
-  background: #f7f8fa;
+  background: var(--bg-soft);
 }
 
 .running-text {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--fg-muted);
   margin-bottom: 6px;
 }
 
 .progress-bar {
   height: 6px;
   border-radius: 3px;
-  background: #e4e6ea;
+  background: var(--bg-track);
   overflow: hidden;
 }
 
 .progress-bar-fill {
   height: 100%;
   width: 0;
-  background: #fc4d50;
+  background: var(--accent);
   transition: width 0.2s ease;
 }
 
 .summary {
   margin-bottom: 14px;
   padding: 12px;
-  border: 1px solid #e2e5ea;
+  border: 1px solid var(--border);
   border-radius: 6px;
 }
 
 .summary-label {
   font-size: 11px;
-  color: #6b7280;
+  color: var(--fg-muted);
 }
 
 .summary-value {
@@ -59,19 +98,43 @@ h1 {
 
 .summary-sub {
   font-size: 11px;
-  color: #6b7280;
+  color: var(--fg-muted);
 }
 
-/* 取得失敗だけは目に留まるように赤くする。11pxの小さな文字なので、
-   白地に対して4.5:1を下回らない範囲でいちばん薄い赤にしてある */
+/* 今年の合計。全期間の合計より小さく置いて、主従が分かるようにする */
+.summary-year {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.summary-year-label {
+  font-size: 11px;
+  color: var(--fg-muted);
+}
+
+.summary-year-value {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.summary-year-count {
+  font-size: 11px;
+  color: var(--fg-muted);
+}
+
 .summary-sub .failed {
-  color: #c94c4f;
+  color: var(--danger-text);
 }
 
 .empty {
   margin-bottom: 14px;
   font-size: 12px;
-  color: #6b7280;
+  color: var(--fg-muted);
 }
 
 button {
@@ -81,17 +144,17 @@ button {
   padding: 9px 0;
   border: none;
   border-radius: 6px;
-  background: #fc4d50;
-  color: #fff;
+  background: var(--accent);
+  color: var(--on-accent);
   cursor: pointer;
 }
 
 button:hover {
-  background: #e03f42;
+  background: var(--accent-hover);
 }
 
 .hint {
   margin: 10px 0 0;
   font-size: 11px;
-  color: #9aa1ab;
+  color: var(--hint);
 }

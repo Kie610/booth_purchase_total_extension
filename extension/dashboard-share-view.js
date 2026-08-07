@@ -7,9 +7,13 @@
 
 // 描画に使った並びをそのまま持ち回る。共有のときに集計し直すと、
 // 画面に出ている順位と違うものを外に出しかねない
-function buildRankingShareStats(results, shops) {
+// results は選んでいる期間へ絞ったもの。断り書きの件数も同じ期間で数える
+// (全期間の未収集件数を出すと、選んだ年の数字の確からしさを見誤る)
+function buildRankingShareStats(results, shops, periodLabel = "") {
   return {
     sort: rankingSort,
+    // 全期間なら空。文面とカードで期間を書き足すかどうかの印になる
+    periodLabel,
     rows: shops.slice(0, RANKING_SHARE_LIMIT),
     shopCount: shops.length,
     // 順位が実際とずれる原因。共有の前に断るために持っておく
@@ -35,7 +39,11 @@ function updateShareButton() {
   }
   const mode = shareMode();
   if (mode === "ranking") {
-    shareBtn.textContent = "𝕏でランキングを共有";
+    // どの期間のランキングが出るのかは、押す前に分かる必要がある
+    const period = rankingShareStats ? rankingShareStats.periodLabel : "";
+    shareBtn.textContent = period
+      ? `𝕏で${period}のランキングを共有`
+      : "𝕏でランキングを共有";
     shareBtn.disabled = !rankingShareStats || rankingShareStats.rows.length === 0;
     return;
   }

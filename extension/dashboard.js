@@ -5,7 +5,7 @@
 // これらは classic script として同じグローバルを共有する(モジュールではない)。
 
 const ORDERS_INDEX_URL = "https://accounts.booth.pm/orders";
-const ORDER_DETAIL_URL = "https://accounts.booth.pm/orders/";
+// 注文詳細のURL(ORDER_DETAIL_URL)は内訳のリンクでも使うので common.js にある
 const REQUEST_INTERVAL_MIN_MS = 250;
 const REQUEST_INTERVAL_MAX_MS = 350;
 const REQUEST_INTERVAL_AVERAGE_MS =
@@ -488,6 +488,9 @@ for (const tbody of [rankingTableBody, summaryTopShopsBody]) {
   });
 }
 
+// ランキングの対象期間(全期間・年)の切り替え
+rankingYear.addEventListener("change", () => setRankingYear(rankingYear.value));
+
 // 金額編と購入数編の切り替え
 rankingSortToggle.addEventListener("click", (event) => {
   const btn = event.target.closest(".segmented-btn");
@@ -767,9 +770,19 @@ function buildResults() {
 function buildSummary(partial) {
   const results = currentResults();
   const valid = results.filter((r) => typeof r.amount === "number");
+  // 今年の分もポップアップで見せる。フッターの「今年」と同じ数え方にそろえる
+  // (収集済みの注文だけ、日付を読めない注文はどの年にも入れない)
+  const thisYear = new Date().getFullYear();
+  const ofThisYear = valid.filter((r) => {
+    const d = parseOrderDate(r.date);
+    return d !== null && d.year === thisYear;
+  });
   return {
     total: valid.reduce((sum, r) => sum + r.amount, 0),
     count: valid.length,
+    year: thisYear,
+    yearTotal: ofThisYear.reduce((sum, r) => sum + r.amount, 0),
+    yearCount: ofThisYear.length,
     pendingCount: results.filter((r) => r.amount === undefined).length,
     failedCount: results.filter((r) => r.amount === null).length,
     skippedCancelled: skippedCount(),
@@ -849,6 +862,8 @@ async function runTaskWithLease(task) {
       ]);
       abortController = null;
       setRunning(false);
+      // 中断でも失敗でも、実行が終わればタイトルは元へ戻す
+      restoreDocumentTitle();
     }
   }
 
@@ -899,8 +914,33 @@ function requestIntervalMs(random = Math.random) {
   );
 }
 
+// ---- タブのタイトルへ出す進捗 ------------------------------------------
+//
+// 集計は数分かかることがあり、その間ユーザーは別のタブで作業している。
+// タブのタイトルに進捗を出せば、権限を増やさずに切り替えなくても様子が分かる。
+// 元のタイトルは読み込み時に控えておき、実行が終わったら(中断・失敗も含めて)必ず戻す。
+
+const BASE_DOCUMENT_TITLE = document.title;
+
+function runProgressTitle(runState) {
+  const { phase, current, total } = runState || {};
+  const head = total > 0 ? `(${current}/${total}) ${phase}…` : `${phase}…`;
+  return `${head} - ${BASE_DOCUMENT_TITLE}`;
+}
+
+function setRunProgressTitle(runState) {
+  document.title = runProgressTitle(runState);
+}
+
+function restoreDocumentTitle() {
+  document.title = BASE_DOCUMENT_TITLE;
+}
+
 // ポップアップ側で進捗を表示できるようにストレージへ書き出す(書き込み過多を避けて間引く)
 async function publishRunState(runState, force) {
+  // タイトルの書き換えはストレージへの書き込みと違って負荷にならないので、
+  // 間引かずに毎回そろえる(間引くと最後の1件が反映されないことがある)
+  setRunProgressTitle(runState);
   const now = Date.now();
   if (!force && now - lastRunStateWrite < RUN_STATE_INTERVAL_MS) return;
   lastRunStateWrite = now;

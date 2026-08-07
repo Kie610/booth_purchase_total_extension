@@ -18,6 +18,13 @@
     <div class="summary-label" id="summaryLabel">前回の集計結果</div>
     <div class="summary-value" id="totalAmount"></div>
     <div class="summary-sub" id="totalCount"></div>
+    <!-- 今年の合計。この項目より前に保存された要約には年の情報が無いので、
+         そのときはこの行ごと出さない(0円と書くと買っていないように見える) -->
+    <div class="summary-year" id="summaryYearBox" hidden>
+      <span class="summary-year-label" id="summaryYearLabel"></span>
+      <span class="summary-year-value" id="summaryYearTotal"></span>
+      <span class="summary-year-count" id="summaryYearCount"></span>
+    </div>
     <div class="summary-sub" id="updatedAt"></div>
   </div>
 

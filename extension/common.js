@@ -11,6 +11,18 @@ const RUN_STATE_KEY = "boothRunState"; // 実行中の進捗(ポップアップ�
 const RUN_LOCK_KEY = "boothRunLock"; // 複数タブから同時に収集しないための期限付きロック
 const DASHBOARD_TAB_KEY = "boothDashboardTab"; // 集計ページのタブID
 
+// 注文詳細ページ。取得(dashboard.js)と内訳のリンク(dashboard-view.js)の両方で使うので
+// 共通側に置く
+const ORDER_DETAIL_URL = "https://accounts.booth.pm/orders/";
+
+// 注文番号はBOOTHのHTML由来の文字列なので、URLへ挿す前に数字だけであることを確かめる。
+// 通らないものはリンクにせず、文字のまま出す(勝手に別のURLを組み立てない)
+const ORDER_ID_PATTERN = /^\d+$/;
+
+function orderDetailUrl(id) {
+  return ORDER_ID_PATTERN.test(String(id)) ? `${ORDER_DETAIL_URL}${id}` : null;
+}
+
 const STATUS_LABELS = {
   completed: "発送完了",
   paid: "支払済み",
@@ -161,6 +173,20 @@ function summaryCounts(summary) {
         ? ` / 除外(キャンセル): ${summary.skippedCancelled}件`
         : ""),
     failed: summary.failedCount ? ` / 取得失敗: ${summary.failedCount}件` : "",
+  };
+}
+
+// ポップアップに出す「今年の合計」。この項目より前に保存された boothSummary には
+// 年の情報が無い。無いものを0円と書くと買っていないように見えるので、
+// その場合は null を返して行ごと出さない(次の集計で保存されれば出る)
+function summaryYearLine(summary) {
+  if (!summary || typeof summary.yearTotal !== "number" || typeof summary.year !== "number") {
+    return null;
+  }
+  return {
+    label: `${summary.year}年の合計`,
+    value: formatYen(summary.yearTotal),
+    count: `収集済み ${summary.yearCount || 0}件`,
   };
 }
 

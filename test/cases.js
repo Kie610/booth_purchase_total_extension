@@ -404,6 +404,35 @@ check("未収集件数", document.getElementById("pendingCount").textContent, "�
 check("除外と取得失敗", document.getElementById("skippedCount").textContent, "除外(キャンセル): 1件 / 金額取得失敗: 1件");
 check("索引の状態表示", indexStatus.textContent.includes("注文数: 6件"), true);
 
+// 収集中はタブのタイトルにも進捗を出す。別のタブで作業していても様子が分かる
+check("タイトルの進捗は件数付き",
+  runProgressTitle({ phase: "金額の収集", current: 35, total: 120 }),
+  `(35/120) 金額の収集… - ${BASE_DOCUMENT_TITLE}`);
+check("件数が決まる前は割合を出さない",
+  runProgressTitle({ phase: "注文履歴の取得", current: 0, total: 0 }),
+  `注文履歴の取得… - ${BASE_DOCUMENT_TITLE}`);
+setRunProgressTitle({ phase: "金額の収集", current: 1, total: 2 });
+check("進捗でタイトルが書き換わる", document.title, `(1/2) 金額の収集… - ${BASE_DOCUMENT_TITLE}`);
+restoreDocumentTitle();
+check("終わればタイトルを元へ戻す", document.title, BASE_DOCUMENT_TITLE);
+
+// ポップアップの要約。今年の合計はフッターと同じ数え方(収集済みのみ・日付が読める注文のみ)
+const popupSummary = buildSummary(false);
+const summaryThisYear = new Date().getFullYear();
+check("要約に今年の合計と件数を足す",
+  [popupSummary.year, popupSummary.yearTotal, popupSummary.yearCount],
+  [summaryThisYear, shareStats.yearTotal, shareStats.yearCount]);
+check("全期間の合計は今までどおり", [popupSummary.total, popupSummary.count], [4000, 2]);
+// 今年の項目より前に保存された要約でもポップアップが壊れないようにする
+check("今年の項目が無い古い要約では行を出さない",
+  [summaryYearLine(null), summaryYearLine({ total: 4000, count: 2 }), summaryYearLine({ year: 2026 })],
+  [null, null, null]);
+check("今年の項目があれば行にする",
+  summaryYearLine({ year: 2026, yearTotal: 1234, yearCount: 2 }),
+  { label: "2026年の合計", value: "¥1,234", count: "収集済み 2件" });
+check("件数が欠けていても0件として出す",
+  summaryYearLine({ year: 2026, yearTotal: 0 }).count, "収集済み 0件");
+
 // 月別テーブルは年でまとめ、月は折りたたんだ状態で始まる
 const yearStats = buildYearStats(targetOrders(), state.cache);
 check("年のまとめ順", yearStats.map(y => y.label), ["2026年", "2025年", "日付不明"]);
@@ -569,6 +598,13 @@ check("範囲外の月は入らない", buildWeekdayHourStats(heatRows, "2026-01
 check("0件のマスは塗らない", heatmapCellAlpha(0, 4), 0);
 check("1件でも薄く塗る", heatmapCellAlpha(1, 4) > 0.1, true);
 check("最も多いマスは最も濃い", heatmapCellAlpha(4, 4), 1);
+// 色そのものはCSSに任せ、JSからは濃さだけを渡す(暗い配色でマスが沈まないように)
+const shadeCell = document.createElement("span");
+setHeatmapCellShade(shadeCell, 2, 4);
+check("マスの濃さはCSS変数で渡す",
+  shadeCell.style.getPropertyValue("--cell-alpha"), String(heatmapCellAlpha(2, 4)));
+setHeatmapCellShade(shadeCell, 0, 4);
+check("0件のマスは塗らない濃さになる", shadeCell.style.getPropertyValue("--cell-alpha"), "0");
 
 // 上のグラフと違う期間のものを並べると、同じ画面で食い違ったものを見比べることになる。
 // 比較する年を切り替えたら、買った曜日と時間帯も同じ期間へ合わせる
@@ -629,6 +665,25 @@ check("内訳にショップ列を出す", orderRows.find(tr => tr.cells[4].text
 check("内訳のショップからBOOTHを開ける",
   orderRows.find(tr => tr.cells[4].textContent === "a1").cells[2].querySelector("a").getAttribute("href"),
   "https://sourflavor.booth.pm/");
+
+// 注文番号からBOOTHの注文詳細ページを開けるようにする。番号はBOOTH由来の文字列なので、
+// 数字だけのものしかURLにしない(通らないものは文字のまま出す)
+check("注文番号のURLは数字のものだけ組み立てる",
+  [orderDetailUrl("1234567"), orderDetailUrl("a1"), orderDetailUrl("12/../9"), orderDetailUrl("１２３"), orderDetailUrl("")],
+  ["https://accounts.booth.pm/orders/1234567", null, null, null, null]);
+const linkedIdCell = orderIdCell("1234567");
+check("注文番号は別タブで開くリンクにする",
+  [linkedIdCell.querySelector("a").getAttribute("href"),
+   linkedIdCell.querySelector("a").getAttribute("target"),
+   linkedIdCell.querySelector("a").getAttribute("rel"),
+   linkedIdCell.textContent],
+  ["https://accounts.booth.pm/orders/1234567", "_blank", "noopener", "1234567"]);
+const plainIdCell = orderIdCell("a1");
+check("数字でない注文番号はリンクにしない",
+  [plainIdCell.querySelector("a"), plainIdCell.textContent], [null, "a1"]);
+// 内訳の表でも、数字でない番号はそのまま文字で出す(この索引のidは数字ではない)
+check("内訳の注文番号はorderIdCellを通す",
+  orderRows.find(tr => tr.cells[4].textContent === "a1").cells[4].querySelector("a"), null);
 
 orderSearch.value = "べつのショップ";
 renderOrderTable(buildResults());
@@ -732,11 +787,11 @@ check("1〜3位に金・銀・銅の王冠を敷く",
   ["rank-badge rank-crown-1", "rank-badge rank-crown-2", "rank-badge rank-crown-3", "rank-badge"]);
 check("5位までを太字にする", rankRows.map(tr => tr.classList.contains("rank-top")),
   [true, true, true, true, true, false, false, false, false, false]);
-check("表示しきれない件数を知らせる", rankingStats.textContent, "ショップ: 12件 (上位10件を表示)");
+check("表示しきれない件数を知らせる", rankingStats.textContent, "対象の期間: 全期間 / ショップ: 12件 (上位10件を表示)");
 state.index = savedRankIndex;
 state.cache = savedRankCache;
 render();
-check("全部表示できるときは件数だけ出す", rankingStats.textContent, "ショップ: 2件");
+check("全部表示できるときは件数だけ出す", rankingStats.textContent, "対象の期間: 全期間 / ショップ: 2件");
 
 // 順位をクリックすると、そのショップで買った商品が下に開く
 const firstShopKey = [...rankingTableBody.querySelectorAll("tr.shop-row")][0].dataset.shopKey;
@@ -821,6 +876,48 @@ check("共有 金額を読めない商品があれば断る", rankingShareIssues
 check("共有 購入数編は金額不明を理由にしない", rankingShareIssues({ ...rankShareBase, sort: "count", unknown: 2 }), []);
 check("共有の確認文面", rankingShareConfirmMessage({ ...rankShareBase, pending: 1, indexComplete: false }),
   "未収集の注文が1件あります。注文履歴の取得が途中で終わっています。\nこのまま共有すると、順位や数字が実際とは違うことがあります。\nよろしいですか?");
+
+// --- ランキングの対象期間(全期間・年) ---
+// 「今年の推し作者」をランキング画面でも見られるようにする。全期間でない数字を
+// 全期間のものとして外へ出さないよう、共有文面とカードにも期間を明記する
+check("期間の選択肢は全期間と注文のある年",
+  [...rankingYear.options].map(o => [o.value, o.textContent]),
+  [["all", "全期間"], ["2026", "2026年"], ["2025", "2025年"]]);
+check("既定は全期間", rankingYear.value, "all");
+check("全期間の未収集件数", rankingShareStats.pending, 4);
+setRankingYear("2026");
+check("選んだ年の注文だけで順位を出す",
+  [...rankingTableBody.querySelectorAll("tr.shop-row")].map(tr => tr.cells[1].textContent),
+  ["SOUR FLAVOR"]);
+check("対象の期間を画面にも出す", rankingStats.textContent, "対象の期間: 2026年 / ショップ: 1件");
+check("期間を絞ると断り書きの件数も同じ期間で数える", rankingShareStats.pending, 2);
+check("共有文面に期間を明記", buildRankingShareText(rankingShareStats, true).split("\n")[0],
+  "BOOTHの推し作者ランキング🛍️（2026年・金額編）");
+check("共有カードにも期間を明記", buildRankingShareCard(rankingShareStats, true).title,
+  "推し作者ランキング（2026年・金額編）");
+check("期間を絞っても断り書きは残す",
+  rankingShareIssues(rankingShareStats), ["未収集の注文が2件あります"]);
+setRankingYear("2025");
+check("年を変えると順位も入れ替わる",
+  [...rankingTableBody.querySelectorAll("tr.shop-row")].map(tr => tr.cells[1].textContent),
+  ["べつのショップ"]);
+check("2025年の未収集は取得失敗の1件", rankingShareStats.pending, 1);
+setRankingYear("all");
+check("全期間へ戻すと全部が対象",
+  [...rankingTableBody.querySelectorAll("tr.shop-row")].map(tr => tr.cells[1].textContent),
+  ["べつのショップ", "SOUR FLAVOR"]);
+check("全期間では文面に期間を足さない", buildRankingShareText(rankingShareStats, true).split("\n")[0],
+  "BOOTHの推し作者ランキング🛍️（金額編）");
+// 選択そのものが消えると戻せなくなるので、期間の選択は空状態でも残す
+setRankingYear("2026");
+const savedPeriodCache = state.cache;
+state.cache = {};
+render();
+check("その年に明細が無くても期間を選び直せる",
+  [rankingArea.hidden, rankingYear.value, rankingEmpty.textContent.includes("2026年")], [true, "2026", true]);
+state.cache = savedPeriodCache;
+setRankingYear("all");
+render();
 
 // 共有ボタンはランキングを開いている間だけランキングを共有する
 location.hash = "#/ranking";
@@ -1928,6 +2025,8 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   await runTask(runAllTask);
   check("全件再取得を中断しても収集済みの金額は残る", state.cache.keep && state.cache.keep.amount, 555);
   check("中断は中断として扱われる", noticeBox.textContent.includes("中断しました"), true);
+  // 進捗を出したタイトルは、中断で終わっても必ず元へ戻す
+  check("中断で終わってもタイトルは元へ戻る", document.title, BASE_DOCUMENT_TITLE);
   forceRefreshAll.checked = false;
 
   // --- ②金額の収集: 一時的な通信エラーで全体を止めない ---
@@ -1966,6 +2065,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   await runTask((signal) => collectAmounts(targetOrders(), false, signal));
   check("一時的な通信エラーは試し直す", flakyTries, 2);
   check("試し直して収集できる", [cachedAmount("ok1"), cachedAmount("flaky")], [1000, 2000]);
+  check("収集を終えるとタイトルは元へ戻る", document.title, BASE_DOCUMENT_TITLE);
   // 版数を書き忘れると、収集した直後から未収集に戻り、毎回の実行で取り直し続ける
   check("収集したエントリに版数が入る", state.cache.ok1.v, CACHE_SCHEMA_VERSION);
   check("収集した直後は取り直しの対象にならない", needsCollect(state.cache.ok1), false);
@@ -2181,6 +2281,36 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
     [dashboardDoc.querySelector('meta[name="viewport"]').getAttribute("content"),
      popupDoc.querySelector('meta[name="viewport"]').getAttribute("content")],
     ["width=device-width, initial-scale=1", "width=device-width, initial-scale=1"]);
+
+  // ポップアップの「今年の合計」。古い要約では行ごと隠せるよう hidden で置く
+  check("ポップアップに今年の合計の行を置く",
+    [popupDoc.getElementById("summaryYearBox").hasAttribute("hidden"),
+     popupDoc.getElementById("summaryYearLabel") !== null,
+     popupDoc.getElementById("summaryYearTotal") !== null,
+     popupDoc.getElementById("summaryYearCount") !== null],
+    [true, true, true, true]);
+
+  // ---- 暗い配色(prefers-color-scheme: dark) ----
+  // 色は :root の変数に集約し、暗い配色ではその変数だけを差し替える。
+  // 規則の中に色を直書きすると、暗い配色でだけ読めない箇所が生まれる
+  const popupCss = await (await fetch("../extension/popup.css")).text();
+  const hardCodedColors = (css) =>
+    css
+      .split("\n")
+      .filter((line) => !/^\s*--/.test(line) && !line.includes("data:image/svg"))
+      .filter((line) => /#[0-9a-fA-F]{3}|rgba?\(\s*\d/.test(line))
+      .map((line) => line.trim());
+  const dashboardCss = await (await fetch("../extension/dashboard.css")).text();
+  check("暗い配色は:rootの上書きで切り替える",
+    [dashboardCss.includes("@media (prefers-color-scheme: dark)"),
+     popupCss.includes("@media (prefers-color-scheme: dark)")], [true, true]);
+  check("配色を規則へ直書きしない", [hardCodedColors(dashboardCss), hardCodedColors(popupCss)], [[], []]);
+  check("ヒートマップのマスの色も変数から作る",
+    dashboardCss.includes("rgb(var(--heat-rgb) / var(--cell-alpha"), true);
+  // 画像として外へ出るものは、見る人の端末設定で変わってはいけない
+  check("共有カードの配色は端末設定で変えない",
+    [SHARE_CARD_THEMES.light.fg, SHARE_CARD_THEMES.light.accent, SHARE_CARD_THEMES.dark.fg],
+    ["#2a2f36", "#fc4d50", "#ffffff"]);
   // 25列のヒートマップは狭い窓でセルが潰れる。注文内訳の表と同じ扱いにする
   check("ヒートマップを横スクロールできる枠へ入れる",
     dashboardDoc.getElementById("heatmapGrid").parentElement.className, "heatmap-scroll");
@@ -2203,7 +2333,6 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
     [...harnessDoc.querySelectorAll('script[src^="../extension/"]')].map(s => s.getAttribute("src").replace("../extension/", "")),
     REQUIRED_GLOBALS.map(([file]) => file));
 
-  const dashboardCss = await (await fetch("../extension/dashboard.css")).text();
   check("アクセント色は変更しない", dashboardCss.includes("--accent: #fc4d50"), true);
   check("共有画像の操作をボタン単位で目立たせる", dashboardCss.includes("button.share-media-btn"), true);
   check("ヒートマップの枠は横へ流す", dashboardCss.includes(".heatmap-scroll {"), true);
@@ -2234,9 +2363,40 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
     [mediaActionsStyle.borderTopWidth, mediaActionsStyle.backgroundColor, mediaActionsStyle.paddingTop],
     ["0px", "rgba(0, 0, 0, 0)", "0px"]);
   colorFixture.remove();
+  // 端末の設定で明暗が入れ替わるので、色そのものではなく「変数どおりか」を見る。
+  // 変数の値は :root(と暗い配色の上書き)にあり、いま効いている方が解決される
+  const colorProbe = document.createElement("span");
+  document.body.appendChild(colorProbe);
+  const resolvedColor = (value) => {
+    colorProbe.style.color = value;
+    return getComputedStyle(colorProbe).color;
+  };
   const shareButtonStyle = getComputedStyle(shareBtn);
-  check("共有ボタンの背景は黒", shareButtonStyle.backgroundColor, "rgb(0, 0, 0)");
-  check("共有ボタンの文字は白", shareButtonStyle.color, "rgb(255, 255, 255)");
+  check("共有ボタンは地色と反転する配色を変数から取る",
+    [shareButtonStyle.backgroundColor, shareButtonStyle.color],
+    [resolvedColor("var(--share-btn-bg)"), resolvedColor("var(--share-btn-fg)")]);
+  // 明暗どちらでも、本文と補足文が地色に沈まないこと(WCAG AAの4.5:1)
+  const channel = (value) => {
+    const ratio = value / 255;
+    return ratio <= 0.04045 ? ratio / 12.92 : ((ratio + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance = (color) => {
+    const [r, g, b] = color.match(/\d+(\.\d+)?/g).map(Number);
+    return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+  };
+  const contrast = (a2, b2) => {
+    const light = Math.max(luminance(a2), luminance(b2));
+    const dark = Math.min(luminance(a2), luminance(b2));
+    return (light + 0.05) / (dark + 0.05);
+  };
+  const pageBg = resolvedColor("var(--bg)");
+  check("本文と補足文は地色に対して4.5:1以上",
+    [contrast(resolvedColor("var(--fg)"), pageBg) >= 4.5,
+     contrast(resolvedColor("var(--fg-muted)"), pageBg) >= 4.5,
+     contrast(resolvedColor("var(--accent-text)"), pageBg) >= 4.5,
+     contrast(resolvedColor("var(--share-btn-fg)"), resolvedColor("var(--share-btn-bg)")) >= 4.5],
+    [true, true, true, true]);
+  colorProbe.remove();
   check("支出推移の要約はカード配置", getComputedStyle(trendSummary).display, "grid");
   // このページの主役はメインの合計額。フッターの合計(20px)と差を付ける
   check("メイン合計額は36px以上",
