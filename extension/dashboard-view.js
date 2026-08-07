@@ -9,6 +9,8 @@
 
 const fetchIndexBtn = document.getElementById("fetchIndexBtn");
 const forceRefreshIndex = document.getElementById("forceRefreshIndex");
+// D10 発送状況などが変わった注文のステータスだけを取り直す(金額は取り直さない)
+const refreshIndexStatus = document.getElementById("refreshIndexStatus");
 const indexStatus = document.getElementById("indexStatus");
 const indexCoverage = document.getElementById("indexCoverage");
 const monthEmpty = document.getElementById("monthEmpty");
@@ -130,6 +132,13 @@ const shareRatioToggle = document.getElementById("shareRatioToggle");
 const shareScaleInput = document.getElementById("shareScale");
 const shareScaleValue = document.getElementById("shareScaleValue");
 const shareDropZone = document.getElementById("shareDropZone");
+// C17 背景の作り方のタブ。パネルの切り替えは hidden 属性で行う
+const shareBgTabs = document.getElementById("shareBgTabs");
+const shareTabImage = document.getElementById("shareTabImage");
+const shareTabTemplate = document.getElementById("shareTabTemplate");
+const shareTabPanelImage = document.getElementById("shareTabPanelImage");
+const shareTabPanelTemplate = document.getElementById("shareTabPanelTemplate");
+const shareTemplateNotice = document.getElementById("shareTemplateNotice");
 const shareColors = document.getElementById("shareColors");
 const sharePatterns = document.getElementById("sharePatterns");
 const shareBgFile = document.getElementById("shareBgFile");
@@ -474,6 +483,7 @@ function renderRunningState(isRunning) {
     btn.disabled = isRunning;
   });
   forceRefreshIndex.disabled = isRunning;
+  refreshIndexStatus.disabled = isRunning;
   forceRefreshRange.disabled = isRunning;
   forceRefreshAll.disabled = isRunning;
   rangeFrom.disabled = isRunning;

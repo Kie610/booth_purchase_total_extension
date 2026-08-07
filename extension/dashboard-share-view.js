@@ -124,6 +124,9 @@ function openSharePanel(payload) {
   setShareModalBackgroundInert(true);
   renderShareRatioToggle();
   renderShareBackgroundControls();
+  // 開き直すたびに「カスタム（背景画像）」から始める。前回どのタブを見ていたかより、
+  // 写真を添える動線が既定であることの方が分かりやすい
+  setShareBgTab("image");
   renderShareTemplates();
   drawSharePanelCard();
   // パネルを開いている間は、後ろの共有ボタンを押せないようにする
@@ -150,6 +153,42 @@ function setShareRatio(ratio) {
   shareRatio = ratio;
   renderShareRatioToggle();
   drawSharePanelCard();
+}
+
+// ---- 背景の作り方のタブ ------------------------------------------------
+//
+// 「カスタム（背景画像）」と「テンプレート（色・模様）」は同時に使わない。
+// 表示の切り替えは hidden 属性だけで行う(CSSの [hidden] が必ず勝つので、
+// クラス側の display 指定と食い違って出っぱなしになることがない)。
+
+// "image" | "template"
+let shareBgTab = "image";
+
+function shareBgTabButtons() {
+  return [
+    ["image", shareTabImage, shareTabPanelImage],
+    ["template", shareTabTemplate, shareTabPanelTemplate],
+  ];
+}
+
+function setShareBgTab(tab, focus = false) {
+  shareBgTab = tab === "template" ? "template" : "image";
+  for (const [name, button, panel] of shareBgTabButtons()) {
+    const on = name === shareBgTab;
+    button.classList.toggle("current", on);
+    button.setAttribute("aria-selected", String(on));
+    // タブ列の中はTabキーで移動しない(選択中の1つだけがタブ順に入る)
+    button.tabIndex = on ? 0 : -1;
+    panel.hidden = !on;
+    if (on && focus) button.focus();
+  }
+  // 画像を選んだままテンプレート側へ来たときの案内は、そのタブでだけ出す
+  renderShareTemplateNotice();
+}
+
+// 画像が最優先という規則は変えていない。効かない理由と戻し方をタブの中で説明する
+function renderShareTemplateNotice() {
+  shareTemplateNotice.hidden = !(shareBgTab === "template" && Boolean(shareBackground));
 }
 
 function renderShareBackgroundControls() {
@@ -282,6 +321,7 @@ function renderShareTemplates() {
   for (const row of [shareColors, sharePatterns]) {
     row.classList.toggle("disabled", Boolean(shareBackground));
   }
+  renderShareTemplateNotice();
 }
 
 // 状態表示は用が済んだら消す。前回の「保存しました」が残っていると、

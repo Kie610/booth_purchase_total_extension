@@ -1632,6 +1632,8 @@ button.icon-btn:hover:not(:disabled) {
   color: var(--fg-muted);
 }
 
+/* C16 形と拡大率はどちらもプレビューの見え方を直接いじる操作。1行に並べて、
+   プレビューと背景の選択(タブ)の間に置く。狭いときだけ縦へ折り返す */
 .share-shape {
   display: grid;
   grid-template-columns: auto minmax(210px, 1fr);
@@ -1640,33 +1642,29 @@ button.icon-btn:hover:not(:disabled) {
   margin-bottom: 16px;
 }
 
-/* 写真を使わない人向けの下地と、確認するだけの文面は畳んでおく寄り道。
-   既定ではプレビュー・背景画像の指定・操作ボタンだけを見せる */
-.share-customize,
-.share-text-details {
-  margin-top: 16px;
-  padding-top: 14px;
-  border-top: 1px solid var(--border);
+/* C17 背景の作り方の切り替え。見た目は他の segmented と同じで、
+   タブなので幅いっぱいへ広げて「ここで切り替える」ことを見せる */
+/* .segmented はこの下で inline-flex を指定しているので、クラス2つ分の詳細度で上書きする */
+.segmented.share-tabs {
+  display: flex;
+  margin-top: 4px;
 }
 
-.share-customize > summary h3,
-.share-text-details > summary h3 {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--fg-muted);
+.share-tabs .segmented-btn {
+  flex: 1;
 }
 
-.share-customize > .share-template-box {
+.share-tabpanel {
   margin-top: 14px;
 }
 
-.share-text-details > .share-text-box {
-  margin-top: 14px;
+/* 画像が最優先という規則は変えず、効かない理由と戻し方をタブの中で説明する */
+.share-template-notice {
+  margin: 12px 0 0;
 }
 
-/* 拡大率は画像を選んだ直後に触るので、投げ込み先のすぐ下に置く */
-.share-bg .share-scale-field {
-  margin-top: 12px;
+/* 拡大率は画像を選んだ直後に触る。形の隣に置くので幅は決め打ちしない */
+.share-scale-field {
   max-width: 320px;
 }
 
@@ -1810,11 +1808,14 @@ button.share-template.current {
   gap: 8px;
 }
 
-/* 文面は開いたときだけ見える確認用。𝕏の投稿画面で直せるので、
-   ここでは全文が読めれば足りる */
+/* C18 文面は常時表示。操作ボタンはパネル下部に貼り付いていて押し出されないので、
+   畳まずに何が渡るのかを見せる。上の背景設定とは区切り線で分ける */
 .share-text-box {
   display: flex;
   flex-direction: column;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
 }
 
 .share-text-note {

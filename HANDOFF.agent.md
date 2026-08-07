@@ -121,7 +121,40 @@ complete:
   差し替えたのは「テンプレートは背景画像より先に置く」(順序が逆になったため反転)と
   アコーディオンの高さ実測(対象がテンプレートだけになったため、パネル全体の実測へ拡張)。
 
+- C: P7(共有パネルの操作性調整とステータス再取得)として improvement-plan の C16〜C18・D10・T1 を
+  実装し`1.1.0`へ統合した。共有カードの描画(share.js)と確認フローは変更していない。
+  C16=「画像の形」と「背景画像の拡大率」を `.share-shape` の1行(grid 2列)にまとめ、
+  プレビュー直下・背景の選択より上へ移した(620px以下は既存の媒体クエリで1列へ折り返す)。
+  C17=`#shareCustomize` アコーディオンを廃止し、`#shareBgTabs`(role=tablist、見た目は
+  既存の segmented)で「カスタム（背景画像）」と「テンプレート（色・模様）」を切り替える。
+  切り替えは hidden 属性だけで行い、選択中のタブだけ tabIndex=0(左右・Home・Endキー対応)。
+  画像優先の規則は変えず、画像を選んだままテンプレートタブへ来たときだけ
+  `#shareTemplateNotice` で理由と戻し方(カスタム側の「元に戻す」)を出す。
+  `.segmented` が後方で inline-flex を指定しているため `.segmented.share-tabs` で上書きした。
+  C18=`#shareTextDetails` を廃止し、投稿文面の textarea をパネル下方に常時表示へ戻した
+  (「𝕏の投稿画面で書き直せます」の補足はそのまま)。
+  D10=①注文履歴の取得に `#refreshIndexStatus`(物理アイテムのステータスを再取得)を追加。
+  ONのとき `appendUnknown` が既知注文も取り込み、注文IDのマージで索引のステータスと
+  日時表記だけを上書きする。金額キャッシュは破棄せず、status を持つエントリだけ
+  `syncCacheStatuses` で同じ値へそろえる。巡回の打ち切りは効率化案を採用し、
+  completed/cancelled 以外(paid・unpaid・unknown)のうち最古の注文
+  (`statusRefreshCutoff`)より古い行に到達した時点で通常の打ち切りロジックへ戻す
+  (全ページ巡回でも正しいが、全件再取得と同じ所要時間になるため。変わりうる注文が
+  1件も無ければ再取得自体を行わず、その旨を案内する)。`commitIndex` の complete 判定と
+  `pruneCacheAfterFullIndexRefresh` の発動条件(force && finishedAllPages)は未変更で、
+  ステータス再取得は prune を起こさない。一括集計(runAllTask)には追加していない。
+  T1=`test/cases.js` が `../extension/dashboard.html` を取得し、`test/index.html` の
+  id付き要素すべてについて本物の同一idとclass集合が一致することを検証する
+  (harnessにあって本物に無いidは失敗。許容は出力先の `out` のみ)。
+  この追加に合わせて、雛形に写し忘れていた44要素のclassを本物へそろえた。
+  test/index.html を新しい共有パネル構成へ同期し、test/cases.js を差し替え・追加した
+  (745→772 checks)。
+
 verified:
+- C: 2026-08-07 — evidence: status=PASS; kind=compile; command=node --check をextensionとtestの全.jsへ実行(claude/p7-share-tabs-status、C16〜C18・D10・T1実装後); environment=Windows、Git Bash; scope=JavaScript構文16ファイル; counts=passed=16, failed=0, skipped=0, not-run=0
+- C: 2026-08-07 — evidence: status=PASS; kind=runtime; command=python -m http.server 8769 --bind 127.0.0.1 を起動しBrowserで/test/index.htmlを確認(窓幅0の既定と1280x900の両方); environment=Windows、Claude Code Browser; scope=拡張機能のブラウザ全体テスト; counts=passed=772, failed=0, skipped=0, not-run=0(1280x900では `.share-shape` の2列側の分岐も通した)
+- C: 2026-08-07 — evidence: status=PASS; kind=runtime; command=scratchpadのプレビュー複製(stub.js+seed.js注入済み)へ修正後のextension一式を反映しport 8770で配信、DOM計測とイベントディスパッチで確認; environment=Windows、Claude Code Browser; scope=C16〜C18・D10のUIと回帰; counts=(a)1280px幅で形(284〜482px)と拡大率(502〜822px)が同一行・`.share-shape` は2列、行の下端569pxがタブ589pxとカスタムタブ本文656pxより上、ドロップゾーンも可視、(b)タブのクリック・左右キー・Endで `#shareTabPanelImage`/`#shareTabPanelTemplate` の computed display が flex↔none に入れ替わり aria-selected と focus も追随、画像を選んだ状態のテンプレートタブでのみ案内が出る、(c)投稿文面は details の外で高さ132pxで常時表示、(d)読み込み直後は sharePanel/shareOverlay/confirmPanel/navOverlay すべて display=none、×とEscapeのどちらでも none に戻り inert も解除、(e)①に `#refreshIndexStatus` が表示され、hintで「金額は取り直さない」「全件再取得との違い」が読める、(f)ダークでも待機タブ7.47:1・案内7.47:1・文面13.44:1、700px/480pxで横スクロールなし(480pxでは1列へ折り返し); failed=0
+- C: 2026-08-07 — evidence: status=NOT-RUN; kind=runtime; command=(未実行); environment=—; scope=D10のBOOTH実ページ巡回(ログイン済みの一覧ページでのステータス更新); counts=not-run=1 — 実ページで実測していないためU1に準ずる。stubのfetch差し替えによる単体相当の検証のみ済み
 - C: 2026-08-07 — evidence: status=PASS; kind=compile; command=node --check をextensionとtestの全.jsへ実行(claude/p6-hidden-hotfix、[hidden]規則追加+テスト追加後); environment=Windows、Git Bash; scope=JavaScript構文16ファイル; counts=passed=16, failed=0, skipped=0, not-run=0
 - C: 2026-08-07 — evidence: status=PASS; kind=runtime; command=python -m http.server 8765 --bind 127.0.0.1 を起動しBrowserで/test/index.htmlを確認(claude/p6-hidden-hotfix); environment=Windows、Claude Code Browser; scope=拡張機能のブラウザ全体テスト; counts=passed=745, failed=0, skipped=0, not-run=0
 - C: 2026-08-07 — evidence: status=PASS; kind=runtime; command=テストページ上で `[hidden]` 規則をCSSOMから一時削除して再計測(deleteRule/insertRule); environment=Windows、Claude Code Browser; scope=追加テストが本当にP6のバグを捕まえるかの確認; counts=規則を外すと `sharePanel` が display=flex のまま検出(1件)、戻すと検出0件

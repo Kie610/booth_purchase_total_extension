@@ -1129,6 +1129,23 @@ check("背景画像が無いと調整UIを使えない",
   [shareScaleInput.disabled, shareCanvas.tabIndex, shareCanvas.getAttribute("aria-disabled")],
   [true, -1, "true"]);
 
+// C17 背景の作り方のタブ。切り替えは hidden 属性だけで行う
+check("開いた直後はカスタム（背景画像）のタブ",
+  [shareBgTab, shareTabPanelImage.hidden, shareTabPanelTemplate.hidden,
+   shareTabImage.getAttribute("aria-selected"), shareTabImage.tabIndex, shareTabTemplate.tabIndex],
+  ["image", false, true, "true", 0, -1]);
+shareTabTemplate.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+check("タブを押すとテンプレート側だけが出る",
+  [shareBgTab, shareTabPanelImage.hidden, shareTabPanelTemplate.hidden,
+   shareTabTemplate.getAttribute("aria-selected"), shareTabTemplate.classList.contains("current")],
+  ["template", true, false, "true", true]);
+shareBgTabs.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true, cancelable: true }));
+check("左右キーでもタブを行き来できる",
+  [shareBgTab, shareTabPanelImage.hidden, shareTabPanelTemplate.hidden], ["image", false, true]);
+shareBgTabs.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true, cancelable: true }));
+check("Endキーで最後のタブを選べる", shareBgTab, "template");
+setShareBgTab("image");
+
 // coverを基準に拡大し、ドラッグ方向へ画像そのものが動くこと
 const coverCalls = [];
 drawCover(
@@ -1147,6 +1164,14 @@ setShareBackground(adjustableBackground, "background.png");
 check("背景画像を選ぶと調整UIを使える",
   [shareScaleInput.disabled, shareCanvas.tabIndex, shareCanvas.classList.contains("adjustable")],
   [false, 0, true]);
+// C17 画像が最優先という規則は変えない。テンプレート側では効かない理由を出す
+check("画像を選んでいてもカスタム側には案内を出さない", shareTemplateNotice.hidden, true);
+setShareBgTab("template");
+check("テンプレート側では効かない理由と戻し方を出す",
+  [shareTemplateNotice.hidden,
+   shareColors.classList.contains("disabled"), sharePatterns.classList.contains("disabled")],
+  [false, true, true]);
+setShareBgTab("image");
 setShareBackgroundScale(175);
 check("拡大率を表示へ反映する",
   [shareBackgroundTransform.scale, shareScaleInput.value, shareScaleValue.textContent],
@@ -1195,6 +1220,10 @@ setShareBackground(null, "");
 check("背景を戻すと調整値も初期化する",
   [shareBackgroundTransform, shareScaleInput.disabled, shareScaleValue.textContent],
   [{ scale: 1, x: 0, y: 0 }, true, "100%"]);
+setShareBgTab("template");
+check("画像を戻すとテンプレートの案内も消える",
+  [shareTemplateNotice.hidden, shareColors.classList.contains("disabled")], [true, false]);
+setShareBgTab("image");
 
 // 縦横比。canvasの大きさごと変える
 check("既定は16:9", [shareCanvas.width, shareCanvas.height], [1200, 675]);
@@ -2080,6 +2109,106 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   check("全件再取得の完了時だけ集計対象外のキャッシュを消す",
     Object.keys(state.cache), ["keep"]);
 
+  // --- D10 物理アイテムのステータス再取得 ---------------------------------
+  // 発送のある注文は支払済み→発送完了のように状態が変わる。金額は変わらないので、
+  // 既知の注文も読み飛ばさずステータスだけ上書きし、金額キャッシュには触れない
+  const statusLink = (id, date, status) =>
+    orderLink(id, date).replace("order-state completed", `order-state ${status}`);
+  const statusRoutes = (seen) => ({
+    [ORDERS_URL]: `<html><body>${statusLink("a1", "2026年6月1日 00:00", "completed")}` +
+      `${statusLink("a2", "2026年5月1日 00:00", "completed")}` +
+      `<div class="pager"><a href="/orders?page=2">2</a><a href="/orders?page=3">3</a></div></body></html>`,
+    [`${ORDERS_URL}?page=2`]: (path) => {
+      seen.push(path);
+      return okResponse(path, `<html><body>${statusLink("a3", "2025年4月1日 00:00", "completed")}` +
+        `${statusLink("a4", "2025年3月1日 00:00", "completed")}` +
+        `<div class="pager"><a href="/orders?page=2">2</a><a href="/orders?page=3">3</a></div></body></html>`);
+    },
+    [`${ORDERS_URL}?page=3`]: (path) => {
+      seen.push(path);
+      return okResponse(path, `<html><body>${statusLink("a5", "2024年1月1日 00:00", "completed")}` +
+        `<div class="pager"><a href="/orders?page=2">2</a><a href="/orders?page=3">3</a></div></body></html>`);
+    },
+  });
+  // a1 だけが「まだ変わりうる」注文(paid)。残りは発送完了で確定している
+  const statusIndex = () => ({
+    updatedAt: "x", complete: true,
+    orders: [
+      { id: "a1", status: "paid", date: "2026年6月1日 00:00" },
+      { id: "a2", status: "completed", date: "2026年5月1日 00:00" },
+      { id: "a3", status: "completed", date: "2025年4月1日 00:00" },
+      { id: "a4", status: "completed", date: "2025年3月1日 00:00" },
+      { id: "a5", status: "completed", date: "2024年1月1日 00:00" },
+    ],
+  });
+  const statusCache = () => ({
+    a1: { amount: 1200, gift: 0, items: [], status: "paid", date: "2026年6月1日 00:00" },
+    // 索引に無い注文。ステータス再取得では prune を起こさないので残るはず
+    gone: { amount: 300, gift: 0, items: [] },
+  });
+  const statusOf = (id) => {
+    const found = state.index.orders.find((o) => o.id === id);
+    return found ? found.status : undefined;
+  };
+
+  // OFF(既定): 既知の注文に到達した時点で打ち切るので、ステータスは古いまま
+  resetIndex();
+  const seenWithoutRefresh = [];
+  routes = statusRoutes(seenWithoutRefresh);
+  state.index = statusIndex();
+  state.cache = statusCache();
+  await runTask((signal) => fetchIndexTask(signal, false));
+  check("再取得しなければステータスは古いまま", statusOf("a1"), "paid");
+  check("再取得しなければ2ページ目以降は見に行かない", seenWithoutRefresh.length, 0);
+
+  // ON: 既知の注文も取り込んで索引を上書きする
+  resetIndex();
+  const seenWithRefresh = [];
+  routes = statusRoutes(seenWithRefresh);
+  state.index = statusIndex();
+  state.cache = statusCache();
+  await runTask((signal) => fetchIndexTask(signal, false, true));
+  check("ステータス再取得で既知注文の状態が新しくなる",
+    [statusOf("a1"), statusOf("a2")], ["completed", "completed"]);
+  check("ステータス再取得でも金額キャッシュは残る",
+    [state.cache.a1.amount, state.cache.gone.amount], [1200, 300]);
+  check("キャッシュ側のステータスも同じ値へそろえる", state.cache.a1.status, "completed");
+  check("ステータス再取得では索引の完全フラグを壊さない", state.index.complete, true);
+  check("ステータス再取得でも注文は増えも減りもしない",
+    state.index.orders.map((o) => o.id), ["a1", "a2", "a3", "a4", "a5"]);
+  check("変わった件数と金額を取り直さないことを伝える",
+    [noticeBox.textContent.includes("ステータスを取り直しました(変わった注文: 1件)"),
+     noticeBox.textContent.includes("金額は取り直していません")], [true, true]);
+  // 変わりうる注文(a1)より古いところまで来たら、そこからは通常どおり既知で打ち切る。
+  // 2ページ目は見に行くが、3ページ目までは辿らない(全件再取得と同じ所要時間にしない)
+  check("変わりうる注文より古くなったら通常の打ち切りへ戻る",
+    seenWithRefresh, [`${ORDERS_URL}?page=2`]);
+
+  // 変わりうる注文が1件も無ければ、巡回を伸ばす意味がない
+  resetIndex();
+  const seenWhenSettled = [];
+  routes = statusRoutes(seenWhenSettled);
+  const settledIndex = statusIndex();
+  settledIndex.orders[0].status = "completed";
+  state.index = settledIndex;
+  state.cache = statusCache();
+  await runTask((signal) => fetchIndexTask(signal, false, true));
+  check("変わりうる注文が無ければ巡回を伸ばさない",
+    [seenWhenSettled.length, noticeBox.textContent.includes("ステータスが変わりうる注文はありませんでした")],
+    [0, true]);
+
+  // 全件再取得と同時に指定されたときは、全件再取得(索引ごと作り直す)が優先される
+  resetIndex();
+  const seenWhenForced = [];
+  routes = statusRoutes(seenWhenForced);
+  state.index = statusIndex();
+  state.cache = statusCache();
+  await runTask((signal) => fetchIndexTask(signal, true, true));
+  check("全件再取得が指定されていればそちらを優先する",
+    [state.index.orders.length, state.index.complete, seenWhenForced.length], [5, true, 2]);
+  check("全件再取得の完了時は今までどおりキャッシュを整理する",
+    Object.keys(state.cache), ["a1"]);
+
   // 全件再取得を中断しても、収集済みの金額は消さない。
   // 消してしまうと「ここまでに取得した金額は保存されている」という案内が嘘になる
   resetIndex();
@@ -2352,41 +2481,64 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
     [Boolean(dashboardDoc.getElementById("shareColors")),
      Boolean(dashboardDoc.getElementById("sharePatterns"))], [true, true]);
   const scaleInput = dashboardDoc.getElementById("shareScale");
-  const shareCustomize = dashboardDoc.getElementById("shareCustomize");
-  check("色と模様のテンプレートはアコーディオンへ畳む",
-    [shareCustomize.tagName, shareCustomize.hasAttribute("open"),
-     shareCustomize.querySelector("summary").textContent.trim()],
-    ["DETAILS", false, "写真を使わない背景（色と模様）"]);
-  check("畳むのはテンプレートだけにする",
-    [Boolean(shareCustomize.querySelector("#shareColors")),
-     Boolean(shareCustomize.querySelector("#sharePatterns")),
-     Boolean(shareCustomize.querySelector("#shareBgFile")),
-     Boolean(shareCustomize.querySelector("#shareScale"))], [true, true, false, false]);
   check("拡大率の範囲は変えない", [scaleInput.min, scaleInput.max, scaleInput.value], ["100", "300", "100"]);
-  // 画像を選ぶ・投げ込む・拡大率・画像の形は、折りたたみの開閉に関係なく見える
-  check("画像の設定と画像の形は畳まない",
-    [dashboardDoc.getElementById("shareCanvas").closest("details"),
-     dashboardDoc.getElementById("shareBgFile").closest("details"),
-     dashboardDoc.getElementById("shareDropZone").closest("details"),
-     dashboardDoc.getElementById("shareScale").closest("details"),
-     dashboardDoc.getElementById("shareRatioToggle").closest("details"),
-     dashboardDoc.getElementById("shareOpenBtn").closest("details")],
-    [null, null, null, null, null, null]);
-  check("画像の指定はプレビューの真下に置く",
-    dashboardHtml.indexOf('id="shareCanvas"') < dashboardHtml.indexOf('id="shareBgFile"')
-      && dashboardHtml.indexOf('id="shareBgFile"') < dashboardHtml.indexOf('id="shareRatioToggle"'), true);
 
-  // C15 文面は𝕏の投稿画面で直せる。畳むが、何が渡るのかは開けば確かめられる
-  const shareTextDetails = dashboardDoc.getElementById("shareTextDetails");
-  check("投稿文面は畳んで下方へ置く",
-    [shareTextDetails.tagName, shareTextDetails.hasAttribute("open"),
-     dashboardDoc.getElementById("shareText").closest("details") === shareTextDetails,
-     dashboardHtml.indexOf('id="shareBgFile"') < dashboardHtml.indexOf('id="shareTextDetails"')],
-    ["DETAILS", false, true, true]);
-  check("文面が𝕏へ渡ることは畳んでも分かる",
-    [shareTextDetails.querySelector("summary").textContent.trim(),
-     shareTextDetails.querySelector(".share-text-note").textContent.includes("𝕏の投稿画面へ渡されます")],
-    ["投稿する文面を確認する", true]);
+  // C16 形と拡大率はどちらもプレビューの見え方を直接いじる操作。1行に並べ、
+  // 背景画像の指定(タブの中)より上へ置く
+  const shapeRow = dashboardDoc.querySelector(".share-shape");
+  check("画像の形と拡大率を同じ行にまとめる",
+    [Boolean(shapeRow.querySelector("#shareRatioToggle")), Boolean(shapeRow.querySelector("#shareScale"))],
+    [true, true]);
+  check("形と拡大率の行は背景画像の指定より上に置く",
+    dashboardHtml.indexOf('id="shareCanvas"') < dashboardHtml.indexOf('id="shareRatioToggle"')
+      && dashboardHtml.indexOf('id="shareScale"') < dashboardHtml.indexOf('id="shareBgFile"'), true);
+
+  // C17 背景の作り方はタブで切り替える(アコーディオンは廃止)
+  check("背景のアコーディオンは廃止した",
+    [dashboardDoc.getElementById("shareCustomize"), dashboardDoc.getElementById("shareTextDetails")],
+    [null, null]);
+  const bgTabs = dashboardDoc.getElementById("shareBgTabs");
+  check("背景の作り方をタブ列として宣言",
+    [bgTabs.getAttribute("role"),
+     [...bgTabs.querySelectorAll("[role='tab']")].map((b) => b.id),
+     [...bgTabs.querySelectorAll("[role='tab']")].map((b) => b.getAttribute("aria-controls"))],
+    ["tablist", ["shareTabImage", "shareTabTemplate"],
+     ["shareTabPanelImage", "shareTabPanelTemplate"]]);
+  check("タブの見た目は既存の切り替えを踏襲する",
+    [bgTabs.classList.contains("segmented"),
+     [...bgTabs.querySelectorAll("[role='tab']")].every((b) => b.classList.contains("segmented-btn"))],
+    [true, true]);
+  check("既定はカスタム（背景画像）のタブから始める",
+    [dashboardDoc.getElementById("shareTabImage").getAttribute("aria-selected"),
+     dashboardDoc.getElementById("shareTabTemplate").getAttribute("aria-selected"),
+     dashboardDoc.getElementById("shareTabPanelImage").hasAttribute("hidden"),
+     dashboardDoc.getElementById("shareTabPanelTemplate").hasAttribute("hidden")],
+    ["true", "false", false, true]);
+  check("タブ列の中はTabキーで移動させない",
+    [dashboardDoc.getElementById("shareTabImage").getAttribute("tabindex"),
+     dashboardDoc.getElementById("shareTabTemplate").getAttribute("tabindex")], ["0", "-1"]);
+  check("画像の指定とテンプレートをそれぞれのタブへ入れる",
+    [Boolean(dashboardDoc.getElementById("shareTabPanelImage").querySelector("#shareBgFile")),
+     Boolean(dashboardDoc.getElementById("shareTabPanelImage").querySelector("#shareDropZone")),
+     Boolean(dashboardDoc.getElementById("shareTabPanelTemplate").querySelector("#shareColors")),
+     Boolean(dashboardDoc.getElementById("shareTabPanelTemplate").querySelector("#sharePatterns"))],
+    [true, true, true, true]);
+  // 画像が最優先という規則は変えない。効かない理由と戻し方をテンプレート側に置く
+  check("画像優先のままテンプレート側に案内を置く",
+    [dashboardDoc.getElementById("shareTemplateNotice").hasAttribute("hidden"),
+     dashboardDoc.getElementById("shareTemplateNotice").textContent.includes("反映されません"),
+     dashboardDoc.getElementById("shareTemplateNotice").textContent.includes("元に戻す")],
+    [true, true, true]);
+
+  // C18 操作ボタンが下部固定になったので、文面は畳まず常時表示へ戻す
+  const shareTextBox = dashboardDoc.querySelector(".share-text-box");
+  check("投稿文面は畳まず常時表示にする",
+    [dashboardDoc.getElementById("shareText").closest("details"),
+     shareTextBox.contains(dashboardDoc.getElementById("shareText")),
+     dashboardHtml.indexOf('id="shareBgFile"') < dashboardHtml.indexOf('id="shareText"')],
+    [null, true, true]);
+  check("文面が𝕏へ渡ることの補足は残す",
+    shareTextBox.querySelector(".share-text-note").textContent.includes("𝕏の投稿画面へ渡されます"), true);
 
   // C13 パネルは縦に長い。操作ボタンと状態表示は本文の外に出し、下部へ貼り付ける
   const sharePanelNode = dashboardDoc.getElementById("sharePanel");
@@ -2467,6 +2619,30 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   check("読み込み確認は全ての拡張スクリプトを見ている",
     [...harnessDoc.querySelectorAll('script[src^="../extension/"]')].map(s => s.getAttribute("src").replace("../extension/", "")),
     REQUIRED_GLOBALS.map(([file]) => file));
+
+  // T1 雛形の陳腐化検出。このページは本物の dashboard.css を読み込んで実表示を測るが、
+  // 雛形側にclassを写し忘れると規則が当たらず、テストだけが素通りする
+  // (P6の「hidden属性が効かない」バグを見逃した原因がこれ)。
+  // 本物にあって雛形に無いidは対象外(雛形は必要な要素だけを置く)。
+  const HARNESS_ONLY_IDS = new Set([
+    // テスト結果の出力先。dashboard.html には無い、このページだけの要素
+    "out",
+  ]);
+  const classSetOf = (node) => [...node.classList].sort().join(" ");
+  const harnessDrift = [];
+  for (const node of harnessDoc.querySelectorAll("[id]")) {
+    if (HARNESS_ONLY_IDS.has(node.id)) continue;
+    const real = dashboardDoc.getElementById(node.id);
+    if (!real) {
+      harnessDrift.push(`${node.id}: dashboard.html に無い`);
+      continue;
+    }
+    if (classSetOf(real) !== classSetOf(node)) {
+      harnessDrift.push(`${node.id}: 雛形[${classSetOf(node)}] / 本物[${classSetOf(real)}]`);
+    }
+  }
+  check(`雛形のid付き要素は本物とclassが一致する(${harnessDoc.querySelectorAll("[id]").length}件)`,
+    harnessDrift, []);
 
   check("アクセント色は変更しない", dashboardCss.includes("--accent: #fc4d50"), true);
   check("共有画像の操作をボタン単位で目立たせる", dashboardCss.includes("button.share-media-btn"), true);
@@ -2568,18 +2744,32 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
        return rect.width > 0 && rect.top >= panelRect.top && rect.bottom <= panelRect.bottom + 1;
      })],
     [true, true, 3, true]);
-  // 画像の設定は畳んだ先ではなく、最初から高さを持って見えている
-  const fixtureBg = sharePanelFixture.querySelector(".share-bg");
-  const customizeNode = sharePanelFixture.querySelector(".share-customize");
-  check("画像の設定は折りたたみの外で見えている",
-    [fixtureBg.closest("details"), fixtureBg.getBoundingClientRect().height > 100, customizeNode.open],
-    [null, true, false]);
-  // 畳んだ状態の高さは見出しの行だけ。開くと中身の分だけ伸びる
-  const closedHeight = customizeNode.getBoundingClientRect().height;
-  customizeNode.open = true;
-  const openedHeight = customizeNode.getBoundingClientRect().height;
-  check("畳んだテンプレートは見出しの高さしか取らない", closedHeight < 60, true);
-  check("開けば色と模様の見本の分だけ伸びる", openedHeight > closedHeight + 30, true);
+  // C16・C17・C18 配るCSSのまま、形と拡大率が1行に並び、タブで実際に切り替わり、
+  // 文面が畳まれず高さを持っていること
+  const fixtureShape = sharePanelFixture.querySelector(".share-shape");
+  // 折り返しは窓の幅で決まる(620px以下の1列は仕様どおり)ので、いま効いている
+  // 列数が幅と一致していることを見る
+  const shapeColumns = getComputedStyle(fixtureShape).gridTemplateColumns.split(" ").length;
+  check("形と拡大率は広い幅で横並びにし狭い幅だけ折り返す",
+    shapeColumns, window.innerWidth <= 620 ? 1 : 2);
+  const fixtureBg = sharePanelFixture.querySelector(".share-tabpanel.share-bg");
+  const fixtureTemplate = sharePanelFixture.querySelector(".share-tabpanel.share-template-box");
+  check("形と拡大率は背景画像の指定より上に出る",
+    fixtureShape.getBoundingClientRect().bottom <= fixtureBg.getBoundingClientRect().top + 1, true);
+  check("選んでいるタブだけが実際に表示される",
+    [getComputedStyle(fixtureBg).display !== "none", getComputedStyle(fixtureTemplate).display],
+    [true, "none"]);
+  fixtureBg.hidden = true;
+  fixtureTemplate.hidden = false;
+  check("タブを切り替えると表示も入れ替わる",
+    [getComputedStyle(fixtureBg).display, getComputedStyle(fixtureTemplate).display !== "none"],
+    ["none", true]);
+  fixtureBg.hidden = false;
+  fixtureTemplate.hidden = true;
+  // 文面は畳まれていないので、textarea が最初から高さを持っている
+  const fixtureText = sharePanelFixture.querySelector(".share-text");
+  check("投稿文面は畳まれず高さを持って見えている",
+    [fixtureText.closest("details"), fixtureText.getBoundingClientRect().height > 100], [null, true]);
   sharePanelFixture.remove();
 
   const trendLineFixture = svgEl("polyline", { class: "trend-line current" });

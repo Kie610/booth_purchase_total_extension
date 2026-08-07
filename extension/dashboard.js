@@ -200,7 +200,9 @@ function downloadBlob(blob, fileName) {
 }
 
 fetchIndexBtn.addEventListener("click", () =>
-  runTask((signal) => fetchIndexTask(signal, forceRefreshIndex.checked))
+  runTask((signal) =>
+    fetchIndexTask(signal, forceRefreshIndex.checked, refreshIndexStatus.checked)
+  )
 );
 
 collectRangeBtn.addEventListener("click", () =>
@@ -334,6 +336,30 @@ shareRatioToggle.addEventListener("click", (event) => {
 });
 
 shareScaleInput.addEventListener("input", () => setShareBackgroundScale(shareScaleInput.value));
+
+// C17 背景の作り方のタブ。role=tablist の作法どおり、左右キーでも行き来できるようにする
+// (マウスで押せる操作をキーボードから使えないままにしない)
+const SHARE_BG_TABS = ["image", "template"];
+
+shareBgTabs.addEventListener("click", (event) => {
+  const button = event.target.closest("[role='tab']");
+  if (!button) return;
+  setShareBgTab(button === shareTabTemplate ? "template" : "image");
+});
+
+shareBgTabs.addEventListener("keydown", (event) => {
+  const step = { ArrowLeft: -1, ArrowRight: 1 }[event.key];
+  if (step === undefined && event.key !== "Home" && event.key !== "End") return;
+  event.preventDefault();
+  const index = SHARE_BG_TABS.indexOf(shareBgTab);
+  const next =
+    event.key === "Home"
+      ? 0
+      : event.key === "End"
+        ? SHARE_BG_TABS.length - 1
+        : (index + step + SHARE_BG_TABS.length) % SHARE_BG_TABS.length;
+  setShareBgTab(SHARE_BG_TABS[next], true);
+});
 
 let shareDragPointer = null;
 let shareDragX = 0;
@@ -1066,8 +1092,27 @@ function listPageLooksUnreadable({ orders, maxPage, pagerFound, emptyFound = fal
 // 揃っていないとき(前回が中断で終わったときなど)は、既知の注文より古いところに
 // 取得できていない範囲が残っている可能性があるため、既知の注文は読み飛ばして
 // 最後のページまで進み、抜けている分を拾う
-function appendUnknown(target, rows, known, stopAtKnown) {
+// D10 ステータス再取得の間は、既知の注文も読み飛ばさずそのまま取り込む。
+// 索引は注文IDで上書きマージされるので、これだけでステータスと日時表記が新しくなる
+// (金額キャッシュには触れないため、収集済みの金額は残る)。
+// refresh は { cutoffSortKey, done } の入れ物。cutoffSortKey より古い注文まで来たら
+// done を立て、そこから先は通常どおりの打ち切り判定へ戻る
+function appendUnknown(target, rows, known, stopAtKnown, refresh = null) {
   for (const row of rows) {
+    if (refresh && !refresh.done) {
+      target.push(row);
+      const sortKey = orderSortKey(row);
+      // 日付を読めない行(-1)では打ち切らない。読めないことを理由に巡回を止めると、
+      // その先に残っている「変わりうる注文」を取りこぼす
+      if (
+        sortKey >= 0 &&
+        refresh.cutoffSortKey !== null &&
+        sortKey < refresh.cutoffSortKey
+      ) {
+        refresh.done = true;
+      }
+      continue;
+    }
     if (known.has(row.id)) {
       if (stopAtKnown) return true;
       continue;
@@ -1075,6 +1120,42 @@ function appendUnknown(target, rows, known, stopAtKnown) {
     target.push(row);
   }
   return false;
+}
+
+// ステータスがこれ以上変わらない注文。発送完了とキャンセルは終着点なので、
+// ここより古いところまで遡れば、取り直す価値のある注文は残っていない
+const SETTLED_STATUSES = new Set(["completed", "cancelled"]);
+
+// まだ変わりうる注文(paid・unpaid・unknown など)のうち最も古いものの並び順。
+// 1件も無ければ null(取り直す対象が無いので、通常の増分取得と同じでよい)
+function statusRefreshCutoff(index) {
+  if (!index) return null;
+  let cutoff = null;
+  for (const order of index.orders) {
+    if (SETTLED_STATUSES.has(order.status)) continue;
+    const sortKey = orderSortKey(order);
+    // 日付を読めない注文は最古と同じ扱いにして、打ち切らず全ページ巡回させる
+    if (sortKey < 0) return 0;
+    if (cutoff === null || sortKey < cutoff) cutoff = sortKey;
+  }
+  return cutoff;
+}
+
+// 金額キャッシュ側にもステータスと日時を控えている版がある。索引だけ新しくすると
+// 内訳の表と索引で違うステータスが出るため、持っているものだけ同じ値へそろえる。
+// 金額・商品明細には触れないので、収集済みの金額は失われない
+async function syncCacheStatuses(fetched) {
+  let changed = false;
+  for (const row of fetched) {
+    const entry = state.cache[row.id];
+    if (!entry || !("status" in entry)) continue;
+    if (entry.status === row.status && entry.date === row.date) continue;
+    entry.status = row.status;
+    if ("date" in entry) entry.date = row.date;
+    changed = true;
+  }
+  if (changed) await saveCache(state.cache);
+  return changed;
 }
 
 // 取得できたところまでを索引へ反映する。中断や失敗のあとでも呼ばれるため、
@@ -1119,7 +1200,7 @@ async function pruneCacheAfterFullIndexRefresh() {
 }
 
 // ① 一覧ページを新しい順に巡回して注文の索引を作る
-async function fetchIndexTask(signal, force) {
+async function fetchIndexTask(signal, force, refreshStatus = false) {
   const known = new Set(
     force || !state.index ? [] : state.index.orders.map((o) => o.id)
   );
@@ -1128,6 +1209,13 @@ async function fetchIndexTask(signal, force) {
   const stopAtKnown = previousComplete;
   // 前回が途中で終わっている索引。既知の注文の先に抜けが残っているかもしれない
   const hadPartialIndex = !force && Boolean(state.index) && !previousComplete;
+  // D10 ステータス再取得。全件再取得は索引ごと作り直すので、そちらが優先されているときは何もしない。
+  // まだ変わりうる注文が1件も無ければ、巡回を伸ばす意味がないので通常の増分取得に任せる
+  const cutoffSortKey = force ? null : statusRefreshCutoff(state.index);
+  const refresh =
+    refreshStatus && !force && state.index && cutoffSortKey !== null
+      ? { cutoffSortKey, done: false }
+      : null;
 
   const fetched = [];
   let reachedKnown = false;
@@ -1135,6 +1223,7 @@ async function fetchIndexTask(signal, force) {
   let unreadable = false;
   let emptyHistory = false;
   let added = 0;
+  let statusUpdated = 0;
 
   try {
     setProgress("購入履歴の1ページ目を取得中...", 0);
@@ -1145,7 +1234,7 @@ async function fetchIndexTask(signal, force) {
     const { orders: firstOrders, maxPage } = firstPage;
     emptyHistory = firstOrders.length === 0 && firstPage.emptyFound;
     unreadable = listPageLooksUnreadable(firstPage);
-    reachedKnown = appendUnknown(fetched, firstOrders, known, stopAtKnown);
+    reachedKnown = appendUnknown(fetched, firstOrders, known, stopAtKnown, refresh);
 
     for (let page = 2; page <= maxPage && !reachedKnown; page++) {
       setProgress(
@@ -1171,19 +1260,31 @@ async function fetchIndexTask(signal, force) {
         fetched,
         parsed.orders,
         known,
-        stopAtKnown
+        stopAtKnown,
+        refresh
       );
     }
     // 例外で抜けた場合はここを通らないため、巡回しきったときだけ true になる。
     // 一覧を読めていない疑いがあるときは「最古まで辿った」と見なさない
     finishedAllPages = !reachedKnown && !unreadable;
   } finally {
+    // 索引を書き換える前に、ステータスが変わった注文を数えておく
+    if (refresh) {
+      const before = new Map(
+        (state.index ? state.index.orders : []).map((o) => [o.id, o.status])
+      );
+      statusUpdated = fetched.filter(
+        (row) => before.has(row.id) && before.get(row.id) !== row.status
+      ).length;
+    }
     added = await commitIndex(fetched, {
       force,
       reachedKnown,
       finishedAllPages,
       previousComplete,
     });
+    // ステータス再取得は索引の書き換えだけ。全件再取得ではないので prune は起こさない
+    if (refresh) await syncCacheStatuses(fetched);
     if (force && finishedAllPages) await pruneCacheAfterFullIndexRefresh();
   }
 
@@ -1205,6 +1306,15 @@ async function fetchIndexTask(signal, force) {
     );
   } else {
     addNotice(`注文履歴を取得しました(新しく追加された注文: ${added}件)。`);
+  }
+  // 何も変わらなかった場合も黙って終わらない。「押したのに反応が無い」と
+  // 取得し損ねたのか変化が無かったのか区別が付かなくなる
+  if (refresh && !unreadable) {
+    addNotice(
+      `ステータスを取り直しました(変わった注文: ${statusUpdated}件)。金額は取り直していません。`
+    );
+  } else if (refreshStatus && !force && !unreadable) {
+    addNotice("ステータスが変わりうる注文はありませんでした。");
   }
 }
 
