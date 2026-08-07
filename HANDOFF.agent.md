@@ -151,6 +151,7 @@ complete:
   (745→772 checks)。
 
 verified:
+- C: 2026-08-07 — evidence: status=PASS; kind=runtime; command=ユーザーが自身のBOOTHアカウント実環境でD10「物理アイテムのステータスを再取得」を実行し、ステータスが再取得されることを確認したと報告(2863d07時点の1.1.0); environment=ユーザーの実ブラウザ・BOOTHログイン済み実ページ; scope=D10ステータス再取得の実ページ動作(一覧巡回・索引更新); counts=ユーザー報告による確認1件, failed=0; 備考=U1のうちD10巡回に関する部分はこの報告で実環境確認済みとなった。金額収集・ページング全般のU1は引き続き未実測
 - C: 2026-08-07 — evidence: status=PASS; kind=compile; command=node --check をextensionとtestの全.jsへ実行(claude/p7-share-tabs-status、C16〜C18・D10・T1実装後); environment=Windows、Git Bash; scope=JavaScript構文16ファイル; counts=passed=16, failed=0, skipped=0, not-run=0
 - C: 2026-08-07 — evidence: status=PASS; kind=runtime; command=python -m http.server 8769 --bind 127.0.0.1 を起動しBrowserで/test/index.htmlを確認(窓幅0の既定と1280x900の両方); environment=Windows、Claude Code Browser; scope=拡張機能のブラウザ全体テスト; counts=passed=772, failed=0, skipped=0, not-run=0(1280x900では `.share-shape` の2列側の分岐も通した)
 - C: 2026-08-07 — evidence: status=PASS; kind=runtime; command=scratchpadのプレビュー複製(stub.js+seed.js注入済み)へ修正後のextension一式を反映しport 8770で配信、DOM計測とイベントディスパッチで確認; environment=Windows、Claude Code Browser; scope=C16〜C18・D10のUIと回帰; counts=(a)1280px幅で形(284〜482px)と拡大率(502〜822px)が同一行・`.share-shape` は2列、行の下端569pxがタブ589pxとカスタムタブ本文656pxより上、ドロップゾーンも可視、(b)タブのクリック・左右キー・Endで `#shareTabPanelImage`/`#shareTabPanelTemplate` の computed display が flex↔none に入れ替わり aria-selected と focus も追随、画像を選んだ状態のテンプレートタブでのみ案内が出る、(c)投稿文面は details の外で高さ132pxで常時表示、(d)読み込み直後は sharePanel/shareOverlay/confirmPanel/navOverlay すべて display=none、×とEscapeのどちらでも none に戻り inert も解除、(e)①に `#refreshIndexStatus` が表示され、hintで「金額は取り直さない」「全件再取得との違い」が読める、(f)ダークでも待機タブ7.47:1・案内7.47:1・文面13.44:1、700px/480pxで横スクロールなし(480pxでは1列へ折り返し); failed=0
@@ -184,7 +185,8 @@ verified:
 - C: 2026-08-02 — evidence: status=PASS; kind=compile; command=python validate_handoff.py --root repository-root; environment=Windows、agent-handoff validator; scope=AGENTS、CLAUDE、HANDOFF、HANDOFF.agentの63 checks; counts=passed=63, failed=0, skipped=0, not-run=0
 
 not-run:
-- U: U1 BOOTHログイン済み実ページでの通信、ページング、セレクタ確認はローカルリリースビルドの範囲外。
+- U: U1 BOOTHログイン済み実ページでの通信、ページング、セレクタ確認はローカルリリースビルドの範囲外
+  (D10のステータス再取得のみ2026-08-07にユーザー実環境で確認済み。verifiedを参照)。
 - U: U2 Firefoxの署名、配布パッケージ、恒久利用は未対応。
 
 ## Decisions
