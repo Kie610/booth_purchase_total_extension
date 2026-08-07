@@ -24,12 +24,12 @@ v1.0.0 リポジトリ全体の敵対的検証の結果と、改善タスクを�
 - A1 【共有】確認ダイアログの文言と実挙動のずれ。`shareConfirmMessage()` は「今年の金額だけを共有します」と
   案内するが、未収集が今年分のみの場合、収集完了後に `canShareTotal()` が真になり `buildShareText()` は
   全期間の合計も含めて共有する(`extension/dashboard.js` の shareBtn ハンドラ + `extension/share.js`)。
-  挙動自体はより正確な数字を出すので、文言側を「取得後に全期間の合計を共有できる場合はそちらを共有します」等へ直すのが妥当。
+  挙動自体はより正確な数字を出すので、文言側を「取得後に全期間の合計を共有できる場合はそちらを共有します」等へ直すのが妥当。済(1.1.0)
 - A2 【進捗】`collectAmounts()` の進捗バーが `index / targets.length` で、テキスト `(index+1/N)` と1件ずれ、
-  最終件でも100%にならない(`extension/dashboard.js`)。
+  最終件でも100%にならない(`extension/dashboard.js`)。済(1.1.0)
 - A3 【タブ管理】集計ページを2枚開くと `boothDashboardTab` が後勝ちし、片方を閉じた `pagehide` でキーが
   無条件に消えるため、残ったタブがあってもポップアップから新規タブが開く(`extension/dashboard.js` init/pagehide、
-  `extension/common.js` openDashboard)。自タブ IDと一致するときだけ消す形にすれば解消。
+  `extension/common.js` openDashboard)。自タブ IDと一致するときだけ消す形にすれば解消。済(1.1.0)
 - A4 【HTML】`dashboard.html` / `popup.html` に `<meta name="viewport">` が無い。拡張タブでは実害が薄いが、
   モバイル系ブラウザ(Firefox for Android等の将来対応)で980px仮想幅で描画される。
 - A5 【レイアウト】曜日×時間帯ヒートマップ(25列grid)に横スクロール用ラッパーが無く、狭い窓では

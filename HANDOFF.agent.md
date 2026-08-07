@@ -19,8 +19,16 @@ complete:
 - C: 2026-08-07のレビュー資料(docs/improvement-plan.md)を`1.0.0`へコミットした(cc090b9、未push)。
 - C: `1.0.0`先端から統合・配布ブランチ`1.1.0`を作成し、manifest・README・テスト・AGENTSの
   バージョン表記をv1.1.0開発中の状態へ更新した。
+- C: P2(軽微バグ修正)として improvement-plan の A1〜A3 を修正し`1.1.0`へ統合した。
+  A1=share.js の共有確認文言を実挙動(取得後に全期間の合計を共有しうる)へ一致、
+  A2=dashboard.js collectAmounts の進捗バー比率を (index+1)/N にしてテキストと一致、
+  A3=dashboard.js の pagehide で boothDashboardTab を自タブIDと一致するときだけ削除
+  (releaseDashboardTabKey。消し損ねは openDashboard 側の tabs.get 失敗時フォールバックで回復)。
+  test/cases.js へ対応テストを追加(640→646 checks)。
 
 verified:
+- C: 2026-08-07 — evidence: status=PASS; kind=compile; command=node --check をextensionとtestの全.jsへ実行(claude/p2-bugfixes、A1〜A3修正後); environment=Windows、Git Bash; scope=JavaScript構文16ファイル; counts=passed=16, failed=0, skipped=0, not-run=0
+- C: 2026-08-07 — evidence: status=PASS; kind=runtime; command=python -m http.server 8745 --bind 127.0.0.1 を起動しBrowserで/test/index.htmlを確認(claude/p2-bugfixes、A1〜A3修正+テスト追加後); environment=Windows、Claude Code Browser; scope=拡張機能のブラウザ全体テスト; counts=passed=646, failed=0, skipped=0, not-run=0
 - C: 2026-08-07 — evidence: status=PASS; kind=compile; command=node --check をextensionとtestの全.jsへ実行(1.1.0ブランチ、バージョン表記更新後); environment=Windows、Git Bash; scope=JavaScript構文16ファイル; counts=passed=16, failed=0, skipped=0, not-run=0
 - C: 2026-08-07 — evidence: status=PASS; kind=runtime; command=python -m http.server 8744 --bind 127.0.0.1 を起動しBrowserで/test/index.htmlを確認(1.1.0ブランチ、バージョン表記更新後); environment=Windows、Claude Code Browser; scope=拡張機能のブラウザ全体テスト; counts=passed=640, failed=0, skipped=0, not-run=0
 - C: 2026-08-02 — evidence: status=PASS; kind=compile; command=PowerShellでextensionとtestの全.jsへbundled node.exe --checkを実行; environment=Windows PowerShell、Node.js bundled runtime 26.731.11130; scope=JavaScript構文16ファイル; counts=passed=16, failed=0, skipped=0, not-run=0

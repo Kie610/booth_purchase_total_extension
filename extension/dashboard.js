@@ -531,18 +531,36 @@ trendPeriodTableBody.addEventListener("click", (event) => {
 // 保存データの読み込みは走らせない(非同期で state を上書きして競合するため)
 if (!document.body.dataset.noAutoInit) init();
 
+// 自分のタブID。集計タブを2枚開くとキーの登録は後勝ちになるため、閉じるときに
+// 「キーが自分の登録か」を確かめる材料として init() で覚えておく
+let dashboardTabId = null;
+
+// pagehide でのキーの後始末。無条件に消すと、残っているタブが登録したキーまで
+// 消してしまい、タブが残っているのにポップアップから新しいタブが開く。
+// 保存値が自分のタブIDと一致するときだけ消す。
+// pagehide 中は読み出し→比較→削除の非同期処理が最後まで走らないことがあるが、
+// その場合はキーが残るだけで実害はない。openDashboard() が tabs.get() の失敗で
+// 消えたタブのキーを検知して新しいタブへ切り替えるため、消し損ねは自然に回復する。
+// 逆(他タブのキーを消してしまう誤削除)は回復手段が無いので、残す側に倒す
+async function releaseDashboardTabKey() {
+  if (dashboardTabId == null) return;
+  const stored = await readStored(DASHBOARD_TAB_KEY, null);
+  if (stored === dashboardTabId) await removeStored(DASHBOARD_TAB_KEY);
+}
+
 async function init() {
   // ポップアップから「集計ページを開く」で復帰できるよう、自分のタブIDを覚えておく
   try {
     const tab = await ext.tabs.getCurrent();
     if (tab && tab.id != null) {
+      dashboardTabId = tab.id;
       await writeStored(DASHBOARD_TAB_KEY, tab.id);
     }
   } catch (e) {
     // タブIDが取れなくても集計自体には影響しない
   }
   window.addEventListener("pagehide", () => {
-    ext.storage.local.remove(DASHBOARD_TAB_KEY);
+    releaseDashboardTabKey();
     if (running) clearRunState();
   });
 
@@ -1067,9 +1085,11 @@ async function collectAmounts(orders, force, signal) {
   let done = 0;
   let failed = 0;
   for (const [index, order] of targets.entries()) {
+    // バーの比率はテキストの (n/N件) と同じ1始まりでそろえる。
+    // index / N だと表示と1件ずれ、最終件を収集中でも100%にならない
     setProgress(
       `金額を収集中... (${index + 1}/${targets.length}件)`,
-      index / targets.length
+      (index + 1) / targets.length
     );
     await publishRunState({
       phase: "金額の収集",

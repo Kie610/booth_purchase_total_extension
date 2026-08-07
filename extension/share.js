@@ -33,11 +33,15 @@ function canShareTotal(stats) {
   return stats.indexComplete && stats.pendingCount === 0;
 }
 
-// 合計を出せないときの確認文面。今年分は共有の前に収集してしまう
+// 合計を出せないときの確認文面。今年分は共有の前に収集してしまう。
+// 収集の結果、未収集が今年分だけだった場合は全期間が揃い、buildShareText() は
+// 合計も含めて共有する。文言が「今年の金額だけ」と断定すると実挙動と食い違うので、
+// 収集する分岐では「合計を共有できる場合は合計も含める」と案内する
 function shareConfirmMessage(stats) {
   const head = "未収集の注文が残っているため、全期間の合計は実際より少なくなります。\n";
   return stats.yearPendingCount > 0
-    ? `${head}今年分の未収集 ${stats.yearPendingCount}件 を取得してから、今年の金額だけを共有します。\nよろしいですか?`
+    ? `${head}今年分の未収集 ${stats.yearPendingCount}件 を取得してから共有します。\n` +
+        "取得後、全期間の合計を共有できる場合は合計も含めて共有します。\nよろしいですか?"
     : `${head}今年の金額だけを共有します。\nよろしいですか?`;
 }
 

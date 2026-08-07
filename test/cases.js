@@ -1504,10 +1504,15 @@ check("共有文面 未収集があれば合計の行を出さない",
 check("共有文面 比較の基準も今年の額になる",
   purchaseComparison(1000), "すき家 ビビンバ牛丼（特盛）");
 
-// 共有前の確認。今年分に未収集があるなら、共有の前にそこだけ収集してしまう
+// 共有前の確認。今年分に未収集があるなら、共有の前にそこだけ収集してしまう。
+// 収集で未収集が今年分だけ解消されると全期間が揃い、共有文面には合計も載るため、
+// 「今年の金額だけ」と断定せず、合計を共有できる場合があることを案内する
 check("共有の確認 今年分を取得してから共有する",
   shareConfirmMessage({ ...shareable, pendingCount: 5, yearPendingCount: 2 }),
-  "未収集の注文が残っているため、全期間の合計は実際より少なくなります。\n今年分の未収集 2件 を取得してから、今年の金額だけを共有します。\nよろしいですか?");
+  "未収集の注文が残っているため、全期間の合計は実際より少なくなります。\n今年分の未収集 2件 を取得してから共有します。\n取得後、全期間の合計を共有できる場合は合計も含めて共有します。\nよろしいですか?");
+check("共有の確認 収集する分岐では今年だけと断定しない",
+  shareConfirmMessage({ ...shareable, pendingCount: 5, yearPendingCount: 2 })
+    .includes("今年の金額だけを共有します"), false);
 check("共有の確認 今年分が揃っていれば取得しない",
   shareConfirmMessage({ ...shareable, pendingCount: 5, yearPendingCount: 0 }),
   "未収集の注文が残っているため、全期間の合計は実際より少なくなります。\n今年の金額だけを共有します。\nよろしいですか?");
@@ -1848,6 +1853,25 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   check("収集したエントリに版数が入る", state.cache.ok1.v, CACHE_SCHEMA_VERSION);
   check("収集した直後は取り直しの対象にならない", needsCollect(state.cache.ok1), false);
 
+  // 進捗バーの比率はテキストの (n/N件) と同じ1始まりでそろえる。
+  // 0始まり(index / N)だと表示と1件ずれ、最終件を収集中でも100%にならない
+  state.index = indexOf2("pg1", "pg2");
+  state.cache = {};
+  routes = {
+    [detailUrl("pg1")]: detailHtml(100),
+    [detailUrl("pg2")]: detailHtml(200),
+  };
+  const progressRatios = [];
+  const realSetProgress = setProgress;
+  setProgress = (text, ratio) => {
+    if (typeof ratio === "number") progressRatios.push(ratio);
+    realSetProgress(text, ratio);
+  };
+  await runTask((signal) => collectAmounts(targetOrders(), false, signal));
+  setProgress = realSetProgress;
+  check("進捗バーはテキストと同じ1始まりで進む", progressRatios, [0.5, 1]);
+  check("最終件の収集中に進捗バーが100%へ達する", progressRatios[progressRatios.length - 1], 1);
+
   // 429はサーバー指定のRetry-Afterを優先する
   state.index = indexOf2("rate", "rate-ok");
   state.cache = { "rate-ok": { v: CACHE_SCHEMA_VERSION, amount: 1, items: [] } };
@@ -1915,6 +1939,23 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   fetchRetryBaseWaitMs = savedRetryWait;
   window.fetch = realFetch;
   resetIndex();
+
+  // --- 集計タブのキーの後始末 ---
+  // 集計タブを2枚開くとキーの登録は後勝ちになる。閉じた側が無条件に消すと、
+  // 残っているタブのキーまで消え、ポップアップから新しいタブが開いてしまう
+  dashboardTabId = 7; // 先に開いたタブ(キーは別のタブ42に上書きされている)
+  await writeStored(DASHBOARD_TAB_KEY, 42);
+  await releaseDashboardTabKey();
+  check("タブキー 他タブの登録は消さない", await readStored(DASHBOARD_TAB_KEY, null), 42);
+  dashboardTabId = 42; // キーを登録した本人
+  await releaseDashboardTabKey();
+  check("タブキー 自分の登録なら消す", await readStored(DASHBOARD_TAB_KEY, null), null);
+  // タブIDを取れなかったページは登録もしていないので、キーに触ってはいけない
+  dashboardTabId = null;
+  await writeStored(DASHBOARD_TAB_KEY, 9);
+  await releaseDashboardTabKey();
+  check("タブキー 自タブIDが無ければ触らない", await readStored(DASHBOARD_TAB_KEY, null), 9);
+  await removeStored(DASHBOARD_TAB_KEY);
 
   // --- 𝕏共有ボタン(実際のHTMLとCSSが表示仕様どおりか) ---
   const dashboardHtml = await (await fetch("../extension/dashboard.html")).text();
