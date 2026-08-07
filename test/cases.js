@@ -2068,7 +2068,8 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
 
   // 正式リリース後はセマンティックバージョンを使い、配布対象のversionを固定して検証する
   check("正式リリース版のセマンティックバージョン", /^[1-9]\d*\.\d+\.\d+$/.test(manifest.version), true);
-  check("今回の正式リリース版", manifest.version, "1.0.0");
+  // 統合先ブランチ名とversionの一致ルールがあるため、開発中は次版の番号で固定する
+  check("開発中の統合対象バージョン", manifest.version, "1.1.0");
 
   check("manifestのiconsに4サイズを宣言", manifest.icons, expectedIcons);
   check("ツールバー用のdefault_iconも同じ4サイズ", manifest.action.default_icon, expectedIcons);
@@ -2078,14 +2079,16 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   const handoffHistoryText = await (await fetch("../docs/handoff-history.md")).text();
   const versioningText = await (await fetch("../docs/versioning.md")).text();
   const agentsText = await (await fetch("../AGENTS.md")).text();
-  check("1.0.0とバージョンブランチ運用を文書化",
+  check("正式リリースと開発版とバージョンブランチ運用を文書化",
     [readmeText.includes("現在の正式リリースは **v1.0.0**"),
+     readmeText.includes("次のバージョン **v1.1.0** を開発中"),
      handoffText.includes("[Durable repository instructions](AGENTS.md)"),
-     agentsText.includes("現在の正式リリースと統合・配布ブランチは `1.0.0`"),
+     agentsText.includes("現在の正式リリースは `1.0.0`。開発中の統合・配布ブランチは `1.1.0`"),
      agentsText.includes("正式リリースが確定するまでは、`main`へ直接コミット・マージ・pushしない"),
      agentsText.includes("正式リリース時は、検証済みバージョンブランチへ`main`をfast-forward"),
      agentsText.includes("バージョンブランチは削除しない"),
-     versioningText.includes("git merge --ff-only <version>")], [true, true, true, true, true, true, true]);
+     versioningText.includes("git merge --ff-only <version>")],
+    [true, true, true, true, true, true, true, true]);
   const supportDistributionNotice = "本拡張機能は無料でダウンロード・利用できます。BOOTHには任意の支援版も用意しますが、支援版に含まれる拡張機能は無料版と同一です。支援版の購入およびBOOSTは作者への任意の支援であり、支援の有無や金額による機能・利用条件・サポート内容の違いはありません。";
   check("無料版と支援版の説明をREADME・作者情報・HANDOFFで統一",
     [readmeText.includes(supportDistributionNotice),

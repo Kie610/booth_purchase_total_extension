@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "BOOTHお買いものレポート",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "BOOTHの購入履歴から支払額を注文単位で集計する非公式ツールです。ピクシブ株式会社およびBOOTHとは関係ありません。",
   "icons": {
     "16": "icons/icon16.png",

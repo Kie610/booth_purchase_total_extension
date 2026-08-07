@@ -1,11 +1,11 @@
 # Agent handoff v1
 
-updated: 2026-08-02T03:08:09+09:00
+updated: 2026-08-07T00:00:00+09:00
 repo: https://github.com/Kie610/booth_purchase_total_extension
-work_branch: 1.0.0
-upstream: origin/1.0.0
-base: v1.0.0@7e884d281670268fab893e83f408c16f08c7bb61
-goal: 正式リリース時に永続バージョンブランチとmainを同じ検証済みコミットへ同期する。
+work_branch: 1.1.0
+upstream: none (未push。pushはユーザー許可後)
+base: 1.0.0@cc090b9ddbd42753522e4c050f939d43ee0a8713
+goal: docs/improvement-plan.md の改善タスクをv1.1.0として統合し、検証後に正式リリースへ進める。
 
 ## State
 
@@ -16,8 +16,13 @@ complete:
 - C: GitHub Release `v1.0.0`を正式公開し、ZIPとSHA-256を再ダウンロードして一致を確認した。
 - C: GitHub Releaseと重複するローカル`dist/`成果物は検証後に削除した。
 - C: 正式リリース確定後、`main`を`1.0.0`へfast-forwardして同じコミットへ同期した。
+- C: 2026-08-07のレビュー資料(docs/improvement-plan.md)を`1.0.0`へコミットした(cc090b9、未push)。
+- C: `1.0.0`先端から統合・配布ブランチ`1.1.0`を作成し、manifest・README・テスト・AGENTSの
+  バージョン表記をv1.1.0開発中の状態へ更新した。
 
 verified:
+- C: 2026-08-07 — evidence: status=PASS; kind=compile; command=node --check をextensionとtestの全.jsへ実行(1.1.0ブランチ、バージョン表記更新後); environment=Windows、Git Bash; scope=JavaScript構文16ファイル; counts=passed=16, failed=0, skipped=0, not-run=0
+- C: 2026-08-07 — evidence: status=PASS; kind=runtime; command=python -m http.server 8744 --bind 127.0.0.1 を起動しBrowserで/test/index.htmlを確認(1.1.0ブランチ、バージョン表記更新後); environment=Windows、Claude Code Browser; scope=拡張機能のブラウザ全体テスト; counts=passed=640, failed=0, skipped=0, not-run=0
 - C: 2026-08-02 — evidence: status=PASS; kind=compile; command=PowerShellでextensionとtestの全.jsへbundled node.exe --checkを実行; environment=Windows PowerShell、Node.js bundled runtime 26.731.11130; scope=JavaScript構文16ファイル; counts=passed=16, failed=0, skipped=0, not-run=0
 - C: 2026-08-02 — evidence: status=PASS; kind=runtime; command=python.exe -m http.server 8731 --bind 127.0.0.1を起動しBrowserでhttp://127.0.0.1:8731/test/index.htmlを確認; environment=Windows、Codex In-app Browser; scope=拡張機能のブラウザ全体テストとconsole error・warning; counts=passed=640, failed=0, skipped=0, not-run=0
 - C: 2026-08-02 — evidence: status=PASS; kind=compile; command=.\tools\release.ps1を実行しExpand-ArchiveとSHA-256比較で検証; environment=Windows PowerShell; scope=v1.0.0配布ZIPの25ファイル、単一ルート、manifest、チェックサム; counts=passed=25, failed=0, skipped=0, not-run=0
