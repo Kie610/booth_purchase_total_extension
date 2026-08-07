@@ -15,12 +15,12 @@
 <pre id="out">running...</pre>
 
 <!-- dashboard.html と同じ要素構成 -->
-<button id="menuBtn" aria-expanded="false"></button>
+<button id="menuBtn" class="menu-btn" aria-expanded="false"></button>
 <span id="viewTitle"></span>
 <span class="copyright">©2026 Kie (Kie工房)</span>
-<div id="navOverlay" hidden></div>
+<div id="navOverlay" class="nav-overlay" hidden></div>
 <div id="navBar" class="nav-bar">
-<nav id="navDrawer" hidden>
+<nav id="navDrawer" class="nav-drawer" hidden>
 <a class="nav-link" href="#/report" data-view="report">お買いものレポート</a>
 <a class="nav-link" href="#/ranking" data-view="ranking">推し作者ランキング</a>
 <a class="nav-link" href="#/trends" data-view="trends">支出推移・前年比較</a>
@@ -46,11 +46,11 @@
   <p class="author-disclaimer author-support-note">本拡張機能は無料でダウンロード・利用できます。BOOTHには任意の支援版も用意しますが、支援版に含まれる拡張機能は無料版と同一です。支援版の購入およびBOOSTは作者への任意の支援であり、支援の有無や金額による機能・利用条件・サポート内容の違いはありません。</p>
 </section>
 
-<div id="pendingBanner" hidden><span id="pendingBannerText"></span><a href="#/report">お買いものレポートで収集する</a><button id="pendingBannerClose" aria-label="この案内を閉じる">×</button></div>
+<div id="pendingBanner" class="notice pending-banner" hidden><span id="pendingBannerText"></span><a href="#/report">お買いものレポートで収集する</a><button id="pendingBannerClose" aria-label="この案内を閉じる">×</button></div>
 
-<div class="view" id="view-report"><section id="firstRunGuide" hidden></section></div>
+<div class="view" id="view-report"><section id="firstRunGuide" class="first-run" hidden></section></div>
 <div class="view" id="view-trends" hidden>
-  <div id="trendsEmpty"></div>
+  <div id="trendsEmpty" class="empty-note"></div>
   <div id="trendsArea" hidden>
     <select id="trendYear"></select>
     <select id="trendBaseYear"></select>
@@ -66,27 +66,27 @@
     <select id="heatmapTo"></select>
     <button id="heatmapAllBtn"></button>
     <span id="heatmapStats"></span>
-    <div id="heatmapEmpty" hidden></div>
+    <div id="heatmapEmpty" class="empty-note" hidden></div>
     <div class="heatmap-scroll"><div id="heatmapGrid" class="heatmap"></div></div>
-    <div id="heatmapSkipped" hidden></div>
+    <div id="heatmapSkipped" class="status warn" hidden></div>
     <table class="period-table"><tbody id="trendPeriodTableBody"></tbody></table>
   </div>
 </div>
 <div class="view" id="view-summary" hidden>
   <select id="summaryYear"></select>
-  <div id="summaryEmpty"></div>
+  <div id="summaryEmpty" class="empty-note"></div>
   <div id="summaryArea" hidden>
     <div id="summaryCards" class="stat-grid"></div>
-    <div id="summaryNewShopWarn" hidden></div>
+    <div id="summaryNewShopWarn" class="status warn" hidden></div>
     <table><tbody id="summaryTopShopsBody"></tbody></table>
   </div>
 </div>
 <div class="view" id="view-ranking" hidden>
   <label>対象の期間<select id="rankingYear"></select></label>
-  <div id="rankingEmpty"></div>
+  <div id="rankingEmpty" class="empty-note"></div>
   <div id="rankingArea" hidden>
     <div id="rankingStats"></div>
-    <div id="rankingUnknown" hidden></div>
+    <div id="rankingUnknown" class="status warn" hidden></div>
     <div id="rankingSortToggle">
       <button class="segmented-btn" data-sort="amount" aria-pressed="true">金額編</button>
       <button class="segmented-btn" data-sort="count" aria-pressed="false">購入数編</button>
@@ -99,10 +99,10 @@
   </div>
 </div>
 <div class="view" id="view-export" hidden>
-  <div id="exportEmpty"></div>
+  <div id="exportEmpty" class="empty-note"></div>
   <div id="exportArea" hidden>
     <div id="exportStats"></div>
-    <div id="exportGap" hidden></div>
+    <div id="exportGap" class="status" hidden></div>
     <button id="exportOrdersBtn"></button>
     <button id="exportItemsBtn"></button>
     <table><tbody id="exportPreviewBody"></tbody></table>
@@ -110,21 +110,21 @@
 </div>
 <div class="view" id="view-backup" hidden>
   <div id="backupStats"></div>
-  <div id="backupCoverage" hidden></div>
+  <div id="backupCoverage" class="status" hidden></div>
   <button id="backupSaveBtn"></button>
   <label for="restoreFile">読み込むバックアップ</label><input type="file" id="restoreFile">
   <div id="restoreStatus" role="status"></div>
 </div>
 
-<div id="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" hidden>
+<div id="progress" class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" hidden>
   <span id="progressText"></span>
   <button id="abortBtn"></button>
   <div><div id="progressFill"></div></div>
 </div>
-<div id="noticeBox" role="status" hidden></div>
-<div id="errorBox" role="alert" hidden></div>
+<div id="noticeBox" class="notice" role="status" hidden></div>
+<div id="errorBox" class="error" role="alert" hidden></div>
 
-<div id="summarySection" hidden>
+<div id="summarySection" class="summary" hidden>
   <div class="summary-main"><span class="summary-label">収集済みの合計額</span><span class="summary-value" id="totalAmount"></span></div>
   <div class="summary-gift"><span class="gift" id="totalGift"></span></div>
   <span id="totalCount"></span>
@@ -144,9 +144,9 @@
 <button id="fetchIndexBtn"></button>
 <input type="checkbox" id="forceRefreshIndex">
 <div id="indexStatus"></div>
-<div id="indexCoverage" hidden></div>
+<div id="indexCoverage" class="status" hidden></div>
 
-<div id="monthEmpty"></div>
+<div id="monthEmpty" class="empty-note"></div>
 <div id="monthArea" hidden>
   <div id="rangeArea">
     <select id="rangeFrom"></select>
@@ -157,8 +157,8 @@
     <input type="checkbox" id="forceRefreshRange">
   </div>
   <table><tbody id="monthTableBody"></tbody></table>
-  <p id="unknownArea" hidden><span id="unknownCount"></span></p>
-  <p id="outdatedArea" hidden><span id="outdatedCount"></span></p>
+  <p id="unknownArea" class="unknown-area" hidden><span id="unknownCount"></span></p>
+  <p id="outdatedArea" class="unknown-area" hidden><span id="outdatedCount"></span></p>
 </div>
 
 <div id="breakdownSection" hidden>
@@ -185,16 +185,16 @@
   <button id="shareBtn" class="share-btn" disabled>𝕏で共有</button>
 </div>
 
-<div id="shareOverlay" hidden></div>
+<div id="shareOverlay" class="share-overlay" hidden></div>
 <!-- 本文と操作の入れ子は dashboard.html と同じにする(本文だけがスクロールし、
      操作と状態表示はパネル下部に貼り付く) -->
-<div id="sharePanel" role="dialog" aria-modal="true" hidden>
+<div id="sharePanel" class="share-panel" role="dialog" aria-modal="true" hidden>
   <div class="share-panel-head"><button id="shareCloseBtn"></button></div>
   <div class="share-panel-body">
     <canvas id="shareCanvas" width="1200" height="675" role="img" tabindex="-1" aria-label="作成した共有カードのプレビュー" aria-disabled="true"></canvas>
     <div class="share-bg">
       <input type="file" id="shareBgFile">
-      <button id="shareBgClearBtn" hidden></button>
+      <button id="shareBgClearBtn" class="secondary small" hidden></button>
       <div id="shareDropZone"></div>
       <span id="shareBgName"></span>
       <input type="range" id="shareScale" min="100" max="300" step="5" value="100" disabled>
@@ -224,8 +224,8 @@
   </div>
 </div>
 
-<div id="confirmOverlay" hidden></div>
-<div id="confirmPanel" role="dialog" aria-modal="true" hidden>
+<div id="confirmOverlay" class="confirm-overlay" hidden></div>
+<div id="confirmPanel" class="confirm-panel" role="dialog" aria-modal="true" hidden>
   <h2 id="confirmTitle">確認</h2>
   <p id="confirmMessage"></p>
   <button id="confirmCancelBtn" class="secondary">やめる</button>

@@ -126,6 +126,16 @@
   box-sizing: border-box;
 }
 
+/* hidden属性が付いた要素は、必ず消えるようにする。
+   ブラウザ既定の [hidden] { display: none } は詳細度が0なので、
+   .share-panel { display: flex } のようにクラスでdisplayを指定した要素では負けてしまい、
+   JSで hidden = true にしても表示が消えないというバグになる。
+   表示・非表示の切り替えは hidden 属性だけで行う決まりなので、ここで一律に勝たせる。
+   クラスでdisplayを切り替えたい要素は、hidden属性を外した状態で使うこと */
+[hidden] {
+  display: none !important;
+}
+
 .visually-hidden {
   position: absolute !important;
   width: 1px !important;

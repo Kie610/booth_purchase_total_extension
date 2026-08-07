@@ -37,6 +37,14 @@
   }
 }
 
+/* hidden属性が付いた要素は、必ず消えるようにする。
+   ブラウザ既定の [hidden] { display: none } は詳細度が0なので、
+   .summary-year { display: flex } のようにクラスでdisplayを指定した要素では負けてしまい、
+   JSで hidden = true にしても表示が消えない(集計ページの dashboard.css と同じ対策) */
+[hidden] {
+  display: none !important;
+}
+
 body {
   width: 300px;
   font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;

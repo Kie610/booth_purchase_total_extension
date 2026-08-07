@@ -10,6 +10,21 @@ goal: docs/improvement-plan.md の改善タスクをv1.1.0として統合し、�
 ## State
 
 complete:
+- C: P6ホットフィックス: `[hidden] { display: none !important; }` を `extension/dashboard.css` と
+  `extension/popup.css` のリセット位置へ追加した。ブラウザ既定の `[hidden]` は詳細度0のため、
+  P6が足した `.share-panel { display: flex }` に負けて共有パネルが hidden 属性を無視して
+  出っぱなしになり、×でもEscapeでも閉じられなかった(JS上は `sharePanel.hidden === true`)。
+  同種のリスクは `.heatmap { display: grid }`(`#heatmapGrid`)、`.nav-drawer.nav-tabs { display: flex }`
+  (`#navDrawer`)、popupの `.summary-year { display: flex }`(`#summaryYearBox`)の3件を洗い出し、
+  全体規則1つで実表示 none になることを確認した。既存の意図的なdisplay切替との衝突は無い
+  (hidden属性を外した状態でのみクラス側のdisplayが効くため)。
+- C: `test/index.html` の雛形へ dashboard.html と同じclassを補った(share-panel、confirm-panel、
+  nav-drawer、notice、status、empty-note など29箇所)。classが抜けていたため、本物のCSSを
+  読み込んでいてもP6のバグが再現せず、実表示テストが素通りしていた。
+- C: `test/cases.js` に画面遷移・パネル開閉の実表示テストを追加した(739→745 checks)。
+  初期表示2件(モーダル6要素・ナビは画面幅どおり)、CSS規則の存在1件、画面遷移スイープ1件、
+  3モーダルの開閉サイクル1件(12判定)、hidden属性の全数チェック1件(31要素)。
+  `[hidden]` 規則を実行時に外すと全数チェックが `sharePanel` を検出して落ちることを確認済み。
 - C: `1.0.0`ブランチを検証済みの`origin/main`先端から作成した。
 - C: manifest、README、テスト、ブランチ運用文書をv1.0.0へ更新した。
 - C: リリース準備コミット`90cd412e402742d6e91d6499a5ce1c145f39382e`を`origin/1.0.0`へpushし、追跡を設定した。
@@ -107,6 +122,10 @@ complete:
   アコーディオンの高さ実測(対象がテンプレートだけになったため、パネル全体の実測へ拡張)。
 
 verified:
+- C: 2026-08-07 — evidence: status=PASS; kind=compile; command=node --check をextensionとtestの全.jsへ実行(claude/p6-hidden-hotfix、[hidden]規則追加+テスト追加後); environment=Windows、Git Bash; scope=JavaScript構文16ファイル; counts=passed=16, failed=0, skipped=0, not-run=0
+- C: 2026-08-07 — evidence: status=PASS; kind=runtime; command=python -m http.server 8765 --bind 127.0.0.1 を起動しBrowserで/test/index.htmlを確認(claude/p6-hidden-hotfix); environment=Windows、Claude Code Browser; scope=拡張機能のブラウザ全体テスト; counts=passed=745, failed=0, skipped=0, not-run=0
+- C: 2026-08-07 — evidence: status=PASS; kind=runtime; command=テストページ上で `[hidden]` 規則をCSSOMから一時削除して再計測(deleteRule/insertRule); environment=Windows、Claude Code Browser; scope=追加テストが本当にP6のバグを捕まえるかの確認; counts=規則を外すと `sharePanel` が display=flex のまま検出(1件)、戻すと検出0件
+- C: 2026-08-07 — evidence: status=PASS; kind=runtime; command=scratchpadのプレビュー複製(stub.js+seed.js注入)へ修正後のdashboard.css/popup.cssを反映しport 8766で配信、getComputedStyleとイベントディスパッチで確認; environment=Windows、Claude Code Browser(ペイン非表示のためスクリーンショットは取得不可); scope=dashboard.htmlとpopup.htmlの実挙動、ライト/ダーク両方; counts=(a)読み込み直後の sharePanel/shareOverlay/authorPanel/confirmPanel/navDrawer/navOverlay はすべて display=none、(b)フッター共有→パネル display=flex、×で none、再度開いてEscapeでも none(inertも解除)、(c)ヒートマップは hidden=true で none・false で grid、ドロワーは420px幅で menuBtn→block/背景クリック→none、作者パネルと確認ダイアログ(キャッシュ削除)も block↔none、(d)ダーク配色でも初期表示・確認ダイアログの開閉・hidden全数チェックが同じ結果、popup.htmlの `#summaryYearBox` は hidden=true で none・false で flex; failed=0
 - C: 2026-08-07 — evidence: status=PASS; kind=compile; command=node --check をextensionとtestの全.jsへ実行(claude/p6-share-redesign、C12〜C15実装後); environment=Windows、Git Bash; scope=JavaScript構文16ファイル; counts=passed=16, failed=0, skipped=0, not-run=0
 - C: 2026-08-07 — evidence: status=PASS; kind=runtime; command=python -m http.server 8760 --bind 127.0.0.1 を起動しBrowserで/test/index.htmlを確認(claude/p6-share-redesign、C12〜C15実装+テスト更新後); environment=Windows、Claude Code Browser; scope=拡張機能のブラウザ全体テスト; counts=passed=739, failed=0, skipped=0, not-run=0
 - C: 2026-08-07 — evidence: status=PASS; kind=runtime; command=scratchpadのプレビュー複製(stub.js+seed.js注入)へ修正後のextensionのJS/CSS/HTMLを反映しport 8761で配信、1280x700で共有パネルを開いてDOM計測とイベントディスパッチで確認; environment=Windows、Claude Code Browser; scope=C12〜C14の実挙動とライト/ダークの配色; counts=(a)画像設定はアコーディオン外・`#shareCustomize`は閉じたまま「画像を選ぶ」まで見える、(b)パネル高さ668pxでフッターは589〜684pxに固定され3ボタンとも無スクロールで可視(本文は936pxを514pxの枠でスクロール)、(c)canvasへのdragoverで枠がアクセント色になりdefaultPrevented=true、Fileを載せたdropで背景適用・ファイル名表示・拡大率有効化まで到達、(d)ライト/ダークとも状態表示・ドロップ枠の文字・ファイル選択/画像ボタンのコントラストは4.8:1以上; failed=0

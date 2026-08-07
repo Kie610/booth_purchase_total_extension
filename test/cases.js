@@ -10,6 +10,27 @@ function parse(html) {
   return new DOMParser().parseFromString(html, "text/html");
 }
 
+// 要素が実際に見えているか(hidden属性が効いているか)を実表示で確かめるための道具。
+// `.hidden` プロパティだけを見ると、CSSのクラス側で display を指定した要素が
+// hidden属性を無視して出っぱなしになる不具合(P6の共有パネル)を見逃す
+function displayOf(id) {
+  return getComputedStyle(document.getElementById(id)).display;
+}
+
+// --- 初期表示: 読み込み直後にモーダルや引き出しが見えていないこと ---
+// P6で .share-panel に display: flex を足したところ、ブラウザ既定の
+// [hidden] { display: none } が詳細度で負け、共有パネルが開いたまま閉じられなくなった。
+// 同じ壊れ方を二度と持ち込まないよう、実際の表示で見張る
+check("読み込み直後はモーダルが表示されない",
+  ["sharePanel", "shareOverlay", "authorPanel", "authorOverlay", "confirmPanel", "confirmOverlay"]
+    .filter((id) => displayOf(id) !== "none"),
+  []);
+// ナビは画面幅で扱いが変わる。水平タブのときは引き出しが常時見えているのが正しい
+const navStartsWide = document.body.classList.contains("nav-wide");
+check("読み込み直後のナビの表示は画面幅どおり",
+  [displayOf("navDrawer") === "none", displayOf("navOverlay") === "none"],
+  [!navStartsWide, true]);
+
 // --- parseOrderDate の表記ゆれ吸収 ---
 check("parseOrderDate 和暦区切り", parseOrderDate("2024年5月3日 12:34"), { year: 2024, month: 5, day: 3, hour: 12, sortKey: 20240503 });
 check("parseOrderDate スラッシュ", parseOrderDate("2024/05/03 12:34"), { year: 2024, month: 5, day: 3, hour: 12, sortKey: 20240503 });
@@ -2414,6 +2435,11 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
     [dashboardCss.includes("@media (prefers-color-scheme: dark)"),
      popupCss.includes("@media (prefers-color-scheme: dark)")], [true, true]);
   check("配色を規則へ直書きしない", [hardCodedColors(dashboardCss), hardCodedColors(popupCss)], [[], []]);
+  // hidden属性を必ず勝たせる全体規則。ブラウザ既定の [hidden] は詳細度0なので、
+  // クラスで display を指定した要素(共有パネル・ヒートマップ・水平タブ・popupの今年の合計)では負ける
+  check("hidden属性を必ず勝たせる規則を両方のCSSへ置く",
+    [dashboardCss.includes("[hidden] {\n  display: none !important;\n}"),
+     popupCss.includes("[hidden] {\n  display: none !important;\n}")], [true, true]);
   check("ヒートマップのマスの色も変数から作る",
     dashboardCss.includes("rgb(var(--heat-rgb) / var(--cell-alpha"), true);
   // 画像として外へ出るものは、見る人の端末設定で変わってはいけない
@@ -2628,6 +2654,52 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   check("アイコンの実ファイルが宣言どおりの寸法", iconSizes, ICON_SIZES.map((s) => `${s}: ${s}x${s}`));
   const authorImage = await createImageBitmap(await (await fetch("../extension/icons/author-kie.png")).blob());
   check("縮小した著者近影の実ファイルを同梱", [authorImage.width, authorImage.height], [240, 240]);
+
+  // --- 画面遷移とパネル開閉を実表示で確かめる ------------------------------
+  //
+  // ここまでのテストは `.hidden` プロパティ(属性)しか見ていないので、
+  // CSSのクラスで display を指定した要素が hidden 属性に勝ってしまう不具合を拾えない。
+  // 以下は getComputedStyle の display を見て、見えている・消えているを実測する。
+  // 本物の dashboard.css は index.html が <link> で読み込んでいるので実測できる
+
+  // 6画面の切り替え。行き先の画面だけが出て、残り5画面は消えていること
+  const SWEEP_VIEWS = ["report", "ranking", "trends", "summary", "export", "backup"];
+  const viewSweep = [];
+  for (const name of SWEEP_VIEWS) {
+    location.hash = `#/${name}`;
+    renderCurrentView();
+    viewSweep.push(
+      SWEEP_VIEWS.filter((v) => getComputedStyle(document.getElementById(`view-${v}`)).display !== "none").join(",")
+    );
+  }
+  check("画面を切り替えると行き先の画面だけが表示される", viewSweep, SWEEP_VIEWS);
+  location.hash = "#/report";
+  renderCurrentView();
+
+  // 3つのモーダルの開閉。開けば見え、閉じれば消えること
+  const panelCycle = [];
+  openSharePanel({ name: "booth-2026", text: "本文", card: summaryShareCard });
+  panelCycle.push(displayOf("sharePanel") !== "none", displayOf("shareOverlay") !== "none");
+  closeSharePanel();
+  panelCycle.push(displayOf("sharePanel") === "none", displayOf("shareOverlay") === "none");
+  openAuthorPanel();
+  panelCycle.push(displayOf("authorPanel") !== "none", displayOf("authorOverlay") !== "none");
+  closeAuthorPanel();
+  panelCycle.push(displayOf("authorPanel") === "none", displayOf("authorOverlay") === "none");
+  const displayConfirm = askConfirm("表示を確かめますか?");
+  panelCycle.push(displayOf("confirmPanel") !== "none", displayOf("confirmOverlay") !== "none");
+  confirmCancelBtn.click();
+  await displayConfirm;
+  panelCycle.push(displayOf("confirmPanel") === "none", displayOf("confirmOverlay") === "none");
+  check("共有・作者情報・確認ダイアログは開けば見え閉じれば消える", panelCycle, new Array(12).fill(true));
+
+  // hidden属性が付いている要素の全数チェック。1つでも表示されていたら、
+  // その要素にクラス側の display 指定が効いてしまっている
+  const hiddenElements = [...document.querySelectorAll("[hidden]")];
+  const stillShown = hiddenElements
+    .filter((el) => getComputedStyle(el).display !== "none")
+    .map((el) => el.id || el.className || el.tagName);
+  check(`hidden属性の付いた要素は必ず消える(${hiddenElements.length}件)`, stillShown, []);
 
   document.getElementById("out").textContent =
     lines.join("\n") + `\n\n---- ${failures === 0 ? "ALL PASS" : failures + " FAILED"} (${lines.length} checks) ----`;
