@@ -396,6 +396,7 @@ check("前年同期が0円なら比率を出さない", buildSpendingTrend([
 
 // --- 描画 ---
 render();
+check("データがあれば初回案内は出さない", firstRunGuide.hidden, true);
 check("合計は収集済みのみ", document.getElementById("totalAmount").textContent, "¥4,000");
 check("合計のギフト表記", document.getElementById("totalGift").textContent, "ギフト ¥400");
 check("収集済み件数", document.getElementById("totalCount").textContent, "収集済み: 2件");
@@ -449,6 +450,14 @@ check("月はキーボードでも範囲にできる", [rangeFrom.value, rangeTo
 may.click();
 check("範囲外の年は強調されない", monthYearRows[0].classList.contains("in-range"), false);
 check("選択された月だけ強調される", monthSubRows.map(r => r.classList.contains("in-range")), [true, false, false]);
+// 背景色だけだと「押せば範囲を変えられる」ことに気付けないので、行末に印を添える
+check("範囲を選べる行に印を添える",
+  [monthYearRows[0].querySelector("td.pick .range-pick") !== null,
+   monthSubRows[0].querySelector("td.pick .range-pick") !== null], [true, true]);
+check("印は読み上げから外す(押す対象は行そのもの)",
+  monthSubRows[0].querySelector(".range-pick").getAttribute("aria-hidden"), "true");
+check("押せない日付不明の行には印を付けない",
+  monthTableBody.querySelector("tr.unknown-row .range-pick"), null);
 
 // 日付不明の行はクリックしても範囲を変えない
 monthTableBody.querySelector("tr.unknown-row").click();
@@ -510,6 +519,15 @@ check("支出推移の要約", [...trendSummary.querySelectorAll(".stat-value")]
   ["¥1,000", "¥3,000", "-¥2,000"]);
 check("月別比較は12か月分", monthlyTrendChart.querySelectorAll(".trend-month").length, 12);
 check("月別比較の棒は今年と前年", monthlyTrendChart.querySelectorAll(".trend-bar").length, 24);
+// 棒グラフにも累計グラフと同じ 0 / 50% / 最大値 の目盛を出す。
+// title属性のツールチップだけでは、ホバーできない環境で金額を読めない
+const axisTrend = buildSpendingTrend(buildResults(), 2026, 12, 2025);
+check("月別グラフに目盛を3段出す",
+  [...monthlyTrendAxis.querySelectorAll(".trend-axis-tick")].map(e => e.textContent),
+  [formatYen(axisTrend.maxMonthly), formatYen(Math.round(axisTrend.maxMonthly / 2)), "¥0"]);
+check("目盛は棒の描画域に合わせて置く",
+  [...monthlyTrendAxis.querySelectorAll(".trend-axis-tick")].map(e => e.className),
+  ["trend-axis-tick axis-top", "trend-axis-tick axis-mid", "trend-axis-tick axis-bottom"]);
 check("累計グラフは2本", cumulativeTrendChart.querySelectorAll("polyline").length, 2);
 check("今年の累計線は対象月まで", cumulativeTrendChart.querySelector("polyline.current").getAttribute("points").split(" ").length, 12);
 check("支出推移にも同じ年別集計", [...trendPeriodTableBody.querySelectorAll(".year-row")].map(row => [row.cells[1].textContent, row.cells[2].textContent]),
@@ -738,6 +756,21 @@ check("並べ替えても開いたまま", firstItemsRow().hidden, false);
 setRankingSort("amount");
 toggleShopItems(firstShopKey);
 check("もう一度押すと閉じる", firstItemsRow().hidden, true);
+
+// ▸ は小さいので、ショップ名の側を押しても開くようにする。
+// ただしショップページへのリンクは本来の遷移が優先(明細を見るつもりで飛ばされない)
+const firstShopRow = rankingTableBody.querySelector("tr.shop-row");
+firstShopRow.cells[2].click();
+check("行のどこを押しても明細が開く", firstItemsRow().hidden, false);
+firstShopRow.cells[2].click();
+check("同じ場所をもう一度押すと閉じる", firstItemsRow().hidden, true);
+const shopLinkRow = [...rankingTableBody.querySelectorAll("tr.shop-row")].find(tr => tr.cells[1].querySelector("a"));
+const shopLinkItemsRow = () =>
+  rankingTableBody.querySelector(`tr.shop-items-row[data-shop-key="${CSS.escape(shopLinkRow.dataset.shopKey)}"]`);
+const shopLink = shopLinkRow.cells[1].querySelector("a");
+shopLink.addEventListener("click", (event) => event.preventDefault(), { once: true });
+shopLink.click();
+check("ショップ名のリンクでは開閉しない", shopLinkItemsRow().hidden, true);
 
 // --- ランキングの基準の切り替え(金額編・購入数編) ---
 // 少額をたくさん買ったショップと、高額を1点だけのショップでは1位が入れ替わる
@@ -1266,6 +1299,9 @@ check("データ出力へ切り替わる",
   [document.getElementById("view-report").hidden, document.getElementById("view-export").hidden], [true, false]);
 check("メニューに現在地が出る",
   [...navDrawer.querySelectorAll(".nav-link")].map(a => a.classList.contains("current")), [false, false, false, false, true, false]);
+check("現在地は読み上げにも出す",
+  [...navDrawer.querySelectorAll(".nav-link")].map(a => a.getAttribute("aria-current")),
+  [null, null, null, null, "page", null]);
 check("画面名を見出しに添える", viewTitle.textContent, "データ出力");
 location.hash = "#/trends";
 renderCurrentView();
@@ -1277,6 +1313,21 @@ renderCurrentView();
 check("レポートへ戻る",
   [document.getElementById("view-report").hidden, document.getElementById("view-export").hidden], [false, true]);
 check("既定の画面では画面名を出さない", viewTitle.textContent, "");
+
+// 広い画面では6画面をヘッダー直下の水平タブとして常時見せる。
+// 畳んだままだとランキング・まとめ・支出推移の存在に気付けない
+applyNavLayout(true);
+check("広い画面ではナビを常時表示する",
+  [navDrawer.hidden, navDrawer.classList.contains("nav-tabs"), menuBtn.hidden, document.body.classList.contains("nav-wide")],
+  [false, true, true, true]);
+setDrawerOpen(true);
+check("水平タブでは畳めない", [navDrawer.hidden, navOverlay.hidden], [false, true]);
+check("水平タブでは開閉状態を持たない", drawerIsOpen(), false);
+
+// 狭い画面は従来どおりの引き出し
+applyNavLayout(false);
+check("狭い画面では引き出しへ戻す",
+  [navDrawer.hidden, navDrawer.classList.contains("nav-tabs"), menuBtn.hidden], [true, false, false]);
 
 menuBtn.click();
 check("メニューが開く", [navDrawer.hidden, navOverlay.hidden, menuBtn.getAttribute("aria-expanded")], [false, false, "true"]);
@@ -1335,6 +1386,20 @@ check("未収集の件数を出す", pendingBannerText.textContent,
   "未収集の注文が4件あります。この画面の内容は実際より少なくなります。");
 check("収集できる画面へ戻す導線がある", pendingBanner.querySelector("a").getAttribute("href"), "#/report");
 
+// 閉じられるのは「今出ている件数のまま」の間だけ。断り書きそのものは消さない
+pendingBannerClose.click();
+check("案内は閉じられる", pendingBanner.hidden, true);
+renderCurrentView();
+check("件数が変わらない間は閉じたまま", pendingBanner.hidden, true);
+const bannerSavedCache = state.cache;
+state.cache = { ...state.cache, b1: { v: CACHE_SCHEMA_VERSION, amount: 100, gift: 0, shipping: 0, status: "completed", date: "2026年3月2日 10:00", items: [item("何か", 100)] } };
+renderCurrentView();
+check("未収集の件数が変われば出し直す", [pendingBanner.hidden, pendingBannerText.textContent],
+  [false, "未収集の注文が3件あります。この画面の内容は実際より少なくなります。"]);
+state.cache = bannerSavedCache;
+renderCurrentView();
+check("元の件数へ戻れば閉じた状態は効かない", pendingBanner.hidden, false);
+
 // 索引が途中までなら、一覧に出ていない注文も残っている
 state.index.complete = false;
 renderCurrentView();
@@ -1350,6 +1415,20 @@ check("すべて収集済みなら出さない", pendingBanner.hidden, true);
 state.cache = savedCache;
 location.hash = "#/report";
 renderCurrentView();
+
+// --- 初回の空状態(3ステップの案内) ---
+// 何も取得していないと合計も収集状況も出せないので、始め方だけを示す
+const guideSavedIndex = state.index;
+const guideSavedCache = state.cache;
+state.index = null;
+state.cache = {};
+render();
+check("何も取得していなければ初回案内を出す", firstRunGuide.hidden, false);
+state.cache = guideSavedCache;
+render();
+check("キャッシュがあれば初回案内は引っ込める", firstRunGuide.hidden, true);
+state.index = guideSavedIndex;
+render();
 
 // --- データの引っ越し(バックアップ／復元) ---
 render();
@@ -1558,6 +1637,44 @@ const OLD = [{ id: "o1", status: "completed", date: "2025年1月1日 00:00" }];
 const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
 
 (async () => {
+  // --- 確認ダイアログ(ネイティブconfirm()の置き換え) ---
+  // 共有前とキャッシュ削除の確認。作者情報・共有カードと同じ作法にそろえ、
+  // 呼び出し側は confirm() と同じく true=実行 / false=取消 で受け取る
+  const confirmAsked = askConfirm("消しますか?\n戻せません。", "削除する");
+  check("確認ダイアログが開く",
+    [confirmPanel.hidden, confirmOverlay.hidden, confirmMessage.textContent, confirmOkBtn.textContent],
+    [false, false, "消しますか?\n戻せません。", "削除する"]);
+  check("既定の位置は取消側", document.activeElement === confirmCancelBtn, true);
+  check("確認中は後ろを操作できない", document.getElementById("view-report").inert, true);
+  confirmOkBtn.click();
+  check("実行を選ぶとtrue", await confirmAsked, true);
+  check("閉じると後ろの操作が戻る",
+    [confirmPanel.hidden, confirmOverlay.hidden, document.getElementById("view-report").inert],
+    [true, true, false]);
+
+  const confirmCancelled = askConfirm("やめますか?");
+  confirmCancelBtn.click();
+  check("やめるを選ぶとfalse", await confirmCancelled, false);
+
+  const confirmEscaped = askConfirm("Escで閉じますか?");
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+  check("Escは取消として閉じる", [await confirmEscaped, confirmPanel.hidden], [false, true]);
+
+  const confirmOverlayClosed = askConfirm("背景を押しますか?");
+  confirmOverlay.click();
+  check("背景を押しても取消", await confirmOverlayClosed, false);
+
+  // Tabは2つのボタンの間で循環する(後ろの操作へ抜けない)
+  const confirmTrapped = askConfirm("フォーカスは閉じ込めますか?");
+  confirmOkBtn.focus();
+  const tabEvent = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
+  document.dispatchEvent(tabEvent);
+  check("最後の次は先頭へ戻す",
+    [tabEvent.defaultPrevented, document.activeElement === confirmCancelBtn], [true, true]);
+  closeConfirmDialog(false);
+  check("フォーカストラップの後始末", [await confirmTrapped, confirmPanel.hidden], [false, true]);
+
+
   // 増分取得: 既知に接続でき、以前が完全なら全体として完全なまま
   state.index = { updatedAt: "x", orders: OLD, complete: true };
   let added = await commitIndex(NEW, { force: false, reachedKnown: true, finishedAllPages: false, previousComplete: true });
@@ -2039,9 +2156,46 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
     [Boolean(dashboardDoc.getElementById("shareColors")),
      Boolean(dashboardDoc.getElementById("sharePatterns"))], [true, true]);
   const scaleInput = dashboardDoc.getElementById("shareScale");
-  check("画像の形の横に拡大率を置く",
-    [scaleInput.closest(".share-shape") !== null, scaleInput.min, scaleInput.max, scaleInput.value],
-    [true, "100", "300", "100"]);
+  // 背景の作り込みは畳んでおく。既定ではプレビュー・文面・3つのボタンだけを見せる
+  const shareCustomize = dashboardDoc.getElementById("shareCustomize");
+  check("背景の指定はアコーディオンへ畳む",
+    [shareCustomize.tagName, shareCustomize.hasAttribute("open"),
+     shareCustomize.querySelector("summary").textContent.trim()],
+    ["DETAILS", false, "背景をカスタマイズ"]);
+  check("テンプレート・画像・拡大率をその中へ入れる",
+    [Boolean(shareCustomize.querySelector("#shareColors")),
+     Boolean(shareCustomize.querySelector("#sharePatterns")),
+     Boolean(shareCustomize.querySelector("#shareBgFile")),
+     Boolean(shareCustomize.querySelector("#shareScale"))], [true, true, true, true]);
+  check("拡大率の範囲は変えない", [scaleInput.min, scaleInput.max, scaleInput.value], ["100", "300", "100"]);
+  check("プレビューと文面とボタンは畳まない",
+    [dashboardDoc.getElementById("shareCanvas").closest("details"),
+     dashboardDoc.getElementById("shareText").closest("details"),
+     dashboardDoc.getElementById("shareOpenBtn").closest("details")], [null, null, null]);
+
+  // 画面幅に合わせた表示。拡張タブでは実害が薄いが、モバイル系ブラウザでは
+  // 指定が無いと980px仮想幅で描画される
+  const popupDoc = new DOMParser().parseFromString(
+    await (await fetch("../extension/popup.html")).text(), "text/html");
+  check("集計ページとポップアップにviewportを宣言",
+    [dashboardDoc.querySelector('meta[name="viewport"]').getAttribute("content"),
+     popupDoc.querySelector('meta[name="viewport"]').getAttribute("content")],
+    ["width=device-width, initial-scale=1", "width=device-width, initial-scale=1"]);
+  // 25列のヒートマップは狭い窓でセルが潰れる。注文内訳の表と同じ扱いにする
+  check("ヒートマップを横スクロールできる枠へ入れる",
+    dashboardDoc.getElementById("heatmapGrid").parentElement.className, "heatmap-scroll");
+  // ギフト表記は金額の下の補足行。横に並べると本体の額の一部に見える
+  check("ギフト表記は合計額の下に置く",
+    [dashboardDoc.querySelector(".summary-main #totalGift") === null,
+     dashboardDoc.querySelector(".summary-gift #totalGift") !== null], [true, true]);
+  check("未収集の案内に閉じるボタンを付ける",
+    dashboardDoc.getElementById("pendingBannerClose").getAttribute("aria-label"), "この案内を閉じる");
+  check("確認ダイアログを正式なモーダルとして宣言",
+    [dashboardDoc.getElementById("confirmPanel").getAttribute("role"),
+     dashboardDoc.getElementById("confirmPanel").getAttribute("aria-modal")], ["dialog", "true"]);
+  check("ナビは1組のリンクを画面幅で見せ分ける",
+    [dashboardDoc.querySelectorAll(".nav-link").length,
+     dashboardDoc.getElementById("navDrawer").parentElement.id], [6, "navBar"]);
 
   // 読み込めなかったファイルを名指しできるよう、スクリプトの一覧と対応させる
   const harnessDoc = new DOMParser().parseFromString(await (await fetch("index.html")).text(), "text/html");
@@ -2052,6 +2206,8 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   const dashboardCss = await (await fetch("../extension/dashboard.css")).text();
   check("アクセント色は変更しない", dashboardCss.includes("--accent: #fc4d50"), true);
   check("共有画像の操作をボタン単位で目立たせる", dashboardCss.includes("button.share-media-btn"), true);
+  check("ヒートマップの枠は横へ流す", dashboardCss.includes(".heatmap-scroll {"), true);
+  check("水平タブの見た目を用意する", dashboardCss.includes(".nav-drawer.nav-tabs {"), true);
   const dashboardStyle = document.createElement("style");
   dashboardStyle.textContent = dashboardCss;
   document.head.appendChild(dashboardStyle);
@@ -2082,17 +2238,24 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   check("共有ボタンの背景は黒", shareButtonStyle.backgroundColor, "rgb(0, 0, 0)");
   check("共有ボタンの文字は白", shareButtonStyle.color, "rgb(255, 255, 255)");
   check("支出推移の要約はカード配置", getComputedStyle(trendSummary).display, "grid");
-  // 背景画像の区画と文面の区画は下端をそろえる。片方だけ伸ばすと、
-  // パネルの中で2つの枠がずれて見える。配るCSSとHTMLで実測する
+  // このページの主役はメインの合計額。フッターの合計(20px)と差を付ける
+  check("メイン合計額は36px以上",
+    parseFloat(getComputedStyle(totalAmountEl).fontSize) >= 36, true);
+  // 背景の作り込みを畳んでも、開けば背景画像の区画と拡大率が使える。
+  // 畳んだ状態では中身に高さが無いことを、配るCSSとHTMLで実測する
   const shareLayoutFixture = document.createElement("div");
   shareLayoutFixture.style.width = "712px";
   shareLayoutFixture.appendChild(
-    document.importNode(dashboardDoc.querySelector(".share-controls"), true)
+    document.importNode(dashboardDoc.getElementById("shareCustomize"), true)
   );
   document.body.appendChild(shareLayoutFixture);
-  const bgBottom = shareLayoutFixture.querySelector(".share-drop").getBoundingClientRect().bottom;
-  const textBottom = shareLayoutFixture.querySelector(".share-text").getBoundingClientRect().bottom;
-  check("文面と背景画像の下端がそろう", Math.abs(bgBottom - textBottom) <= 1, true);
+  const customizeNode = shareLayoutFixture.querySelector("#shareCustomize");
+  // 畳んだ状態の高さは見出しの行だけ。開くと中身の分だけ伸びる
+  const closedHeight = customizeNode.getBoundingClientRect().height;
+  customizeNode.open = true;
+  const openedHeight = customizeNode.getBoundingClientRect().height;
+  check("畳んだ背景設定は見出しの高さしか取らない", closedHeight < 60, true);
+  check("開けば背景画像と拡大率の分だけ伸びる", openedHeight > closedHeight + 150, true);
   shareLayoutFixture.remove();
 
   const trendLineFixture = svgEl("polyline", { class: "trend-line current" });

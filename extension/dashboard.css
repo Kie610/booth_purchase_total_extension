@@ -93,6 +93,16 @@ body {
 
 /* ---- 画面切り替えのメニュー ---- */
 
+/* 広い画面では水平タブの帯になる。狭い画面では中の引き出しが position: fixed
+   なので、この枠自体は高さを持たない(帯の線も出ない) */
+.nav-bar {
+  background: #fff;
+}
+
+body.nav-wide .nav-bar {
+  border-bottom: 1px solid var(--border);
+}
+
 .nav-overlay {
   position: fixed;
   inset: 0;
@@ -149,6 +159,47 @@ body {
 
 .nav-author-btn:hover {
   background: var(--bg-soft);
+}
+
+/* ---- 水平タブ(760px以上) ----
+   広い画面では6画面すべてをヘッダー直下に並べて常時見せる。切り替えはJSが
+   .nav-tabs の付け外しで行うので、幅の条件はここに書かない
+   (メディアクエリだけで見せると、hidden属性の付いた要素をCSSで表示することになる) */
+.nav-drawer.nav-tabs {
+  position: static;
+  z-index: auto;
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  width: auto;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 0 24px;
+  border-right: 0;
+  box-shadow: none;
+}
+
+/* 6項目+作者情報を1行に収めるため、引き出しのときより一段詰める。
+   幅が足りないときは折り返す(横スクロールにすると、隠れたタブに気付けない) */
+.nav-tabs .nav-link {
+  padding: 10px;
+  border-bottom: 3px solid transparent;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.nav-tabs .nav-link.current {
+  box-shadow: none;
+  border-bottom-color: var(--accent);
+}
+
+.nav-tabs .nav-author-btn {
+  width: auto;
+  margin: 0 0 0 auto;
+  padding: 10px;
+  border-top: 0;
+  font-size: 13px;
+  color: var(--fg-muted);
 }
 
 /* ---- 作者情報 ---- */
@@ -567,6 +618,81 @@ button.share-btn:hover:not(:disabled) {
   font-weight: 700;
 }
 
+/* 閉じるボタンは案内の右上。案内の文章に重ならないよう右に余白を確保する */
+.pending-banner {
+  position: relative;
+  padding-right: 44px;
+}
+
+button.banner-close {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  font-size: 18px;
+  color: inherit;
+  opacity: 0.7;
+}
+
+button.banner-close:hover:not(:disabled) {
+  color: inherit;
+  opacity: 1;
+}
+
+/* ---- はじめての方への案内 ---- */
+
+.first-run {
+  margin: 0 0 20px;
+  padding: 18px 20px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--bg-soft);
+}
+
+.first-run h2 {
+  margin: 0 0 10px;
+  font-size: 15px;
+}
+
+.first-run-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.first-run-steps li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.first-run-no {
+  color: var(--accent);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.first-run-body {
+  display: block;
+  font-size: 13px;
+}
+
+.first-run-body .hint {
+  display: block;
+  margin: 4px 0 0;
+}
+
+.first-run > .hint {
+  margin-bottom: 0;
+}
+
 /* ---- 結果 ---- */
 
 .summary {
@@ -584,9 +710,28 @@ button.share-btn:hover:not(:disabled) {
   margin-right: 12px;
 }
 
+/* このページの主役。フッターの合計(20px)と差を付けて、最初に目に入るようにする */
 .summary-value {
-  font-size: 28px;
+  font-size: 38px;
   font-weight: 700;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ギフト分は金額の下の補足行。横に並べると本体の額の一部に見える */
+.summary-gift {
+  margin-top: 2px;
+  font-size: 13px;
+}
+
+/* ギフトが無い注文しか無ければ中身が空になる。空のspanは消えるので、
+   囲みの高さも0になり、余分な行は残らない */
+.summary-gift .gift {
+  margin-right: 0;
+}
+
+.summary-gift .gift:empty {
+  display: none;
 }
 
 .summary-sub {
@@ -724,7 +869,46 @@ button.share-btn:hover:not(:disabled) {
   background: #aeb4bd;
 }
 
+/* 縦軸と棒グラフを横に並べる。軸の目盛は棒の描画域(上余白14px〜188px)へ
+   合わせるため、位置を決め打ちする */
+.trend-chart-frame {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.trend-axis {
+  position: relative;
+  flex: 0 0 auto;
+  width: 64px;
+  height: 230px;
+}
+
+.trend-axis-tick {
+  position: absolute;
+  right: 0;
+  transform: translateY(-50%);
+  color: var(--fg-muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.trend-axis-tick.axis-top {
+  top: 14px;
+}
+
+.trend-axis-tick.axis-mid {
+  top: 108px;
+}
+
+.trend-axis-tick.axis-bottom {
+  top: 202px;
+}
+
 .trend-bars {
+  flex: 1 1 auto;
+  min-width: 0;
   display: grid;
   grid-template-columns: repeat(12, minmax(24px, 1fr));
   gap: 5px;
@@ -815,12 +999,19 @@ button.share-btn:hover:not(:disabled) {
   margin-bottom: 12px;
 }
 
+/* 25列あるので、狭い窓ではセルが潰れて読めなくなる。注文内訳の表と同じく
+   横スクロールできる枠に入れ、最低幅を割ったらスクロールさせる */
+.heatmap-scroll {
+  overflow-x: auto;
+}
+
 /* 左端が曜日の見出し、残り24列が時間帯 */
 .heatmap {
   display: grid;
-  grid-template-columns: 28px repeat(24, minmax(0, 1fr));
+  grid-template-columns: 28px repeat(24, minmax(16px, 1fr));
   gap: 2px;
   align-items: center;
+  min-width: 480px;
 }
 
 .heatmap-corner,
@@ -869,6 +1060,11 @@ button.share-btn:hover:not(:disabled) {
   .trend-bars {
     grid-template-columns: repeat(12, minmax(28px, 1fr));
   }
+
+  /* 目盛の桁数より、棒そのものの幅を優先する */
+  .trend-axis {
+    width: 46px;
+  }
 }
 
 /* ---- アコーディオン ---- */
@@ -882,24 +1078,28 @@ button.share-btn:hover:not(:disabled) {
   display: none;
 }
 
-.accordion > summary h2 {
+.accordion > summary h2,
+.accordion > summary h3 {
   display: flex;
   align-items: center;
   gap: 6px;
   margin: 0;
 }
 
-.accordion > summary h2::before {
+.accordion > summary h2::before,
+.accordion > summary h3::before {
   content: "▸";
   color: var(--fg-muted);
   font-weight: 400;
 }
 
-.accordion[open] > summary h2::before {
+.accordion[open] > summary h2::before,
+.accordion[open] > summary h3::before {
   content: "▾";
 }
 
-.accordion > summary:hover h2 {
+.accordion > summary:hover h2,
+.accordion > summary:hover h3 {
   color: var(--accent-text);
 }
 
@@ -983,6 +1183,47 @@ button.share-btn:hover:not(:disabled) {
 .month-table .unknown-row {
   cursor: default;
   color: var(--fg-muted);
+}
+
+/* 行をクリックすると収集範囲になることの手掛かり。押せるのは行そのものなので、
+   この印はラジオボタン風の表示だけにして、押す場所を増やさない */
+.month-table th.pick,
+.month-table td.pick {
+  width: 74px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.month-table .range-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  color: var(--fg-muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.month-table .range-pick::before {
+  content: "○";
+}
+
+.month-table tbody tr:hover .range-pick {
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+/* 範囲に入っている行。背景色(.in-range)だけでは範囲の端が分かりにくい */
+.month-table .in-range .range-pick {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.month-table .in-range .range-pick::before {
+  content: "●";
 }
 
 .index-status {
@@ -1247,6 +1488,28 @@ button.icon-btn:hover:not(:disabled) {
   margin-bottom: 16px;
 }
 
+/* 背景の作り込みは畳んでおく寄り道。既定ではプレビュー・文面・ボタンだけを見せる */
+.share-customize {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.share-customize > summary h3 {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--fg-muted);
+}
+
+.share-customize > .share-template-box {
+  margin-top: 14px;
+}
+
+.share-customize .share-scale-field {
+  margin-top: 14px;
+  max-width: 320px;
+}
+
 .share-scale-field input[type="range"] {
   display: block;
   width: 100%;
@@ -1443,6 +1706,51 @@ button.share-media-btn:hover:not(:disabled) {
   background: #ffe3e3;
 }
 
+/* ---- 確認ダイアログ ---- */
+
+/* 共有カード・作者情報より手前。共有の前の確認は、共有パネルを開く前に出る */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(0, 0, 0, 0.42);
+}
+
+.confirm-panel {
+  position: fixed;
+  z-index: 41;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(480px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  padding: 20px 24px 22px;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.24);
+}
+
+.confirm-panel-head h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+/* 確認文はネイティブのconfirm()と同じく改行で区切って読ませる */
+.confirm-message {
+  margin: 12px 0 0;
+  font-size: 13px;
+  white-space: pre-line;
+}
+
+.confirm-panel-foot {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 20px;
+}
+
 .restore-field {
   font-size: 13px;
   font-weight: 700;
@@ -1539,22 +1847,37 @@ button.segmented-btn.current {
   margin-top: 12px;
 }
 
+/* ▸ を押せる印にした分だけ順位の列を広げる(78pxだと2px溢れる) */
 .ranking-table th.rank,
 .ranking-table td.rank {
-  width: 78px;
+  width: 84px;
   text-align: center;
 }
 
-/* 順位をクリックすると買った商品が開く */
+/* 行のどこを押しても買った商品が開く(ショップ名のリンクだけは遷移が優先) */
 .ranking-table td.rank {
   cursor: pointer;
   white-space: nowrap;
 }
 
+/* ▸ が小さく淡いと開けることに気付けない。枠と色を付けて押せる印にする */
 .ranking-table td.rank .toggle {
   margin-left: 4px;
-  color: var(--fg-muted);
-  font-size: 11px;
+  padding: 0 3px;
+  border-radius: 4px;
+  background: var(--bg-hover);
+  color: var(--accent-text);
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+tr.shop-row {
+  cursor: pointer;
+}
+
+tr.shop-row:hover .toggle {
+  background: var(--accent);
+  color: #fff;
 }
 
 /* 編を切り替えると太字になる行が入れ替わり、中身の幅で決まる列は少し動く。
@@ -1577,7 +1900,7 @@ button.segmented-btn.current {
 /* .data-table td の余白より詳しく書かないと効かない。
    順位の列ぶん左を空けて、どのショップの中身かを見た目でつなぐ */
 .data-table td.shop-items {
-  padding: 6px 16px 14px 78px;
+  padding: 6px 16px 14px 84px;
   background: var(--bg-soft);
 }
 

@@ -28,13 +28,38 @@ const state = { index: null, cache: {} };
 
 // ---- イベント配線 ------------------------------------------------------
 
-// 画面の切り替え。移動しても同じJSコンテキストのままなので、収集は止まらない
+// 画面の切り替え。移動しても同じJSコンテキストのままなので、収集は止まらない。
+// 広い画面ではヘッダー直下の水平タブ、狭い画面では従来の引き出しにする
+const wideNavMedia = window.matchMedia(`(min-width: ${WIDE_NAV_MIN_WIDTH}px)`);
+applyNavLayout(wideNavMedia.matches);
+wideNavMedia.addEventListener("change", (event) => applyNavLayout(event.matches));
+// 拡張のページは幅の変わり方が環境によって違い、メディアクエリの change が
+// 届かないことがある。窓の大きさが変わったときにも合わせ直す(同じ形なら何も変わらない)
+window.addEventListener("resize", () => applyNavLayout(wideNavMedia.matches));
+
 menuBtn.addEventListener("click", () => setDrawerOpen(!drawerIsOpen()));
 navOverlay.addEventListener("click", () => setDrawerOpen(false));
 navDrawer.addEventListener("click", (event) => {
   // リンクの既定動作でハッシュが変わり、hashchange 側で描画が切り替わる
   if (event.target.closest(".nav-link[data-view]")) setDrawerOpen(false);
 });
+// 未収集の案内は、件数が変わらない間だけ畳める(断り書き自体は消さない)
+pendingBannerClose.addEventListener("click", dismissPendingBanner);
+
+// 確認ダイアログ。作者情報・共有カードと同じ作法(背景inert・Escape・フォーカストラップ)
+confirmOkBtn.addEventListener("click", () => closeConfirmDialog(true));
+confirmCancelBtn.addEventListener("click", () => closeConfirmDialog(false));
+confirmOverlay.addEventListener("click", () => closeConfirmDialog(false));
+document.addEventListener("keydown", (event) => {
+  if (confirmPanel.hidden) return;
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeConfirmDialog(false);
+    return;
+  }
+  trapConfirmPanelFocus(event);
+});
+
 authorBtn.addEventListener("click", openAuthorPanel);
 authorCloseBtn.addEventListener("click", closeAuthorPanel);
 authorOverlay.addEventListener("click", closeAuthorPanel);
@@ -174,17 +199,17 @@ function onRangeChanged() {
 shareBtn.addEventListener("click", async () => {
   if (running) return;
   if (shareMode() === "ranking") {
-    shareRanking();
+    await shareRanking();
     return;
   }
   if (shareMode() === "summary") {
-    shareYearSummary();
+    await shareYearSummary();
     return;
   }
   if (!shareStats) return;
 
   if (!canShareTotal(shareStats)) {
-    if (!confirm(shareConfirmMessage(shareStats))) return;
+    if (!(await askConfirm(shareConfirmMessage(shareStats), "共有する"))) return;
     if (shareStats.yearPendingCount > 0) {
       const { aborted, failed } = await runTask((signal) =>
         collectAmounts(ordersInYear(shareStats.year), false, signal)
@@ -212,10 +237,10 @@ shareBtn.addEventListener("click", async () => {
 
 // ランキングは全期間が対象なので、合計のように「今年の分だけ」へ逃がせない。
 // 順位がずれうるときは、そのまま出すかどうかを本人に決めてもらう
-function shareRanking() {
+async function shareRanking() {
   if (!rankingShareStats || rankingShareStats.rows.length === 0) return;
   if (rankingShareIssues(rankingShareStats).length > 0) {
-    if (!confirm(rankingShareConfirmMessage(rankingShareStats))) return;
+    if (!(await askConfirm(rankingShareConfirmMessage(rankingShareStats), "共有する"))) return;
   }
   const hide = rankingHideNumbers.checked;
   openSharePanel({
@@ -226,10 +251,10 @@ function shareRanking() {
 }
 
 // まとめもランキングと同じで、期間を切り出しても数字は正しくならない
-function shareYearSummary() {
+async function shareYearSummary() {
   if (!summaryShareStats || summaryShareStats.orderCount === 0) return;
   if (summaryShareIssues(summaryShareStats).length > 0) {
-    if (!confirm(summaryShareConfirmMessage(summaryShareStats))) return;
+    if (!(await askConfirm(summaryShareConfirmMessage(summaryShareStats), "共有する"))) return;
   }
   openSharePanel({
     name: `booth-${summaryShareStats.year}`,
@@ -413,11 +438,20 @@ trendBaseYear.addEventListener("change", () =>
   setTrendYears(trendYear.value, trendBaseYear.value)
 );
 
-// 順位をクリックすると、そのショップで買った商品を開く
+// 順位や行のどこを押しても、そのショップで買った商品を開く。
+// 順位横の ▸ だけが対象だと小さすぎて開けることに気付けないため、行全体を効かせる。
+// ただしショップ名のリンクは本来の遷移(ショップページ)を優先する。
+// 明細を見るつもりで踏んだ人が別ページへ飛ばされる方が困る
 for (const tbody of [rankingTableBody, summaryTopShopsBody]) {
   tbody.addEventListener("click", (event) => {
     const button = event.target.closest("button.rank-toggle");
-    if (button) toggleShopItems(button.closest("tr.shop-row").dataset.shopKey);
+    if (button) {
+      toggleShopItems(button.closest("tr.shop-row").dataset.shopKey);
+      return;
+    }
+    if (event.target.closest("a")) return;
+    const row = event.target.closest("tr.shop-row");
+    if (row) toggleShopItems(row.dataset.shopKey);
   });
 }
 
@@ -453,7 +487,11 @@ clearIndexBtn.addEventListener("click", async () => {
   if (running) return;
   const count = state.index ? state.index.orders.length : 0;
   if (count === 0) return;
-  if (!confirm(`注文履歴のキャッシュ(${count}件)を削除します。\n収集した金額は残ります。よろしいですか?`)) return;
+  const ok = await askConfirm(
+    `注文履歴のキャッシュ(${count}件)を削除します。\n収集した金額は残ります。よろしいですか?`,
+    "削除する"
+  );
+  if (!ok) return;
   await clearIndexData();
   showNotice(`注文履歴のキャッシュを削除しました(${count}件)。`);
 });
@@ -462,7 +500,11 @@ clearAmountsBtn.addEventListener("click", async () => {
   if (running) return;
   const count = Object.keys(state.cache).length;
   if (count === 0) return;
-  if (!confirm(`収集した金額のキャッシュ(${count}件)を削除します。\n注文履歴は残ります。よろしいですか?`)) return;
+  const ok = await askConfirm(
+    `収集した金額のキャッシュ(${count}件)を削除します。\n注文履歴は残ります。よろしいですか?`,
+    "削除する"
+  );
+  if (!ok) return;
   await clearAmountsData();
   showNotice(`収集した金額のキャッシュを削除しました(${count}件)。`);
 });

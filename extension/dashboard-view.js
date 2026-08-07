@@ -80,6 +80,14 @@ const errorBox = document.getElementById("errorBox");
 const menuBtn = document.getElementById("menuBtn");
 const navDrawer = document.getElementById("navDrawer");
 const navOverlay = document.getElementById("navOverlay");
+const firstRunGuide = document.getElementById("firstRunGuide");
+const monthlyTrendAxis = document.getElementById("monthlyTrendAxis");
+const pendingBannerClose = document.getElementById("pendingBannerClose");
+const confirmOverlay = document.getElementById("confirmOverlay");
+const confirmPanel = document.getElementById("confirmPanel");
+const confirmMessage = document.getElementById("confirmMessage");
+const confirmOkBtn = document.getElementById("confirmOkBtn");
+const confirmCancelBtn = document.getElementById("confirmCancelBtn");
 const authorBtn = document.getElementById("authorBtn");
 const authorOverlay = document.getElementById("authorOverlay");
 const authorPanel = document.getElementById("authorPanel");
@@ -173,7 +181,14 @@ function renderCurrentView() {
     document.getElementById(`view-${name}`).hidden = name !== current;
   }
   navDrawer.querySelectorAll(".nav-link").forEach((link) => {
-    link.classList.toggle("current", link.dataset.view === current);
+    const on = link.dataset.view === current;
+    link.classList.toggle("current", on);
+    // 水平タブでは色と下線しか手掛かりが無いので、読み上げにも現在地を出す
+    if (on) {
+      link.setAttribute("aria-current", "page");
+    } else {
+      link.removeAttribute("aria-current");
+    }
   });
   viewTitle.textContent = VIEW_TITLES[current];
   renderPendingBanner(current);
@@ -187,6 +202,14 @@ function renderCurrentView() {
 // 実際より少なくなる。数字だけを見せて黙っていると、それを正しい合計だと
 // 思わせてしまうので、足りないことと収集する場所を伝える。
 // 画面を増やしたときも自動で付くよう、区画の外に1つだけ置いてある
+// 閉じた案内の内容。件数や理由が変われば「別の案内」として出し直す。
+// ストレージへは書かない(タブを開き直せばまた出る)
+let dismissedPendingSignature = null;
+
+function pendingBannerSignature(pending, incomplete) {
+  return `${pending}/${incomplete ? 1 : 0}`;
+}
+
 function renderPendingBanner(current) {
   if (current === DEFAULT_VIEW) {
     pendingBanner.hidden = true;
@@ -194,7 +217,14 @@ function renderPendingBanner(current) {
   }
   const pending = buildResults().filter((r) => needsCollect(state.cache[r.id])).length;
   const incomplete = Boolean(state.index) && !indexIsComplete(state.index);
-  pendingBanner.hidden = pending === 0 && !incomplete;
+  const signature = pendingBannerSignature(pending, incomplete);
+  // 閉じたときと内容が変わったら、閉じた記録ごと捨てて出し直す。
+  // 記録を残すと、いったん収集して戻ったときにまた黙ってしまう
+  if (dismissedPendingSignature !== null && dismissedPendingSignature !== signature) {
+    dismissedPendingSignature = null;
+  }
+  pendingBanner.hidden =
+    (pending === 0 && !incomplete) || dismissedPendingSignature === signature;
   if (pendingBanner.hidden) return;
 
   const reasons = [];
@@ -205,7 +235,42 @@ function renderPendingBanner(current) {
     `${reasons.join("。")}。この画面の内容は実際より少なくなります。`;
 }
 
+// 断り書きそのものは消さない。いま出ている件数のままの間だけ畳む
+function dismissPendingBanner() {
+  const pending = buildResults().filter((r) => needsCollect(state.cache[r.id])).length;
+  const incomplete = Boolean(state.index) && !indexIsComplete(state.index);
+  dismissedPendingSignature = pendingBannerSignature(pending, incomplete);
+  pendingBanner.hidden = true;
+}
+
+// ---- ナビゲーションの形 ------------------------------------------------
+//
+// 広い画面ではドロワーに畳まず、ヘッダー直下の水平タブとして常時見せる。
+// 畳んだままだとランキング・まとめ・支出推移の存在に気付けないため。
+// 境目は760px。既存の狭幅レイアウト切り替えは620pxだが、6項目のタブは
+// 620px幅では1行に収まらず折り返してしまう(1項目あたり約110〜130px必要)。
+// 620〜760pxは従来どおりドロワーにし、620px以下の詰めたレイアウトとも矛盾させない。
+const WIDE_NAV_MIN_WIDTH = 760;
+let navIsWide = false;
+// 狭い画面での引き出しの開閉。幅が変わっても、狭いままなら開けたものは開けておく
+let drawerOpen = false;
+
+// 画面幅ごとの切り替え。DOMは1組のまま、見せ方と開閉の扱いだけを変える
+function applyNavLayout(wide) {
+  navIsWide = wide;
+  document.body.classList.toggle("nav-wide", wide);
+  navDrawer.classList.toggle("nav-tabs", wide);
+  // 常時出ている状態では開閉ボタンに意味が無い
+  menuBtn.hidden = wide;
+  menuBtn.setAttribute("aria-expanded", String(!wide && drawerOpen));
+  navOverlay.hidden = wide || !drawerOpen;
+  navDrawer.hidden = !wide && !drawerOpen;
+}
+
 function setDrawerOpen(open, returnFocus = true) {
+  // 水平タブのときは畳まない(閉じると行き先が消えてしまう)
+  if (navIsWide) return;
+  drawerOpen = open;
   navDrawer.hidden = !open;
   navOverlay.hidden = !open;
   menuBtn.setAttribute("aria-expanded", String(open));
@@ -218,7 +283,81 @@ function setDrawerOpen(open, returnFocus = true) {
 }
 
 function drawerIsOpen() {
-  return !navDrawer.hidden;
+  return !navIsWide && !navDrawer.hidden;
+}
+
+// ---- 確認ダイアログ ----------------------------------------------------
+//
+// 取り消せない操作の前に出す確認。ネイティブの confirm() は見た目も作法も
+// 作者情報・共有カードのモーダルと揃わないので、同じ形で作る。
+// 呼び出し側が confirm() と同じように書けるよう Promise<boolean> を返す
+// (true=実行してよい / false=やめる)。
+
+let confirmResolve = null;
+let confirmReturnFocus = null;
+
+function confirmModalBackgroundElements() {
+  return Array.from(document.body.children).filter(
+    (element) =>
+      element !== confirmOverlay && element !== confirmPanel && element.tagName !== "SCRIPT"
+  );
+}
+
+function setConfirmModalBackgroundInert(inert) {
+  for (const element of confirmModalBackgroundElements()) element.inert = inert;
+  document.body.classList.toggle("modal-open", inert);
+}
+
+function confirmPanelFocusableElements() {
+  return Array.from(confirmPanel.querySelectorAll("button:not([disabled])")).filter(
+    (element) =>
+      element.getClientRects().length > 0 || document.body.dataset.noAutoInit !== undefined
+  );
+}
+
+function trapConfirmPanelFocus(event) {
+  if (event.key !== "Tab" || confirmPanel.hidden) return;
+  const focusable = confirmPanelFocusableElements();
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (!first || !last) return;
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
+function askConfirm(message, okLabel = "実行する") {
+  // 二重に開くと、先の確認の答えが宙に浮く。開いている間は取消として閉じる
+  if (!confirmPanel.hidden) closeConfirmDialog(false);
+  confirmReturnFocus = document.activeElement;
+  confirmMessage.textContent = message;
+  confirmOkBtn.textContent = okLabel;
+  confirmOverlay.hidden = false;
+  confirmPanel.hidden = false;
+  setConfirmModalBackgroundInert(true);
+  // 既定の位置は「やめる」側。Enterの連打で消してしまわないようにする
+  confirmCancelBtn.focus();
+  return new Promise((resolve) => {
+    confirmResolve = resolve;
+  });
+}
+
+function closeConfirmDialog(result) {
+  if (confirmPanel.hidden) return;
+  confirmOverlay.hidden = true;
+  confirmPanel.hidden = true;
+  setConfirmModalBackgroundInert(false);
+  if (confirmReturnFocus && typeof confirmReturnFocus.focus === "function") {
+    confirmReturnFocus.focus();
+  }
+  confirmReturnFocus = null;
+  const resolve = confirmResolve;
+  confirmResolve = null;
+  if (resolve) resolve(result);
 }
 
 // 作者情報ダイアログの表示は dashboard-author-view.js に分離。
@@ -385,6 +524,7 @@ function setProgress(text, ratio) {
 // ---- 描画 --------------------------------------------------------------
 
 function render() {
+  renderFirstRunGuide();
   renderIndexStatus();
   renderMonthArea();
   renderResult();
@@ -398,6 +538,13 @@ function render() {
   // 出し分けと共有ボタンは上の描画結果に依るので最後に決める。
   // renderCurrentView が共有ボタンまで更新するので、ここで呼ぶのは1回でよい
   renderCurrentView();
+}
+
+// 何も取得していない初回だけ、始め方を3段階で示す。索引かキャッシュが
+// 1件でもあれば、合計や収集状況の方が知りたいものなので引っ込める
+function renderFirstRunGuide() {
+  const started = Boolean(state.index) || Object.keys(state.cache).length > 0;
+  firstRunGuide.hidden = started;
 }
 
 // ランキング・まとめ・支出推移の表示は dashboard-insights-view.js に分離。
@@ -559,7 +706,7 @@ function renderMonthArea() {
     (year, expanded) => {
       // 日付不明の年はまとめようがないので、折りたたまずに1行だけ出す
       if (year.key === null) return statRow(year, { className: "unknown-row" });
-      const row = statRow(year, { className: "year-row", toggle: true, expanded });
+      const row = statRow(year, { className: "year-row", toggle: true, expanded, pick: true });
       // 年をクリックしたときに設定する範囲(その年に存在する月の最古〜最新)
       row.dataset.rangeFrom = year.months[year.months.length - 1].key;
       row.dataset.rangeTo = year.months[0].key;
@@ -569,7 +716,7 @@ function renderMonthArea() {
     },
     (month, year) => {
       if (year.key === null) return null;
-      const row = statRow(month, { className: "month-row", indent: true });
+      const row = statRow(month, { className: "month-row", indent: true, pick: true });
       row.dataset.monthKey = month.key;
       row.tabIndex = 0;
       row.setAttribute("aria-label", `${month.label}を収集範囲に設定`);
@@ -611,8 +758,11 @@ function renderMonthArea() {
   }
 }
 
-// 月別テーブルの1行(年・月・日付不明で共通)
-function statRow(stat, { className, toggle, expanded, indent }) {
+// 月別テーブルの1行(年・月・日付不明で共通)。
+// 行をクリックすると収集範囲になる行には、右端に「選択」の印を添える。
+// 範囲に入っている行の背景色(.in-range)だけだと、押せば範囲を変えられることに
+// 気付きにくいため。印そのものは飾りなので、押す対象は今までどおり行のまま
+function statRow(stat, { className, toggle, expanded, indent, pick }) {
   const tr = el("tr", className);
   if (stat.pending > 0) tr.classList.add("has-pending");
   tr.appendChild(
@@ -621,6 +771,13 @@ function statRow(stat, { className, toggle, expanded, indent }) {
   tr.appendChild(td(stat.count, "num"));
   tr.appendChild(td(stat.collected, "num"));
   tr.appendChild(td(stat.pending > 0 ? stat.pending : "—", "num"));
+  const pickCell = td("", "pick");
+  if (pick) {
+    const mark = el("span", "range-pick", "選択");
+    mark.setAttribute("aria-hidden", "true");
+    pickCell.appendChild(mark);
+  }
+  tr.appendChild(pickCell);
   return tr;
 }
 

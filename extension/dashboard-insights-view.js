@@ -290,6 +290,24 @@ function barHeight(amount, max) {
   return Math.max(3, (amount / max) * 100);
 }
 
+// 棒グラフの縦軸。累計グラフ(renderCumulativeChart)と同じく 0 / 50% / 最大値 の
+// 3段だけを出す。title属性のツールチップはホバーできない環境では読めないため、
+// 目盛が無いと棒の高さから金額を推し量る手段がまったく無くなる。
+// 位置はCSS側のクラス(.axis-top / .axis-mid / .axis-bottom)で棒の描画域に合わせる
+function renderMonthlyTrendAxis(max) {
+  monthlyTrendAxis.innerHTML = "";
+  const ceiling = max > 0 ? max : 0;
+  for (const [className, ratio] of [
+    ["axis-top", 1],
+    ["axis-mid", 0.5],
+    ["axis-bottom", 0],
+  ]) {
+    monthlyTrendAxis.appendChild(
+      el("span", `trend-axis-tick ${className}`, formatYen(Math.round(ceiling * ratio)))
+    );
+  }
+}
+
 function svgEl(tag, attributes, text) {
   const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
   for (const [name, value] of Object.entries(attributes || {})) {
@@ -400,6 +418,7 @@ function renderSpendingTrends(now = new Date()) {
   trendsArea.hidden = valid.length === 0;
   if (valid.length === 0) {
     trendSummary.innerHTML = "";
+    monthlyTrendAxis.innerHTML = "";
     monthlyTrendChart.innerHTML = "";
     cumulativeTrendChart.innerHTML = "";
     trendPeriodTableBody.innerHTML = "";
@@ -453,6 +472,7 @@ function renderSpendingTrends(now = new Date()) {
     statCard(`${trend.baseYear}年との差`, differenceText, rateText, differenceClass)
   );
 
+  renderMonthlyTrendAxis(trend.maxMonthly);
   monthlyTrendChart.innerHTML = "";
   monthlyTrendChart.setAttribute(
     "aria-label",

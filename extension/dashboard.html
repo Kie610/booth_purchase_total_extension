@@ -2,6 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>BOOTHお買いものレポート</title>
 <link rel="stylesheet" href="dashboard.css">
 </head>
@@ -16,15 +17,19 @@
   </header>
 
   <div id="navOverlay" class="nav-overlay" hidden></div>
-  <nav id="navDrawer" class="nav-drawer" aria-label="画面の切り替え" hidden>
-    <a class="nav-link" href="#/report" data-view="report">お買いものレポート</a>
-    <a class="nav-link" href="#/ranking" data-view="ranking">推し作者ランキング</a>
-    <a class="nav-link" href="#/trends" data-view="trends">支出推移・前年比較</a>
-    <a class="nav-link" href="#/summary" data-view="summary">今年のまとめ</a>
-    <a class="nav-link" href="#/export" data-view="export">データ出力</a>
-    <a class="nav-link" href="#/backup" data-view="backup">データの引っ越し</a>
-    <button type="button" id="authorBtn" class="nav-author-btn">作者について</button>
-  </nav>
+  <!-- 広い画面ではヘッダー直下の水平タブ、狭い画面では引き出しとして同じ要素を使う。
+       リンクを2組に分けると、現在地の反映やフォーカス順が画面幅ごとに食い違う -->
+  <div id="navBar" class="nav-bar">
+    <nav id="navDrawer" class="nav-drawer" aria-label="画面の切り替え" hidden>
+      <a class="nav-link" href="#/report" data-view="report">お買いものレポート</a>
+      <a class="nav-link" href="#/ranking" data-view="ranking">推し作者ランキング</a>
+      <a class="nav-link" href="#/trends" data-view="trends">支出推移・前年比較</a>
+      <a class="nav-link" href="#/summary" data-view="summary">今年のまとめ</a>
+      <a class="nav-link" href="#/export" data-view="export">データ出力</a>
+      <a class="nav-link" href="#/backup" data-view="backup">データの引っ越し</a>
+      <button type="button" id="authorBtn" class="nav-author-btn">作者について</button>
+    </nav>
+  </div>
 
   <div id="authorOverlay" class="author-overlay" hidden></div>
   <section id="authorPanel" class="author-panel" role="dialog" aria-modal="true" aria-labelledby="authorPanelTitle" hidden>
@@ -59,7 +64,9 @@
          収集はレポート画面でしか行えないので、そこへ戻る導線も添える -->
     <!-- .notice は white-space: pre-line なので、改行を入れるとそこで行が分かれる。
          案内とリンクは続けて読ませたいので同じ行に書く -->
-    <div id="pendingBanner" class="notice" role="status" aria-live="polite" hidden><span id="pendingBannerText"></span><a href="#/report">お買いものレポートで収集する</a></div>
+    <!-- 閉じられるのは「今出ている件数のまま」の間だけ。未収集の件数が変われば
+         また出す(閉じた状態は保存しないので、開き直しても再表示される) -->
+    <div id="pendingBanner" class="notice pending-banner" role="status" aria-live="polite" hidden><span id="pendingBannerText"></span><a href="#/report">お買いものレポートで収集する</a><button type="button" id="pendingBannerClose" class="icon-btn banner-close" aria-label="この案内を閉じる">×</button></div>
 
    <div class="view" id="view-report">
     <p class="lead">
@@ -69,14 +76,46 @@
       収集の実行中でもメニューから画面を切り替えられます(処理は止まりません)。
     </p>
 
+    <!-- まだ何も取得していない初回は、どこから始めるのかを3段階で示す。
+         収集していない状態では合計も内訳も出せないので、この案内だけを残す -->
+    <section id="firstRunGuide" class="first-run" hidden>
+      <h2>はじめての方へ（3ステップ）</h2>
+      <ol class="first-run-steps">
+        <li>
+          <span class="first-run-no">①</span>
+          <span class="first-run-body">
+            <b>BOOTHへログインする</b>
+            <span class="hint"><a href="https://accounts.booth.pm/orders" target="_blank" rel="noopener">accounts.booth.pm</a> を開いて、購入履歴が見える状態にします。</span>
+          </span>
+        </li>
+        <li>
+          <span class="first-run-no">②</span>
+          <span class="first-run-body">
+            <b>「一括で集計を実行」を押す</b>
+            <span class="hint">注文履歴と金額を続けて取得します。取得中もこのタブを開いたまま、他のタブは自由に操作できます。</span>
+          </span>
+        </li>
+        <li>
+          <span class="first-run-no">③</span>
+          <span class="first-run-body">
+            <b>レポート・ランキングを見る</b>
+            <span class="hint">合計額のほか、推し作者ランキング・支出推移・今年のまとめを画面の切り替えから開けます。</span>
+          </span>
+        </li>
+      </ol>
+      <p class="hint">取得できなかった注文があると、表示される数字は実際より少なくなります。その場合は画面上に必ず断りを出します。</p>
+    </section>
+
     <!-- 年別・月別は合計額の内訳なので、離して置くと見比べられない。
          同じ枠に入れ、既定では畳んでおく -->
     <section id="summarySection" class="summary" hidden>
       <div class="summary-main">
         <span class="summary-label">収集済みの合計額</span>
-        <span class="gift" id="totalGift"></span>
         <span class="summary-value" id="totalAmount"></span>
       </div>
+      <!-- ギフト分は支払額の一部。金額の横に並べると本体の額と混ざって見えるので、
+           フッターと同じく金額の下の補足行に置く -->
+      <div class="summary-gift"><span class="gift" id="totalGift"></span></div>
       <div class="summary-sub">
         <span id="totalCount"></span>
         <span id="pendingCount"></span>
@@ -169,13 +208,16 @@
 
         <table class="data-table month-table">
           <thead>
-            <tr><th>期間</th><th class="num">注文数</th><th class="num">収集済み</th><th class="num">未収集</th></tr>
+            <!-- 最後の列は「範囲に入っているか」を示すだけの印。読み上げでは
+                 行のaria-labelが範囲設定を説明するので、見出しは補助的に置く -->
+            <tr><th>期間</th><th class="num">注文数</th><th class="num">収集済み</th><th class="num">未収集</th><th class="pick">範囲</th></tr>
           </thead>
           <tbody id="monthTableBody"></tbody>
         </table>
         <p class="hint">
           年の行の ▸ をクリックすると月別を開閉できます。
           年の行をクリックするとその年全体が、月の行をクリックするとその月が範囲に設定されます。
+          右端の「選択」が塗られている行が、いま収集する範囲です。
         </p>
 
         <p id="unknownArea" class="unknown-area" hidden><span id="unknownCount"></span></p>
@@ -320,7 +362,12 @@
                <span><i class="legend-swatch previous"></i><span id="trendPreviousYearLabel"></span></span>
              </div>
            </div>
-           <div id="monthlyTrendChart" class="trend-bars" role="img"></div>
+           <!-- 目盛はホバーできない環境でも金額を読めるようにするためのもの。
+                累計グラフと同じく 0 / 50% / 最大値 の3本を出す -->
+           <div class="trend-chart-frame">
+             <div class="trend-axis" id="monthlyTrendAxis" aria-hidden="true"></div>
+             <div id="monthlyTrendChart" class="trend-bars" role="img"></div>
+           </div>
            <p class="hint">今年は今月まで、前年は12月までを表示します。上の前年差は同じ月までの金額で比較します。</p>
          </section>
 
@@ -357,7 +404,11 @@
            <div id="heatmapEmpty" class="empty-note" hidden>
              選んだ期間に、曜日と時刻の分かる注文がありません。
            </div>
-           <div id="heatmapGrid" class="heatmap" role="img"></div>
+           <!-- 25列あるので、狭い窓ではセルが潰れる。注文内訳の表と同じく
+                横スクロールできる枠に入れて、幅が足りなくても読めるようにする -->
+           <div class="heatmap-scroll">
+             <div id="heatmapGrid" class="heatmap" role="img"></div>
+           </div>
            <div class="heatmap-legend">
              <span class="hint">少ない</span>
              <span class="heatmap-scale"></span>
@@ -567,28 +618,36 @@
             <button type="button" class="segmented-btn" data-ratio="3:4" aria-pressed="false">3:4</button>
           </div>
         </div>
-        <div class="share-scale-field">
-          <label class="share-field-label" for="shareScale">背景画像の拡大率 <output id="shareScaleValue" for="shareScale">100%</output></label>
-          <input type="range" id="shareScale" min="100" max="300" step="5" value="100" disabled>
-        </div>
-      </div>
-
-      <!-- 手持ちの画像が無くても選べるように、その場で描く下地を並べる。
-           色と模様を別々に選び、その組み合わせが背景になる。
-           見本を小さく詰めると何の模様か分からないので、幅いっぱいを使う -->
-      <div class="share-template-box">
-        <span class="share-field-label" id="shareTemplateLabel">背景テンプレート</span>
-        <div class="share-template-row">
-          <span class="share-template-kind">色</span>
-          <div class="share-templates" id="shareColors" role="group" aria-label="背景の色"></div>
-        </div>
-        <div class="share-template-row">
-          <span class="share-template-kind">模様</span>
-          <div class="share-templates" id="sharePatterns" role="group" aria-label="背景の模様"></div>
-        </div>
       </div>
 
       <div class="share-controls">
+        <div class="share-text-box">
+          <label class="share-field-label" for="shareText">投稿する文面</label>
+          <textarea id="shareText" class="share-text" readonly aria-describedby="shareTextDescription"></textarea>
+          <span class="visually-hidden" id="shareTextDescription">Xの投稿画面へ渡す文章です。</span>
+        </div>
+      </div>
+
+      <!-- 背景の作り込みは、そのままでも共有できる寄り道。既定では畳んでおき、
+           プレビュー・文面・3つのボタンだけが最初に目に入るようにする -->
+      <details class="accordion share-customize" id="shareCustomize">
+        <summary><h3>背景をカスタマイズ</h3></summary>
+
+        <!-- 手持ちの画像が無くても選べるように、その場で描く下地を並べる。
+             色と模様を別々に選び、その組み合わせが背景になる。
+             見本を小さく詰めると何の模様か分からないので、幅いっぱいを使う -->
+        <div class="share-template-box">
+          <span class="share-field-label" id="shareTemplateLabel">背景テンプレート</span>
+          <div class="share-template-row">
+            <span class="share-template-kind">色</span>
+            <div class="share-templates" id="shareColors" role="group" aria-label="背景の色"></div>
+          </div>
+          <div class="share-template-row">
+            <span class="share-template-kind">模様</span>
+            <div class="share-templates" id="sharePatterns" role="group" aria-label="背景の模様"></div>
+          </div>
+        </div>
+
         <div class="share-bg">
           <span class="share-field-label" id="shareBgLabel">背景画像</span>
           <div class="share-bg-row">
@@ -606,12 +665,11 @@
           </div>
         </div>
 
-        <div class="share-text-box">
-          <label class="share-field-label" for="shareText">投稿する文面</label>
-          <textarea id="shareText" class="share-text" readonly aria-describedby="shareTextDescription"></textarea>
-          <span class="visually-hidden" id="shareTextDescription">Xの投稿画面へ渡す文章です。</span>
+        <div class="share-scale-field">
+          <label class="share-field-label" for="shareScale">背景画像の拡大率 <output id="shareScaleValue" for="shareScale">100%</output></label>
+          <input type="range" id="shareScale" min="100" max="300" step="5" value="100" disabled>
         </div>
-      </div>
+      </details>
 
       <p class="hint share-note">
         𝕏の投稿画面には画像を自動で添付できません。
@@ -631,6 +689,20 @@
       <button type="button" id="shareOpenBtn" class="share-btn">𝕏の投稿画面を開く</button>
     </div>
     <span class="hint" id="shareCardStatus" role="status"></span>
+  </div>
+
+  <!-- 取り消せない操作の確認。ネイティブの confirm() だと作者情報・共有カードの
+       モーダルと作法が揃わないので、同じフォーカストラップとinertで作る -->
+  <div class="confirm-overlay" id="confirmOverlay" hidden></div>
+  <div class="confirm-panel" id="confirmPanel" role="dialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmMessage" hidden>
+    <div class="confirm-panel-head">
+      <h2 id="confirmTitle">確認</h2>
+    </div>
+    <p class="confirm-message" id="confirmMessage"></p>
+    <div class="confirm-panel-foot">
+      <button type="button" id="confirmCancelBtn" class="secondary">やめる</button>
+      <button type="button" id="confirmOkBtn" class="primary">実行する</button>
+    </div>
   </div>
 
 <script src="common.js"></script>
