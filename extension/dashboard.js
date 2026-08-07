@@ -38,6 +38,23 @@ let lastRunStateWrite = 0;
 let runLockHeartbeatTimer = null;
 const state = { index: null, cache: {} };
 
+// 描画1回のあいだ使い回す buildResults() の結果。
+// buildResults() は注文数に比例して新しい配列を組み立てるため、各描画関数が
+// それぞれ呼ぶと1回の render() で同じ配列を8回前後作り直すことになる。
+// state.index / state.cache は「丸ごと差し替える」場合と「同じ参照のまま
+// 中身を書き換える」場合の両方があるので、参照が変わったら作り直し、
+// 中身だけ変わる経路(収集・復元など)では render() が必ず作り直す。
+//
+// 宣言をここに置くのは、下のイベント配線にある早期の renderCurrentView() から
+// 参照されるため。初期ハッシュがレポート以外だと、その呼び出しが
+// renderPendingBanner() 経由で currentResults() まで届く。宣言をファイル後方に
+// 置くと let の TDZ に入り、「Cannot access 'resultsMemo' before initialization」で
+// トップレベルの実行が止まって init() が走らず、画面が空になる。
+// 参照する関数は関数宣言(巻き上げられる)なので、変数だけ前に出せばよい。
+let resultsMemo = null;
+let resultsMemoIndex = null;
+let resultsMemoCache = null;
+
 // ---- イベント配線 ------------------------------------------------------
 
 // 画面の切り替え。移動しても同じJSコンテキストのままなので、収集は止まらない。
@@ -699,16 +716,6 @@ function oldestCoveredOrder() {
   }
   return oldest;
 }
-
-// 描画1回のあいだ使い回す buildResults() の結果。
-// buildResults() は注文数に比例して新しい配列を組み立てるため、各描画関数が
-// それぞれ呼ぶと1回の render() で同じ配列を8回前後作り直すことになる。
-// state.index / state.cache は「丸ごと差し替える」場合と「同じ参照のまま
-// 中身を書き換える」場合の両方があるので、参照が変わったら作り直し、
-// 中身だけ変わる経路(収集・復元など)では render() が必ず作り直す。
-let resultsMemo = null;
-let resultsMemoIndex = null;
-let resultsMemoCache = null;
 
 // state を変えた直後に必ず呼ぶ側(render)から使う。作り直して返す
 function refreshResults() {

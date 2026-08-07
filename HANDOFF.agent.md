@@ -1,6 +1,6 @@
 # Agent handoff v1
 
-updated: 2026-08-07T12:00:00+09:00
+updated: 2026-08-07T13:00:00+09:00
 repo: https://github.com/Kie610/booth_purchase_total_extension
 work_branch: 1.1.0
 upstream: none (未push。pushはユーザー許可後)
@@ -70,8 +70,25 @@ complete:
   共有文面・共有カード・共有ボタンの文言をすべて選択期間で統一した
   (全期間のときは従来の文面のまま。期間選択は空状態でも消えないよう #rankingArea の外に置いた)。
   test/cases.js へ対応テストを追加(689→725 checks)。
+- C: P3が持ち込んだ初期化順序バグ(TDZ)をホットフィックスし`1.1.0`へ統合した。
+  症状=`dashboard.html#/ranking` のようにレポート以外を初期ハッシュにして開くと
+  「Cannot access 'resultsMemo' before initialization」でdashboard.jsのトップレベル実行が
+  止まり、init()が走らず画面が空になる。原因=イベント配線直後の早期 renderCurrentView() が
+  renderPendingBanner() → pendingBannerCounts() → currentResults() と辿るのに対し、
+  B1で入れた resultsMemo / resultsMemoIndex / resultsMemoCache の `let` 宣言が
+  ファイル後方(723行目付近)にあり、let の TDZ に入っていた。初期ハッシュが既定の
+  レポートのときは renderPendingBanner が早期returnするため発症せず、既存テストも
+  この経路しか通していなかった。修正=3つの宣言を `const state` 直後の状態宣言ブロックへ移し、
+  「早期実行から参照されるためここに置く」理由をコメントで残した(参照する
+  refreshResults/currentResults は関数宣言で巻き上げられるため移動不要)。
+  test/cases.js へ回帰テストを2件追加(725→727 checks)。harnessはページを読み込み直せず
+  resultsMemo を未初期化へ戻せないため、(1)レポート以外のハッシュで描画経路が例外を出さないこと、
+  (2)fetchしたdashboard.jsのソース上で宣言が早期呼び出しより前にあることの2つに分けて検証している。
 
 verified:
+- C: 2026-08-07 — evidence: status=PASS; kind=compile; command=node --check をextensionとtestの全.jsへ実行(claude/p3-tdz-hotfix、resultsMemo宣言移動+回帰テスト追加後); environment=Windows、Git Bash; scope=JavaScript構文16ファイル; counts=passed=16, failed=0, skipped=0, not-run=0
+- C: 2026-08-07 — evidence: status=PASS; kind=runtime; command=python -m http.server 8756 --bind 127.0.0.1 を起動しBrowserで/test/index.htmlを確認(claude/p3-tdz-hotfix); environment=Windows、Claude Code Browser; scope=拡張機能のブラウザ全体テスト; counts=passed=727, failed=0, skipped=0, not-run=0
+- C: 2026-08-07 — evidence: status=PASS; kind=runtime; command=scratchpadのプレビュー複製(stub.js+seed.js注入、注文90件)へ修正後のextensionの.jsを上書きしport 8757で配信、http://127.0.0.1:8757/dashboard.html#/ranking を直接開いてconsoleとDOMを確認; environment=Windows、Claude Code Browser; scope=レポート以外を初期ハッシュにした読み込みの実挙動; counts=ReferenceError=0件(consoleエラー0件)、ランキング6ショップ・合計¥375,300を描画、未収集5件のバナーも表示; failed=0
 - C: 2026-08-07 — evidence: status=PASS; kind=compile; command=node --check をextensionとtestの全.jsへ実行(claude/p4-features、D1〜D5実装後); environment=Windows、Git Bash; scope=JavaScript構文16ファイル; counts=passed=16, failed=0, skipped=0, not-run=0
 - C: 2026-08-07 — evidence: status=PASS; kind=runtime; command=python -m http.server 8752 --bind 127.0.0.1 を起動しBrowserで/test/index.htmlをライト・ダークの両方で確認(claude/p4-features、D1〜D5実装+テスト追加後); environment=Windows、Claude Code Browser; scope=拡張機能のブラウザ全体テスト; counts=passed=725, failed=0, skipped=0, not-run=0
 - C: 2026-08-07 — evidence: status=PASS; kind=runtime; command=scratchpadへ複製したextension一式(スタブ+デモデータ、注文66件・2024〜2026年)をport 8753で配信し、prefers-color-schemeをlight/darkへ切り替えてgetComputedStyleでコントラスト比を計測; environment=Windows、Claude Code Browser; scope=全6画面・共有パネル・確認ダイアログ・通知/エラー/注意書き・月別テーブル・ポップアップの文字と背景; counts=ダーク時の本文・補足・リンク・入力欄はいずれも6.4:1以上、ライト時は4.8:1以上、failed=0(白文字×ブランド赤のボタンは明暗とも3.3:1で従来どおり)

@@ -2174,6 +2174,38 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   check("タブキー 自タブIDが無ければ触らない", await readStored(DASHBOARD_TAB_KEY, null), 9);
   await removeStored(DASHBOARD_TAB_KEY);
 
+  // --- 初期ハッシュがレポート以外でも読み込みが止まらないこと(TDZ回帰) ---
+  // #/ranking などレポート以外を初期ハッシュにして開くと、dashboard.js 冒頭の
+  // 早期 renderCurrentView() が renderPendingBanner() 経由で currentResults() を呼ぶ。
+  // resultsMemo の宣言がその呼び出しより後にあると let の TDZ に入り、
+  // 「Cannot access 'resultsMemo' before initialization」でトップレベルの実行が
+  // 止まり、init() が走らず画面が空になっていた。
+  //
+  // テストの取り方: このharnessはページを読み込み直せず、いったん初期化された
+  // resultsMemo を未初期化には戻せないため、TDZそのものは実行時に再現できない。
+  // そこで(1)レポート以外のハッシュで描画経路が例外なく通ること、
+  // (2)ソース上の宣言順が早期呼び出しより前にあること、の2つに分けて確かめる。
+  let earlyRenderError = null;
+  try {
+    location.hash = "#/ranking";
+    renderCurrentView();
+    currentResults();
+  } catch (err) {
+    earlyRenderError = String(err);
+  } finally {
+    location.hash = "#/report";
+    renderCurrentView();
+  }
+  check("レポート以外のハッシュでも描画経路が例外を出さない", earlyRenderError, null);
+
+  const dashboardSource = await (await fetch("../extension/dashboard.js")).text();
+  const memoDeclIndex = dashboardSource.search(/^let resultsMemo = null;$/m);
+  // 早期呼び出しは、行頭の renderCurrentView(); (関数定義でも配線でもない裸の呼び出し)
+  const earlyCallIndex = dashboardSource.search(/^renderCurrentView\(\);$/m);
+  check("resultsMemoの宣言が早期renderCurrentView()より前にある",
+    [memoDeclIndex >= 0, earlyCallIndex >= 0, memoDeclIndex < earlyCallIndex],
+    [true, true, true]);
+
   // --- 𝕏共有ボタン(実際のHTMLとCSSが表示仕様どおりか) ---
   const dashboardHtml = await (await fetch("../extension/dashboard.html")).text();
   const dashboardDoc = new DOMParser().parseFromString(dashboardHtml, "text/html");
