@@ -39,8 +39,25 @@ complete:
   フォーカストラップ)へ置換、C10=メイン合計のギフトを金額下の補足行へ、
   C11=ランキングの行全体を明細開閉の対象に(リンクは遷移優先)し▸を押せる見た目へ。
   test/cases.js へ対応テストを追加(646→689 checks)。
+- C: P3(効率改善)として improvement-plan の B1〜B4 を実装し`1.1.0`へ統合した。挙動・表示は不変。
+  B1=render() 冒頭で refreshResults() が buildResults() を1回だけ実行し、各描画関数へ渡す
+  (renderResult/renderSpendingTrends/renderRankingArea/renderYearSummary/renderExportArea/
+  renderBackupArea/renderHeatmap は既定引数 currentResults())。描画サイクル外(画面切り替え・
+  未収集バナー・CSV出力・内訳の絞り込み)は currentResults() が state.index/state.cache の
+  参照を見て使い回し、参照が変わったときだけ作り直す。render() は常に作り直すため、
+  同じ参照のまま中身が変わる経路(収集・キャッシュ書き換え)でも古い結果を出さない。
+  B2=検索入力を150msでdebounce(ステータス・並べ替えの変更は待たずに描画し、待機中の描画は取り消す)、
+  renderOrderTable でショップ名ラベルを行ごとに1回だけ作り compareOrderRows へ渡す。
+  B3=collectAmounts のキャッシュ保存間隔を cacheFlushInterval() で
+  min(50, max(5, floor(総件数/20))) にし、書き込み総量を件数に対して線形へ寄せた
+  (上限50件は中断時の取り直しを約15秒ぶんに抑えるため)。
+  B4=oldestCoveredOrder が暫定最古の sortKey を保持し parseOrderDate() の再計算をやめた。
+  テストの追加・変更はなし(689 checksのままALL PASS)。
 
 verified:
+- C: 2026-08-07 — evidence: status=PASS; kind=compile; command=node --check をextensionとtestの全.jsへ実行(claude/p3-efficiency、B1〜B4実装後); environment=Windows、Git Bash; scope=JavaScript構文16ファイル; counts=passed=16, failed=0, skipped=0, not-run=0
+- C: 2026-08-07 — evidence: status=PASS; kind=runtime; command=python -m http.server 8750 --bind 127.0.0.1 を起動しBrowserで/test/index.htmlを確認(claude/p3-efficiency、B1〜B4実装後); environment=Windows、Claude Code Browser; scope=拡張機能のブラウザ全体テスト; counts=passed=689, failed=0, skipped=0, not-run=0
+- C: 2026-08-07 — evidence: status=PASS; kind=runtime; command=注文1000件の合成データを注入した一時計測ページ(コミットせず削除済み)をport 8750で配信し、before(stash)/after で比較; environment=Windows、Claude Code Browser; scope=B1・B2の効果測定; counts=render()1回あたりのbuildResults呼び出し 7回→1回、検索入力10回ぶんの同期処理 29.1ms→0.2ms、shop-ascのソート 12.4ms→6.7ms、render()全体 28.9ms→28.4ms(DOM構築が支配的で差は誤差範囲)
 - C: 2026-08-07 — evidence: status=PASS; kind=compile; command=node --check をextensionとtestの全.jsへ実行(claude/p1-ui-improvements、C1〜C11実装後); environment=Windows、Git Bash; scope=JavaScript構文16ファイル; counts=passed=16, failed=0, skipped=0, not-run=0
 - C: 2026-08-07 — evidence: status=PASS; kind=runtime; command=python -m http.server 8746 --bind 127.0.0.1 を起動しBrowserで/test/index.htmlを確認(claude/p1-ui-improvements、C1〜C11実装+テスト追加後); environment=Windows、Claude Code Browser; scope=拡張機能のブラウザ全体テスト; counts=passed=689, failed=0, skipped=0, not-run=0
 - C: 2026-08-07 — evidence: status=PASS; kind=runtime; command=scratchpadへ複製したextension一式(stub.js+デモデータ注入、注文90件・2024〜2026年)をport 8747で配信し、1280/800/620/480px幅で全6画面・共有パネル・確認ダイアログ・初回空状態をDOM計測で確認; environment=Windows、Claude Code Browser(スクリーンショットは非表示ペインのため取得不可、レイアウトはgetBoundingClientRect/scrollWidthで計測); scope=横スクロール発生箇所と操作可能性; counts=passed=6画面×4幅=24, failed=0, skipped=0, not-run=0
@@ -67,7 +84,7 @@ not-run:
 
 1. 次の変更では規模に応じ、同期済み`main`から新しい永続バージョンブランチを作る — blocked-by: none
 2. 次回の正式リリースでも検証後にバージョンブランチ、`main`、リモートのSHAを一致させる — blocked-by: none
-3. `docs/improvement-plan.md`(2026-08-07レビュー)の残りP3(効率)→P4(機能)を委任する — blocked-by: ユーザーの着手判断
+3. `docs/improvement-plan.md`(2026-08-07レビュー)の残りP4(機能)→P5(調査)を委任する — blocked-by: ユーザーの着手判断
 
 ## Paths
 

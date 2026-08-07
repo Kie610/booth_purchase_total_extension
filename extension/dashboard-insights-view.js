@@ -77,8 +77,7 @@ function renderRankingSortToggle() {
     .forEach((th) => th.classList.toggle("sorted", th.dataset.sort === rankingSort));
 }
 
-function renderRankingArea() {
-  const results = buildResults();
+function renderRankingArea(results = currentResults()) {
   const shops = aggregateByShop(results, rankingSort);
   renderRankingSortToggle();
   rankingEmpty.hidden = shops.length > 0;
@@ -209,8 +208,7 @@ function renderYearOptions(select, years, selected) {
   select.value = String(selected);
 }
 
-function renderYearSummary() {
-  const results = buildResults();
+function renderYearSummary(results = currentResults()) {
   const years = orderYears(results);
   summaryEmpty.hidden = years.length > 0;
   summaryArea.hidden = years.length === 0;
@@ -411,8 +409,7 @@ function setTrendYears(year, baseYear) {
   renderSpendingTrends();
 }
 
-function renderSpendingTrends(now = new Date()) {
-  const results = buildResults();
+function renderSpendingTrends(now = new Date(), results = currentResults()) {
   const valid = results.filter((result) => typeof result.amount === "number");
   trendsEmpty.hidden = valid.length > 0;
   trendsArea.hidden = valid.length === 0;
@@ -499,7 +496,7 @@ function renderSpendingTrends(now = new Date()) {
   renderCumulativeChart(trend);
   // 左で選んでいる年へ合わせてから描く
   syncHeatmapToYear(trend.year);
-  renderHeatmap();
+  renderHeatmap(results);
   renderPeriodTableInto(
     trendPeriodTableBody,
     aggregateByPeriod(results),
@@ -586,8 +583,7 @@ function heatmapCellAlpha(count, max) {
   return 0.15 + (count / max) * 0.85;
 }
 
-function renderHeatmap() {
-  const results = buildResults();
+function renderHeatmap(results = currentResults()) {
   const keys = heatmapMonthKeys(results);
   if (keys.length === 0) {
     heatmapGrid.innerHTML = "";

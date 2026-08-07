@@ -10,7 +10,19 @@ const REQUEST_INTERVAL_MIN_MS = 250;
 const REQUEST_INTERVAL_MAX_MS = 350;
 const REQUEST_INTERVAL_AVERAGE_MS =
   (REQUEST_INTERVAL_MIN_MS + REQUEST_INTERVAL_MAX_MS) / 2;
-const CACHE_FLUSH_EVERY = 5; // 取得途中で中断されても失わないよう小まめに保存する
+// 取得途中で中断されても失わないよう小まめに保存する。ただし saveCache() は
+// キャッシュ全体を書き直すので、間隔を固定にするとn件の収集で書き込み量が
+// O(n²/間隔)になる。間隔を件数に比例させると全体の書き込み量が件数に対して
+// 線形に近づく(20回前後の保存に収まる)。
+// 上限を50件で切るのは、中断時に取り直しになる範囲を抑えるため。
+// 1件あたり約0.3秒なので、最悪でも15秒ぶんの取得をやり直すだけで済む。
+// 下限の5件は、件数が少ないときに従来と同じ細かさを保つための値
+const CACHE_FLUSH_MIN = 5;
+const CACHE_FLUSH_MAX = 50;
+
+function cacheFlushInterval(total) {
+  return Math.min(CACHE_FLUSH_MAX, Math.max(CACHE_FLUSH_MIN, Math.floor(total / 20)));
+}
 const RUN_STATE_INTERVAL_MS = 400; // ポップアップへ進捗を渡す書き込みの間引き
 const RUN_LOCK_HEARTBEAT_MS = 10_000;
 const RUN_LOCK_WEB_NAME = "booth-purchase-total-collector";
@@ -90,11 +102,11 @@ window.addEventListener("hashchange", () => {
 renderCurrentView();
 
 exportOrdersBtn.addEventListener("click", () =>
-  downloadCsv(buildOrdersCsv(buildResults()), csvFileName("orders"))
+  downloadCsv(buildOrdersCsv(currentResults()), csvFileName("orders"))
 );
 
 exportItemsBtn.addEventListener("click", () =>
-  downloadCsv(buildItemsCsv(buildResults()), csvFileName("items"))
+  downloadCsv(buildItemsCsv(currentResults()), csvFileName("items"))
 );
 
 backupSaveBtn.addEventListener("click", () =>
@@ -184,9 +196,30 @@ forceRefreshRange.addEventListener("change", updatePlannedCount);
 forceRefreshAll.addEventListener("change", updatePlannedCount);
 rangeFrom.addEventListener("change", onRangeChanged);
 rangeTo.addEventListener("change", onRangeChanged);
-orderSearch.addEventListener("input", () => renderOrderTable(buildResults()));
-orderStatusFilter.addEventListener("change", () => renderOrderTable(buildResults()));
-orderSort.addEventListener("change", () => renderOrderTable(buildResults()));
+// 検索は1文字打つたびに全行のDOMを作り直すため、注文が多いほど入力が重くなる。
+// 打っている間はまとめ、手が止まってから1回だけ描き直す。
+// 150msは連続入力の間隔より長く、押してから反応するまでの遅れとしては気付きにくい範囲
+const ORDER_SEARCH_DEBOUNCE_MS = 150;
+let orderSearchTimer = null;
+
+orderSearch.addEventListener("input", () => {
+  if (orderSearchTimer !== null) clearTimeout(orderSearchTimer);
+  orderSearchTimer = setTimeout(() => {
+    orderSearchTimer = null;
+    renderOrderTable(currentResults());
+  }, ORDER_SEARCH_DEBOUNCE_MS);
+});
+// 選び直しは1回で終わる操作なので、待たずにその場で描き直す。
+// 待っている検索の描画があれば、こちらが最新の入力値ごと描くので取り消す
+for (const select of [orderStatusFilter, orderSort]) {
+  select.addEventListener("change", () => {
+    if (orderSearchTimer !== null) {
+      clearTimeout(orderSearchTimer);
+      orderSearchTimer = null;
+    }
+    renderOrderTable(currentResults());
+  });
+}
 
 function onRangeChanged() {
   highlightSelectedRange();
@@ -650,12 +683,49 @@ function currentMonthStats() {
 function oldestCoveredOrder() {
   if (!state.index) return null;
   let oldest = null;
+  // 暫定の最古の並び順も持っておく。比べるたびに parseOrderDate() をやり直すと、
+  // 注文1件につき2回日付を解析することになる
+  let oldestSortKey = 0;
   for (const order of state.index.orders) {
     const d = parseOrderDate(order.date);
     if (!d) continue;
-    if (!oldest || d.sortKey < parseOrderDate(oldest.date).sortKey) oldest = order;
+    if (!oldest || d.sortKey < oldestSortKey) {
+      oldest = order;
+      oldestSortKey = d.sortKey;
+    }
   }
   return oldest;
+}
+
+// 描画1回のあいだ使い回す buildResults() の結果。
+// buildResults() は注文数に比例して新しい配列を組み立てるため、各描画関数が
+// それぞれ呼ぶと1回の render() で同じ配列を8回前後作り直すことになる。
+// state.index / state.cache は「丸ごと差し替える」場合と「同じ参照のまま
+// 中身を書き換える」場合の両方があるので、参照が変わったら作り直し、
+// 中身だけ変わる経路(収集・復元など)では render() が必ず作り直す。
+let resultsMemo = null;
+let resultsMemoIndex = null;
+let resultsMemoCache = null;
+
+// state を変えた直後に必ず呼ぶ側(render)から使う。作り直して返す
+function refreshResults() {
+  resultsMemo = buildResults();
+  resultsMemoIndex = state.index;
+  resultsMemoCache = state.cache;
+  return resultsMemo;
+}
+
+// 描画サイクルの外(画面切り替え・検索・CSV出力など)から使う。
+// 直近の結果が今の state のものなら、そのまま使い回す
+function currentResults() {
+  if (
+    resultsMemo !== null &&
+    resultsMemoIndex === state.index &&
+    resultsMemoCache === state.cache
+  ) {
+    return resultsMemo;
+  }
+  return refreshResults();
 }
 
 // 索引と収集済みの金額を突き合わせて表示用の一覧にする
@@ -695,7 +765,7 @@ function buildResults() {
 
 // ポップアップに見せる要約
 function buildSummary(partial) {
-  const results = buildResults();
+  const results = currentResults();
   const valid = results.filter((r) => typeof r.amount === "number");
   return {
     total: valid.reduce((sum, r) => sum + r.amount, 0),
@@ -1126,6 +1196,7 @@ async function collectAmounts(orders, force, signal) {
 
   let done = 0;
   let failed = 0;
+  const flushEvery = cacheFlushInterval(targets.length);
   for (const [index, order] of targets.entries()) {
     // バーの比率はテキストの (n/N件) と同じ1始まりでそろえる。
     // index / N だと表示と1件ずれ、最終件を収集中でも100%にならない
@@ -1152,7 +1223,7 @@ async function collectAmounts(orders, force, signal) {
         shipping: detail.shipping,
       };
       done++;
-      if (done % CACHE_FLUSH_EVERY === 0) await saveCache(state.cache);
+      if (done % flushEvery === 0) await saveCache(state.cache);
     } catch (err) {
       // 中断とログイン切れは続けても仕方がないので、そのまま止める
       if (isFatalFetchError(err)) throw err;

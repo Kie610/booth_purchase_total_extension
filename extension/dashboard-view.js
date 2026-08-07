@@ -210,13 +210,21 @@ function pendingBannerSignature(pending, incomplete) {
   return `${pending}/${incomplete ? 1 : 0}`;
 }
 
+// 案内に出す件数。描画サイクルの外(画面切り替え・閉じる操作)からも呼ばれるので、
+// 直近の一覧を使い回す currentResults() から数える
+function pendingBannerCounts() {
+  return {
+    pending: currentResults().filter((r) => needsCollect(state.cache[r.id])).length,
+    incomplete: Boolean(state.index) && !indexIsComplete(state.index),
+  };
+}
+
 function renderPendingBanner(current) {
   if (current === DEFAULT_VIEW) {
     pendingBanner.hidden = true;
     return;
   }
-  const pending = buildResults().filter((r) => needsCollect(state.cache[r.id])).length;
-  const incomplete = Boolean(state.index) && !indexIsComplete(state.index);
+  const { pending, incomplete } = pendingBannerCounts();
   const signature = pendingBannerSignature(pending, incomplete);
   // 閉じたときと内容が変わったら、閉じた記録ごと捨てて出し直す。
   // 記録を残すと、いったん収集して戻ったときにまた黙ってしまう
@@ -237,8 +245,7 @@ function renderPendingBanner(current) {
 
 // 断り書きそのものは消さない。いま出ている件数のままの間だけ畳む
 function dismissPendingBanner() {
-  const pending = buildResults().filter((r) => needsCollect(state.cache[r.id])).length;
-  const incomplete = Boolean(state.index) && !indexIsComplete(state.index);
+  const { pending, incomplete } = pendingBannerCounts();
   dismissedPendingSignature = pendingBannerSignature(pending, incomplete);
   pendingBanner.hidden = true;
 }
@@ -524,17 +531,21 @@ function setProgress(text, ratio) {
 // ---- 描画 --------------------------------------------------------------
 
 function render() {
+  // 表示用の一覧はここで1回だけ作り、各描画関数へ渡す。
+  // 描画関数がそれぞれ buildResults() を呼ぶと、注文数に比例した組み立てが
+  // 1回の描画で8回前後繰り返される(refreshResults / currentResults は dashboard.js)
+  const results = refreshResults();
   renderFirstRunGuide();
   renderIndexStatus();
   renderMonthArea();
-  renderResult();
-  renderSpendingTrends();
+  renderResult(results);
+  renderSpendingTrends(new Date(), results);
   updatePlannedCount();
   renderClearArea();
-  renderRankingArea();
-  renderYearSummary();
-  renderExportArea();
-  renderBackupArea();
+  renderRankingArea(results);
+  renderYearSummary(results);
+  renderExportArea(results);
+  renderBackupArea(results);
   // 出し分けと共有ボタンは上の描画結果に依るので最後に決める。
   // renderCurrentView が共有ボタンまで更新するので、ここで呼ぶのは1回でよい
   renderCurrentView();
@@ -550,8 +561,7 @@ function renderFirstRunGuide() {
 // ランキング・まとめ・支出推移の表示は dashboard-insights-view.js に分離。
 
 // 引っ越しの画面。何を持ち出せるのかが分かれば十分なので、件数と期間だけを出す
-function renderBackupArea() {
-  const results = buildResults();
+function renderBackupArea(results = currentResults()) {
   const collected = results.filter((r) => !needsCollect(state.cache[r.id]));
   const dated = results
     .map((r) => parseOrderDate(r.date))
@@ -588,8 +598,7 @@ function dateLabel(d) {
 
 // データ出力の画面。CSVそのものは押されたときに組み立てるが、
 // 何件書き出せるのかと、お支払金額と商品合計にずれがあるかはここで示す
-function renderExportArea() {
-  const results = buildResults();
+function renderExportArea(results = currentResults()) {
   const withItems = results.filter((r) => Array.isArray(r.items));
   const itemCount = withItems.reduce((sum, r) => sum + r.items.length, 0);
 
@@ -865,8 +874,7 @@ function highlightSelectedRange() {
   });
 }
 
-function renderResult() {
-  const results = buildResults();
+function renderResult(results = currentResults()) {
   renderFooter(results);
 
   if (results.length === 0) {
@@ -1022,7 +1030,9 @@ function renderOrderStatusOptions(results) {
   orderStatusFilter.value = statuses.includes(selected) ? selected : "";
 }
 
-function compareOrderRows(a, b, sort) {
+// shopLabel は行ごとに1回だけ作ったショップ名を引く関数。
+// 既定では都度組み立てる(呼び出し側が事前計算していない場合のため)
+function compareOrderRows(a, b, sort, shopLabel = orderShopsLabel) {
   if (sort === "date-asc") {
     const aDate = orderSortKey(a);
     const bDate = orderSortKey(b);
@@ -1034,7 +1044,7 @@ function compareOrderRows(a, b, sort) {
     return aDate - bDate;
   }
   if (sort === "shop-asc") {
-    return orderShopsLabel(a).localeCompare(orderShopsLabel(b), "ja") ||
+    return shopLabel(a).localeCompare(shopLabel(b), "ja") ||
       orderSortKey(b) - orderSortKey(a);
   }
   if (sort === "amount-desc" || sort === "amount-asc") {
@@ -1053,12 +1063,22 @@ function renderOrderTable(results) {
   renderOrderStatusOptions(results);
   const query = orderSearch.value.trim().toLocaleLowerCase("ja");
   const status = orderStatusFilter.value;
+  // ショップ名は絞り込みでも並べ替えでも使う。shop-asc の比較のたびに
+  // 商品明細から組み直すと、1回の描画で O(n log n) 回作り直すことになるため、
+  // 行ごとに1回だけ作って引き当てる
+  const shopLabels = new Map();
+  const shopLabel = (result) => {
+    if (!shopLabels.has(result)) shopLabels.set(result, orderShopsLabel(result));
+    return shopLabels.get(result);
+  };
   const filtered = results.filter((result) => {
     if (status && result.status !== status) return false;
     if (!query) return true;
-    return `${result.id} ${orderShopsLabel(result)}`.toLocaleLowerCase("ja").includes(query);
+    return `${result.id} ${shopLabel(result)}`.toLocaleLowerCase("ja").includes(query);
   });
-  const sorted = [...filtered].sort((a, b) => compareOrderRows(a, b, orderSort.value));
+  const sorted = [...filtered].sort((a, b) =>
+    compareOrderRows(a, b, orderSort.value, shopLabel)
+  );
   for (const r of sorted) {
     const tr = el("tr");
     tr.appendChild(td(r.date));
