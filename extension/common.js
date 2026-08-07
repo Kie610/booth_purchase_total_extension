@@ -10,6 +10,7 @@ const SUMMARY_KEY = "boothSummary"; // 最後に完了した集計の要約(ポ�
 const RUN_STATE_KEY = "boothRunState"; // 実行中の進捗(ポップアップから覗くため)
 const RUN_LOCK_KEY = "boothRunLock"; // 複数タブから同時に収集しないための期限付きロック
 const DASHBOARD_TAB_KEY = "boothDashboardTab"; // 集計ページのタブID
+const THEME_KEY = "boothTheme"; // 配色テーマの選択("light" | "dark" | "system")
 
 // 注文詳細ページ。取得(dashboard.js)と内訳のリンク(dashboard-view.js)の両方で使うので
 // 共通側に置く
@@ -623,6 +624,89 @@ async function readStored(key, fallback) {
 
 async function writeStored(key, value) {
   await ext.storage.local.set({ [key]: value });
+}
+
+// ---- 配色テーマ --------------------------------------------------------
+//
+// 集計ページとポップアップが同じ設定(ストレージの boothTheme)に従う。
+// 「システム」では :root から data-theme を外し、CSSの
+// @media (prefers-color-scheme: dark) にそのまま任せる(端末の設定が
+// 途中で変わっても、JSを介さずその場で切り替わる)。
+//
+// フラッシュ(誤ったテーマが一瞬見える現象)について。
+// ext.storage.local の読み出しは非同期なので、最初の描画に間に合う保証が無い。
+// 緩和策は2つ。
+//  (1) CSSの既定を「端末の設定に従う」ままにしてある。既定値の「システム」を
+//      使っている限り、JSが動く前から正しい配色で描かれる。
+//  (2) 選択を localStorage(同期的に読める)へ写しておき、
+//      applyMirroredTheme() を描画より前に呼んで先に当てる。
+//      正となるのはあくまで ext.storage.local 側で、読み終わり次第 initTheme() が
+//      上書きし、写しも取り直す。
+// それでも「端末と違うテーマを選んでいて、かつ写しがまだ無い初回」だけは
+// 一瞬もとの配色が見えることがある。これは同期的に読める拡張ストレージが無いため。
+const THEME_VALUES = ["light", "dark", "system"];
+const DEFAULT_THEME = "system";
+const THEME_MIRROR_KEY = "boothThemeMirror"; // localStorage 側の写し(前述の緩和策)
+
+// 保存値が壊れていても画面が壊れないよう、知らない値はすべて既定へ倒す
+function normalizeTheme(value) {
+  return THEME_VALUES.includes(value) ? value : DEFAULT_THEME;
+}
+
+// :root への反映。返り値は実際に当てたテーマ名
+function applyTheme(theme) {
+  const normalized = normalizeTheme(theme);
+  const root = document.documentElement;
+  if (normalized === "system") root.removeAttribute("data-theme");
+  else root.setAttribute("data-theme", normalized);
+  return normalized;
+}
+
+// 今 :root に当たっているテーマ(属性が無ければ「システム」)
+function currentAppliedTheme() {
+  return normalizeTheme(document.documentElement.getAttribute("data-theme"));
+}
+
+// localStorage は使えない環境(無効化・容量超過)があるので、失敗しても無視する。
+// 写しが無ければ既定の「システム」として扱われるだけで、正の値は storage 側にある
+function writeThemeMirror(theme) {
+  try {
+    localStorage.setItem(THEME_MIRROR_KEY, theme);
+  } catch (e) {
+    // 写せなくても動作に影響はない(フラッシュしやすくなるだけ)
+  }
+}
+
+function readThemeMirror() {
+  try {
+    return normalizeTheme(localStorage.getItem(THEME_MIRROR_KEY));
+  } catch (e) {
+    return DEFAULT_THEME;
+  }
+}
+
+// 描画前に呼ぶ同期の先当て
+function applyMirroredTheme() {
+  return applyTheme(readThemeMirror());
+}
+
+async function loadTheme() {
+  return normalizeTheme(await readStored(THEME_KEY, DEFAULT_THEME));
+}
+
+async function saveTheme(theme) {
+  const normalized = normalizeTheme(theme);
+  writeThemeMirror(normalized);
+  await writeStored(THEME_KEY, normalized);
+  return normalized;
+}
+
+// 読み込み時の適用。先に写しを当ててから、正の値で上書きする
+async function initTheme() {
+  applyMirroredTheme();
+  const theme = await loadTheme();
+  writeThemeMirror(theme);
+  return applyTheme(theme);
 }
 
 function loadCache() {

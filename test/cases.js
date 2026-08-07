@@ -2883,6 +2883,147 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   panelCycle.push(displayOf("confirmPanel") === "none", displayOf("confirmOverlay") === "none");
   check("共有・作者情報・確認ダイアログは開けば見え閉じれば消える", panelCycle, new Array(12).fill(true));
 
+  // --- D11 配色テーマの切り替え -------------------------------------------
+  //
+  // 変数の値だけでなく、実際に描かれる色(computed style)が入れ替わることを見る。
+  // 本物の dashboard.css は index.html が <link> で読み込んでいるので実測できる。
+  // 端末の設定は変えられないので、「システム」の検証は matchMedia の結果と突き合わせる
+
+  // 保存値が壊れていても既定へ倒れること(既定は「システム」)
+  check("テーマの既定と正規化",
+    [normalizeTheme(undefined), normalizeTheme(null), normalizeTheme("sepia"),
+     normalizeTheme("light"), normalizeTheme("dark"), normalizeTheme("system")],
+    ["system", "system", "system", "light", "dark", "system"]);
+
+  const bodyColors = () => {
+    const style = getComputedStyle(document.body);
+    return [style.backgroundColor, style.color];
+  };
+  const LIGHT_COLORS = ["rgb(255, 255, 255)", "rgb(42, 47, 54)"]; // --bg #fff / --fg #2a2f36
+  const DARK_COLORS = ["rgb(20, 23, 27)", "rgb(230, 233, 238)"]; // --bg #14171b / --fg #e6e9ee
+
+  const beforeTheme = currentAppliedTheme();
+  applyTheme("light");
+  const lightApplied = [document.documentElement.getAttribute("data-theme"), ...bodyColors()];
+  applyTheme("dark");
+  const darkApplied = [document.documentElement.getAttribute("data-theme"), ...bodyColors()];
+  check("ライトを選ぶと明るい配色になる", lightApplied, ["light", ...LIGHT_COLORS]);
+  check("ダークを選ぶと暗い配色になる", darkApplied, ["dark", ...DARK_COLORS]);
+
+  // 「システム」は属性を外して @media (prefers-color-scheme) に任せる。
+  // JSを介さないので、テスト実行中の端末の設定がそのまま出る
+  applyTheme("system");
+  const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  check("システムでは属性を外して端末の設定に戻る",
+    [document.documentElement.hasAttribute("data-theme"), ...bodyColors()],
+    [false, ...(systemDark ? DARK_COLORS : LIGHT_COLORS)]);
+
+  // 保存と復元。ストレージは test/stub.js の差し替え
+  const beforeStoredTheme = await loadTheme();
+  check("保存前は既定の システム を返す", await loadTheme(), "system");
+  await saveTheme("dark");
+  check("選択をストレージへ保存する", browser.storage.local._data[THEME_KEY], "dark");
+  check("保存した選択を読み戻せる", await loadTheme(), "dark");
+  await saveTheme("あかるい"); // 壊れた値は保存の時点で既定へ倒す
+  check("知らない値は保存も既定へ倒す", browser.storage.local._data[THEME_KEY], "system");
+  await saveTheme("light");
+  applyTheme("system");
+  check("読み込み時の適用でストレージの選択が復元される",
+    [await initTheme(), document.documentElement.getAttribute("data-theme"), ...bodyColors()],
+    ["light", "light", ...LIGHT_COLORS]);
+
+  // ヘッダーの切り替え。押した見た目(.current と aria-pressed)と実際の配色が一致すること
+  const themeBtn = (value) => themeSwitch.querySelector(`button[data-theme-value="${value}"]`);
+  check("ヘッダーに3状態の切り替えがある",
+    [...themeSwitch.querySelectorAll("button[data-theme-value]")].map((b) => b.dataset.themeValue),
+    ["light", "dark", "system"]);
+  check("絵文字だけになっても意味が分かるラベルを持つ",
+    [...themeSwitch.querySelectorAll("button[data-theme-value]")]
+      .every((b) => Boolean(b.getAttribute("aria-label"))), true);
+  themeBtn("dark").click();
+  check("ダークを押すと配色と選択中の印が変わる",
+    [document.documentElement.getAttribute("data-theme"),
+     themeBtn("dark").classList.contains("current"),
+     themeBtn("dark").getAttribute("aria-pressed"),
+     themeBtn("light").classList.contains("current"),
+     ...bodyColors()],
+    ["dark", true, "true", false, ...DARK_COLORS]);
+  themeBtn("system").click();
+  check("システムを押すと端末の設定へ戻る",
+    [document.documentElement.hasAttribute("data-theme"),
+     themeBtn("system").classList.contains("current"),
+     ...bodyColors()],
+    [false, true, ...(systemDark ? DARK_COLORS : LIGHT_COLORS)]);
+  // クリックの保存は待たない作りなので、ここで書き終わりを待ってから確かめる
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  check("押した選択もストレージへ残る", browser.storage.local._data[THEME_KEY], "system");
+
+  // 後片付け。以降のテストと再実行に、ここで選んだテーマを持ち越さない
+  await saveTheme(beforeStoredTheme);
+  applyTheme(beforeTheme);
+  try {
+    localStorage.removeItem(THEME_MIRROR_KEY);
+  } catch (e) {
+    // 使えない環境でも後片付けの失敗は無視する
+  }
+
+  // 明示的な選択は端末の設定より優先される。@media 側に :not([data-theme]) が
+  // 無いと、暗い端末で「ライト」を選んでも暗いままになる
+  check("端末の設定より選択を優先させる書き方になっている",
+    [dashboardCss.includes("@media (prefers-color-scheme: dark) {\n  :root:not([data-theme]) {"),
+     popupCss.includes("@media (prefers-color-scheme: dark) {\n  :root:not([data-theme]) {")],
+    [true, true]);
+  check("明示的なテーマの規則を両方のCSSへ置く",
+    [dashboardCss.includes(':root[data-theme="dark"] {'),
+     dashboardCss.includes(':root[data-theme="light"] {'),
+     popupCss.includes(':root[data-theme="dark"] {'),
+     popupCss.includes(':root[data-theme="light"] {')],
+    [true, true, true, true]);
+
+  // 暗い配色の値は @media と :root[data-theme="dark"] の2か所に写しで持っている。
+  // 片方だけ直すとそのテーマでだけ配色が壊れるので、中身が一致することを見張る
+  const declsAfter = (css, header) => {
+    const start = css.indexOf(header);
+    if (start < 0) return [`${header} が見つからない`];
+    let depth = 0;
+    let i = css.indexOf("{", start);
+    const open = i;
+    for (; i < css.length; i++) {
+      if (css[i] === "{") depth++;
+      else if (css[i] === "}" && --depth === 0) break;
+    }
+    return css
+      .slice(open + 1, i)
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => /^(--[\w-]+|color-scheme)\s*:/.test(line));
+  };
+  const dashboardMediaDark = declsAfter(dashboardCss, "@media (prefers-color-scheme: dark) {");
+  const popupMediaDark = declsAfter(popupCss, "@media (prefers-color-scheme: dark) {");
+  check("集計ページの暗い配色は2か所で同じ値",
+    declsAfter(dashboardCss, ':root[data-theme="dark"] {'), dashboardMediaDark);
+  check("ポップアップの暗い配色は2か所で同じ値",
+    declsAfter(popupCss, ':root[data-theme="dark"] {'), popupMediaDark);
+  check("暗い配色の値が空になっていない",
+    [dashboardMediaDark.length > 10, popupMediaDark.length > 5], [true, true]);
+
+  // 画像として外へ出るものは端末設定にもテーマ選択にも左右させない(D11の据え置き)
+  const shareJs = await (await fetch("../extension/share.js")).text();
+  check("テーマ切り替えは共有カードの描画に触れない", shareJs.includes("data-theme"), false);
+
+  // 本物のヘッダーにも同じ切り替えが載っていること(雛形だけに置いても意味がない)
+  const realThemeSwitch = dashboardDoc.getElementById("themeSwitch");
+  check("本物のヘッダーに切り替えを置く",
+    [Boolean(realThemeSwitch),
+     realThemeSwitch && realThemeSwitch.closest(".app-header-inner") !== null,
+     realThemeSwitch && realThemeSwitch.querySelectorAll("button[data-theme-value]").length],
+    [true, true, 3]);
+  // 狭い画面での逃がし方。文字ラベルを畳み、それでも1行に入らない幅では
+  // 著作権表示を畳んで切り替えを残す(見出しが折り返してヘッダーが二段になるのを防ぐ)
+  check("狭い画面では文字ラベルと著作権表示を畳む",
+    [dashboardCss.includes(".theme-label {"),
+     dashboardCss.includes("@media (max-width: 520px) {")], [true, true]);
+
   // hidden属性が付いている要素の全数チェック。1つでも表示されていたら、
   // その要素にクラス側の display 指定が効いてしまっている
   const hiddenElements = [...document.querySelectorAll("[hidden]")];

@@ -13,6 +13,14 @@
       <h1>BOOTHお買いものレポート</h1>
       <span class="view-title" id="viewTitle"></span>
       <span class="copyright">©2026 Kie (Kie工房)</span>
+      <!-- 配色テーマの切り替え。狭い画面では文字ラベルを隠して絵文字だけになるので、
+           意味が分かるよう aria-label と title を必ず付ける。
+           選択中は既存の segmented と同じ .current で示す -->
+      <div id="themeSwitch" class="segmented theme-switch" role="group" aria-label="配色テーマ">
+        <button type="button" class="segmented-btn theme-btn" data-theme-value="light" aria-label="ライト" title="ライト" aria-pressed="false"><span class="theme-icon" aria-hidden="true">☀</span><span class="theme-label">ライト</span></button>
+        <button type="button" class="segmented-btn theme-btn" data-theme-value="dark" aria-label="ダーク" title="ダーク" aria-pressed="false"><span class="theme-icon" aria-hidden="true">☾</span><span class="theme-label">ダーク</span></button>
+        <button type="button" class="segmented-btn theme-btn" data-theme-value="system" aria-label="システム（端末の設定に従う）" title="システム（端末の設定に従う）" aria-pressed="false"><span class="theme-icon" aria-hidden="true">◐</span><span class="theme-label">システム</span></button>
+      </div>
     </div>
   </header>
 

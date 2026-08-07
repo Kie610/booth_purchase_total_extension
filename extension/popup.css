@@ -19,9 +19,12 @@
 }
 
 /* 端末の設定が暗い配色のときだけ、変数をまとめて差し替える。
-   文字と背景のコントラストは4.5:1(WCAG AA)以上を保つ */
+   文字と背景のコントラストは4.5:1(WCAG AA)以上を保つ。
+   ポップアップにはテーマの切り替えを置かず、集計ページで選んだ設定
+   (ストレージの boothTheme)を popup.js が読んで :root へ data-theme として付ける。
+   :not([data-theme]) で守るのは、その選択を端末の設定より優先させるため */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme]) {
     color-scheme: dark;
     --fg: #e6e9ee;
     --fg-muted: #a5adb8;
@@ -35,6 +38,30 @@
     --danger-text: #ff9a9c;
     --hint: #949ca6;
   }
+}
+
+/* 「ダーク」を選んだとき。端末の設定に関わらず暗い配色にする。
+   上の @media と同じ値の写しで、ずれるとどちらかのテーマだけ壊れるため、
+   test/cases.js が2つの塊の中身が一致することを検査している */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --fg: #e6e9ee;
+  --fg-muted: #a5adb8;
+  --bg: #14171b;
+  --bg-soft: #1c2026;
+  --border: #333941;
+  --bg-track: #2a3038;
+  --accent: #fc4d50;
+  --accent-hover: #ff6f71;
+  --on-accent: #ffffff;
+  --danger-text: #ff9a9c;
+  --hint: #949ca6;
+}
+
+/* 「ライト」を選んだとき。上の @media は当たらないので :root の既定値が効く。
+   部品まで明るく描かせたいので color-scheme だけ明示する */
+:root[data-theme="light"] {
+  color-scheme: light;
 }
 
 /* hidden属性が付いた要素は、必ず消えるようにする。

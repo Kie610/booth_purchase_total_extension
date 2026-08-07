@@ -1,6 +1,10 @@
 /* 配色はすべてこの変数に集約する。暗い配色は下の
-   @media (prefers-color-scheme: dark) で :root を上書きするだけで切り替わるので、
+   @media (prefers-color-scheme: dark) と :root[data-theme="dark"] で :root を
+   上書きするだけで切り替わるので、
    個々の規則に色を直書きしないこと(直書きすると暗い配色でだけ読めなくなる)。
+   テーマの選び方は3つ。ヘッダーの切り替えで「ライト」「ダーク」を選ぶと
+   :root へ data-theme が付いてそちらが優先され、「システム」では属性を外して
+   @media (端末の設定) に従う。
    共有カード(canvas描画)と背景テンプレートの見本は share.js が持つ配色のままにする。
    画像として外へ出るものが、見る人の端末設定で変わってはいけないため */
 :root {
@@ -66,9 +70,11 @@
 }
 
 /* 端末の設定が暗い配色のときだけ、変数をまとめて差し替える。
-   本文・補足文と地色のコントラストは4.5:1(WCAG AA)以上を保つこと */
+   本文・補足文と地色のコントラストは4.5:1(WCAG AA)以上を保つこと。
+   :not([data-theme]) で守っているのは、利用者がヘッダーで明示的に選んだテーマを
+   端末の設定より優先させるため(「システム」を選ぶと属性が外れてここへ戻る) */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme]) {
     color-scheme: dark;
     --fg: #e6e9ee;
     --fg-muted: #a5adb8;
@@ -120,6 +126,72 @@
     --share-btn-hover: #cfd4db;
     --drop-over-bg: #33201f;
   }
+}
+
+/* テーマ切り替えで「ダーク」を選んだとき。OSの設定に関わらず暗い配色にする。
+   上の @media と同じ値をここへ書き写している。CSSには「同じ宣言の集まりを2つの条件へ
+   当てる」書き方が無く、light-dark() は --heat-rgb のような数値だけの変数に使えないため
+   (rgb(var(--heat-rgb) / ...) の材料にしている)、二重に持つしかない。
+   片方だけ直すとそのテーマでだけ配色が壊れるので、test/cases.js が
+   2つの塊の中身が一字一句一致することを検査している */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --fg: #e6e9ee;
+  --fg-muted: #a5adb8;
+  --border: #333941;
+  --border-strong: #4d545e;
+  --bg-hover: #262b31;
+  --accent: #fc4d50;
+  /* 暗い地色の上ではブランド色そのままで5.4:1あるが、リンクは一段明るくする */
+  --accent-text: #ff8f91;
+  --accent-hover: #ff6f71;
+  --accent-glow: rgba(252, 77, 80, 0.5);
+  --on-accent: #fff;
+  --bg-soft: #1c2026;
+  --bg: #14171b;
+  --bg-elevated: #191d22;
+  --bg-track: #2a3038;
+  --overlay: rgba(0, 0, 0, 0.55);
+  --overlay-strong: rgba(0, 0, 0, 0.66);
+  --shadow-soft: rgba(0, 0, 0, 0.5);
+  --shadow-footer: rgba(0, 0, 0, 0.4);
+  --shadow-panel: rgba(0, 0, 0, 0.6);
+  --focus-ring: #cbd5e1;
+  --danger-text: #ff9a9c;
+  --success-text: #6ed39d;
+  --series-previous: #767e8a;
+  /* 暗い地色の上では、薄い赤より明るい赤の方が濃淡を追える */
+  --heat-rgb: 255 122 124;
+  --range-bg: #3a2325;
+  --range-bg-hover: #48292c;
+  --notice-bg: #2c2617;
+  --notice-border: #5d4f22;
+  --notice-fg: #f0d896;
+  --error-bg: #341d1e;
+  --error-border: #6d3436;
+  --error-fg: #ffb3b4;
+  --sensitive-bg: #341d1e;
+  --sensitive-border: #8a4245;
+  --sensitive-fg: #ffb3b4;
+  --file-btn-bg: #2f2444;
+  --file-btn-border: #5c4083;
+  --file-btn-fg: #d9c2f5;
+  --file-btn-hover: #3a2c53;
+  --share-media-bg: #2a1c1d;
+  --share-media-border: #a05f62;
+  --share-media-fg: #ffc2c3;
+  --share-media-hover: #3a2526;
+  --share-btn-bg: #e6e9ee;
+  --share-btn-fg: #14171b;
+  --share-btn-hover: #cfd4db;
+  --drop-over-bg: #33201f;
+}
+
+/* テーマ切り替えで「ライト」を選んだとき。上の @media は :not([data-theme]) で
+   守ってあるので当たらず、:root の既定値がそのまま効く。
+   OSが暗い設定でも部品まで明るく描かせたいので color-scheme だけ明示する */
+:root[data-theme="light"] {
+  color-scheme: light;
 }
 
 * {
@@ -209,6 +281,29 @@ body {
   color: var(--fg-muted);
   font-size: 12px;
   white-space: nowrap;
+}
+
+/* 配色テーマの切り替え。見た目は他の segmented と同じで、ヘッダーへ収まるよう
+   一回り小さくする。ヘッダーは overflow: hidden なので、縮めずに右端まで残す */
+.theme-switch {
+  align-self: center;
+  flex: none;
+  margin-left: 12px;
+}
+
+.theme-switch .segmented-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  font-size: 12px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.theme-icon {
+  font-size: 13px;
+  line-height: 1;
 }
 
 /* ---- 画面切り替えのメニュー ---- */
@@ -1993,6 +2088,31 @@ button.segmented-btn.current {
   .copyright {
     padding-left: 8px;
     font-size: 10px;
+  }
+
+  /* 狭い画面では文字ラベルを落として絵文字だけにする。
+     3つ並べても90px前後で収まり、引き出し表示のときでも押せる位置に残る。
+     意味は aria-label と title で伝わる */
+  .theme-label {
+    display: none;
+  }
+
+  .theme-switch {
+    margin-left: 8px;
+  }
+
+  .theme-switch .segmented-btn {
+    padding: 4px 8px;
+  }
+}
+
+/* 500pxを切ると、見出し・著作権表示・テーマ切り替えが1行に収まらず、
+   見出しが折り返してヘッダーの帯が二段になる。狭い画面ではその場で押せる
+   テーマ切り替えを優先し、著作権表示だけ畳む
+   (作者はメニューの「作者について」で確認できる) */
+@media (max-width: 520px) {
+  .copyright {
+    display: none;
   }
 
   .author-profile {

@@ -75,6 +75,34 @@ navDrawer.addEventListener("click", (event) => {
 // 未収集の案内は、件数が変わらない間だけ畳める(断り書き自体は消さない)
 pendingBannerClose.addEventListener("click", dismissPendingBanner);
 
+// 配色テーマの切り替え。押した時点で見た目を変え、保存の完了は待たない
+// (待つと反映が遅れて二度押しを誘う。保存に失敗しても、その画面では選んだ配色のまま)
+themeSwitch.addEventListener("click", (event) => {
+  const btn = event.target.closest("button[data-theme-value]");
+  if (!btn) return;
+  const theme = applyTheme(btn.dataset.themeValue);
+  renderThemeSwitch(theme);
+  saveTheme(theme);
+});
+
+// ポップアップや別タブの集計ページで変えられたときにも追従する。
+// 自分で押したときも同じ値で流れてくるが、当て直すだけなので実害はない
+ext.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== "local" || !changes[THEME_KEY]) return;
+  const theme = applyTheme(changes[THEME_KEY].newValue);
+  writeThemeMirror(theme);
+  renderThemeSwitch(theme);
+});
+
+// テーマの適用は最初の描画より前に置く。ストレージの読み出しは非同期なので、
+// 同期的に読める写し(localStorage)を先に当てて誤ったテーマが見える時間を詰める。
+// テストは state と同じくテーマも直接差し替えるので、自動適用は本番だけにする
+if (!document.body.dataset.noAutoInit) {
+  applyMirroredTheme();
+  renderThemeSwitch(currentAppliedTheme());
+  initTheme().then(renderThemeSwitch);
+}
+
 // 確認ダイアログ。作者情報・共有カードと同じ作法(背景inert・Escape・フォーカストラップ)
 confirmOkBtn.addEventListener("click", () => closeConfirmDialog(true));
 confirmCancelBtn.addEventListener("click", () => closeConfirmDialog(false));

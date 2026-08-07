@@ -28,7 +28,16 @@ ext.storage.onChanged.addListener((changes, areaName) => {
   if (changes[RUN_STATE_KEY] || changes[SUMMARY_KEY]) {
     render();
   }
+  // 開いている最中に集計ページでテーマを変えられることがある
+  if (changes[THEME_KEY]) {
+    writeThemeMirror(applyTheme(changes[THEME_KEY].newValue));
+  }
 });
+
+// 配色テーマはここでは切り替えられない(切り替えは集計ページのヘッダー)。
+// 開くたびに集計ページと同じ設定を読んで当てるだけ。
+// 描画より前に置き、同期的に読める写しで誤ったテーマが見える時間を詰める
+initTheme();
 
 render();
 

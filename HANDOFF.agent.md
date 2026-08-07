@@ -1,6 +1,6 @@
 # Agent handoff v1
 
-updated: 2026-08-07T15:30:00+09:00
+updated: 2026-08-07T17:10:00+09:00
 repo: https://github.com/Kie610/booth_purchase_total_extension
 work_branch: 1.1.0
 upstream: none (未push。pushはユーザー許可後)
@@ -150,7 +150,38 @@ complete:
   test/index.html を新しい共有パネル構成へ同期し、test/cases.js を差し替え・追加した
   (745→772 checks)。
 
+- C: P8(配色テーマの切り替え)として improvement-plan の D11 を実装し`1.1.0`へ統合した。
+  UI=ヘッダーの著作権表示の右へ3状態の segmented(ライト/ダーク/システム、既定システム)。
+  サイクル式1個ではなく3ボタンにしたのは、今どれを選んでいるかが一目で分かるため。
+  絵文字+文字ラベルで、620px以下は文字ラベルを畳んで絵文字だけにする(aria-labelとtitleで
+  意味は残る。3つで85px)。さらに520px以下は著作権表示を畳む。500pxを切ると
+  見出し・著作権・切り替えが1行に入らず、見出しが折り返してヘッダーが二段(78px)になるため。
+  この結果、480pxのヘッダー高は変更前の78pxから52pxへ下がり、375pxは78pxで変更前と同じ。
+  適用方式=CSSの `@media (prefers-color-scheme: dark)` の対象を `:root:not([data-theme])` にし、
+  `:root[data-theme="dark"]`(同じ値の写し)と `:root[data-theme="light"]`(color-schemeのみ)を
+  足した。「システム」では data-theme を外してCSSの媒体クエリへ戻すので、OS設定の変更に
+  JSを介さず追従する。light-dark() 方式は採らなかった。--heat-rgb が
+  `rgb(var(--heat-rgb) / var(--cell-alpha))` の材料になる数値3つの変数で色関数に置き換えられず、
+  約60個の変数を全面的に書き直す割に得るものが無いため。写しがずれる危険は、
+  2か所の宣言が一字一句一致することを検査するテストで抑えた(集計ページ・ポップアップの両方)。
+  保存=`ext.storage.local` の `boothTheme`("light"|"dark"|"system")。common.js に
+  normalizeTheme/applyTheme/loadTheme/saveTheme/initTheme を置き、dashboard と popup が共用する。
+  集計ページは押した時点で即時反映し、`storage.onChanged` で他コンテキスト(ポップアップ・
+  別タブ)の変更にも追従する。ポップアップは開くたびに読んで当てるだけ(切り替えUIは持たない)。
+  フラッシュ緩和=(1)CSSの既定を媒体クエリのままにしてあるので既定の「システム」では
+  JSが動く前から正しい配色、(2)選択を localStorage(`boothThemeMirror`、同期的に読める)へ
+  写し、描画前の `applyMirroredTheme()` で先に当てる。正はあくまで ext.storage.local 側で、
+  読み終わり次第 initTheme() が上書きする。同期的に読める拡張ストレージが無いため、
+  「端末と違うテーマを選んでいて、かつ写しがまだ無い初回」だけは一瞬もとの配色が見える。
+  共有カード(canvas)と背景テンプレートの見本はライト配色固定のまま(share.js は未変更)。
+  test/index.html の雛形へ切り替えを同期し、test/cases.js へD11のテストを追加した
+  (772→794 checks)。
+
 verified:
+- C: 2026-08-07 — evidence: status=PASS; kind=compile; command=node --check をextensionとtestの全.jsへ実行(claude/p8-theme-toggle、D11実装後); environment=Windows、Git Bash; scope=JavaScript構文16ファイル; counts=passed=16, failed=0, skipped=0, not-run=0
+- C: 2026-08-07 — evidence: status=PASS; kind=runtime; command=python -m http.server 8773 --bind 127.0.0.1 を起動しBrowserで/test/index.htmlを確認(端末設定ライト・ダークの両方); environment=Windows、Claude Code Browser; scope=拡張機能のブラウザ全体テスト; counts=passed=794, failed=0, skipped=0, not-run=0(772→794。D11で22件追加)
+- C: 2026-08-07 — evidence: status=PASS; kind=runtime; command=scratchpadのプレビュー複製(stub.js+seed.js注入。再読み込みの検証のためstubの保存先をlocalStorageへ写す改造を複製側にのみ施した)へ修正後のextension一式を反映しport 8774で配信、DOM計測とイベントディスパッチで確認; environment=Windows、Claude Code Browser; scope=D11のUIと回帰; counts=(a)1280pxでヘッダー右端に切り替えが出る(841〜1066px、文字ラベルあり)、620/560pxは絵文字のみ85pxで著作権も並ぶ、480/375pxは著作権を畳んで切り替えを残し横溢れ0・中心座標のヒットテストもボタンに当たる、(b)ライト↔ダーク↔システムの押下で body の背景・文字とヘッダー背景の computed style が即時入れ替わる(#fff/#2a2f36 ↔ #14171b/#e6e9ee)、(c)再読み込み後も選択(ダーク)が復元され .current と aria-pressed も一致、(d)popup.html も同じ設定に従い、端末ダーク×選択ライトで背景#fff・color-scheme:light、端末ダーク×システムで暗い配色、(e)ライト・ダーク双方で共有パネル・確認ダイアログ・作者パネルの開閉が初期none→開く→×/Escapeでnoneに戻る、(f)共有カードcanvasの画素はテーマを変えても同一(角=240,214,255で一致)、(g)切り替えボタンのコントラストは未選択がライト4.83:1・ダーク7.47:1、選択中は白文字×ブランド赤の3.32:1で既存のsegmented・主ボタンと同水準; failed=0
+- C: 2026-08-07 — evidence: status=NOT-RUN; kind=runtime; command=(未実行); environment=—; scope=拡張機能として読み込んだ実ブラウザでのテーマ切り替え(実際のext.storage.localとポップアップ); counts=not-run=1 — スタブ差し替えのプレビューでのみ確認しており、実拡張での確認は未実施
 - C: 2026-08-07 — evidence: status=PASS; kind=runtime; command=ユーザーが自身のBOOTHアカウント実環境でD10「物理アイテムのステータスを再取得」を実行し、ステータスが再取得されることを確認したと報告(2863d07時点の1.1.0); environment=ユーザーの実ブラウザ・BOOTHログイン済み実ページ; scope=D10ステータス再取得の実ページ動作(一覧巡回・索引更新); counts=ユーザー報告による確認1件, failed=0; 備考=U1のうちD10巡回に関する部分はこの報告で実環境確認済みとなった。金額収集・ページング全般のU1は引き続き未実測
 - C: 2026-08-07 — evidence: status=PASS; kind=compile; command=node --check をextensionとtestの全.jsへ実行(claude/p7-share-tabs-status、C16〜C18・D10・T1実装後); environment=Windows、Git Bash; scope=JavaScript構文16ファイル; counts=passed=16, failed=0, skipped=0, not-run=0
 - C: 2026-08-07 — evidence: status=PASS; kind=runtime; command=python -m http.server 8769 --bind 127.0.0.1 を起動しBrowserで/test/index.htmlを確認(窓幅0の既定と1280x900の両方); environment=Windows、Claude Code Browser; scope=拡張機能のブラウザ全体テスト; counts=passed=772, failed=0, skipped=0, not-run=0(1280x900では `.share-shape` の2列側の分岐も通した)

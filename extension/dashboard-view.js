@@ -80,6 +80,7 @@ const orderTableBody = document.getElementById("orderTableBody");
 const noticeBox = document.getElementById("noticeBox");
 const errorBox = document.getElementById("errorBox");
 const menuBtn = document.getElementById("menuBtn");
+const themeSwitch = document.getElementById("themeSwitch");
 const navDrawer = document.getElementById("navDrawer");
 const navOverlay = document.getElementById("navOverlay");
 const firstRunGuide = document.getElementById("firstRunGuide");
@@ -282,6 +283,17 @@ function applyNavLayout(wide) {
   menuBtn.setAttribute("aria-expanded", String(!wide && drawerOpen));
   navOverlay.hidden = wide || !drawerOpen;
   navDrawer.hidden = !wide && !drawerOpen;
+}
+
+// 配色テーマの切り替えの見た目。選択中を .current で示し、
+// 押しボタンの集まりとして aria-pressed も合わせる
+function renderThemeSwitch(theme) {
+  const current = normalizeTheme(theme);
+  for (const btn of themeSwitch.querySelectorAll("button[data-theme-value]")) {
+    const selected = btn.dataset.themeValue === current;
+    btn.classList.toggle("current", selected);
+    btn.setAttribute("aria-pressed", String(selected));
+  }
 }
 
 function setDrawerOpen(open, returnFocus = true) {
