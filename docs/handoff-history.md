@@ -1,5 +1,13 @@
 # 引き継ぎ資料
 
+## 1.1.0 の統合内訳(HANDOFF.agent.md 縮小のため移動、2026-08-09)
+
+- P2=A1〜A3、P1=C1〜C11(+A4・A5)、P3=B1〜B4(+TDZホットフィックス)、P4=D1〜D5、
+  P6=C12〜C15(+[hidden]ホットフィックス)、P7=C16〜C18・D10・T1、P8=D11、
+  P9=D12・D13(8d295cf。保留点はimprovement-planの済注記を参照)、P10=D14(沼レポート)。
+- 検証証跡(縮小前): 2026-08-08 compile `node --check` 16ファイル passed=16/failed=0、
+  runtime `python -m http.server 8783` + Browserで /test/index.html passed=830/failed=0(794→830)。
+
 新しいセッションで「BOOTHお買いものレポート」拡張機能の開発を続けるための資料です。
 最初に作業場所とGit運用、その後にプロジェクト構造、検証方法、調査済みの技術知見を記載します。
 

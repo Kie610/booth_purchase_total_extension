@@ -11,6 +11,8 @@ const RUN_STATE_KEY = "boothRunState"; // 実行中の進捗(ポップアップ�
 const RUN_LOCK_KEY = "boothRunLock"; // 複数タブから同時に収集しないための期限付きロック
 const DASHBOARD_TAB_KEY = "boothDashboardTab"; // 集計ページのタブID
 const THEME_KEY = "boothTheme"; // 配色テーマの選択("light" | "dark" | "system")
+// D14 沼レポートの手動割り当て { [商品キー]: "アバターkey" | "__multi__" }
+const AVATAR_ASSIGN_KEY = "boothAvatarAssign";
 
 // 注文詳細ページ。取得(dashboard.js)と内訳のリンク(dashboard-view.js)の両方で使うので
 // 共通側に置く
@@ -566,6 +568,214 @@ function aggregateByShop(results, sortBy) {
     .sort((a, b) => compare(a, b) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 }
 
+// ---- D14 沼レポート(アバター別支出内訳) --------------------------------
+//
+// **商品ページへは一切アクセスしない。**手元のキャッシュにある items[].name だけで判断する。
+// BOOTHの購入履歴では、バリエーションのある商品の名前が「商品名 (バリエーション名)」の
+// 形で保存されている(2026-08-08にユーザーの実環境で実測)。この末尾の括弧を剥がし、
+// 中身を素体名の辞書(avatar-master.js)と突き合わせてアバター別に集計する。
+//
+// **読み取れなかったものを推測で埋めない。**素体名を1つに絞れなければ「複数対応」、
+// 1つも見つからなければ「未分類」として、そのまま画面に出す。直したいときは
+// 商品単位の手動割り当てで上書きしてもらう。
+
+// 「複数対応」を表す予約キー。辞書の key とぶつからないよう記号で囲む
+const AVATAR_MULTI_KEY = "__multi__";
+
+// 対応する括弧の組。BOOTHの商品名には半角と全角のどちらも現れる
+const VARIATION_BRACKETS = { ")": "(", "）": "（" };
+
+// 商品名を「本体」と「末尾のバリエーション名」へ分ける。
+//
+// 採用するのは**最後の対応括弧グループ**。入れ子(「商品名 (エク(ミルフィ))」)では
+// 外側のグループを採るので、バリエーション名は「エク(ミルフィ)」になる。
+// 括弧が無いもの、閉じ括弧に対応する開き括弧が無いもの、括弧の中身が本体と同文のもの
+// (単一バリエーション商品はこの形になる)は「バリエーションなし」= null とする。
+function parseItemName(name) {
+  const text = String(name === undefined || name === null ? "" : name).trim();
+  const close = text[text.length - 1];
+  const open = VARIATION_BRACKETS[close];
+  if (!open) return { base: text, variation: null };
+
+  let depth = 0;
+  for (let i = text.length - 1; i >= 0; i--) {
+    if (text[i] === close) depth++;
+    else if (text[i] === open && --depth === 0) {
+      const inner = text.slice(i + 1, text.length - 1).trim();
+      const base = text.slice(0, i).trim();
+      // 本体が空(名前まるごとが括弧)なら、剥がすと何も残らないので剥がさない
+      if (!base || !inner || inner === base) return { base: base || text, variation: null };
+      return { base, variation: inner };
+    }
+  }
+  // 閉じ括弧だけがある壊れた名前。バリエーションとして扱わない
+  return { base: text, variation: null };
+}
+
+// 英数字だけの別名は語の切れ目で照合する。単純な部分一致にすると
+// "Eku" が "Nekura" に、"Lime" が "Sublime" に当たってしまう。
+// 日本語の別名は語の切れ目が無いので部分一致で見る
+const AVATAR_LATIN_ALIAS = /^[a-z0-9][a-z0-9 &_.'-]*$/i;
+
+function avatarAliasMatches(text, alias) {
+  if (!alias) return false;
+  if (!AVATAR_LATIN_ALIAS.test(alias)) return text.includes(alias);
+  const escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, "i").test(text);
+}
+
+// 見つかった素体のkey(辞書の並び順、重複なし)
+function matchAvatarKeys(text) {
+  if (!text) return [];
+  const keys = [];
+  for (const avatar of AVATAR_MASTER) {
+    if (avatar.aliases.some((alias) => avatarAliasMatches(text, alias))) keys.push(avatar.key);
+  }
+  return keys;
+}
+
+// Full Pack のように「複数素体ぶん」を名乗る表記があるか
+function hasAvatarMultiMarker(text) {
+  if (!text) return false;
+  const lower = String(text).toLowerCase();
+  return AVATAR_MULTI_MARKERS.some((marker) => lower.includes(marker.toLowerCase()));
+}
+
+function avatarByKey(key) {
+  return AVATAR_MASTER.find((avatar) => avatar.key === key) || null;
+}
+
+// ショップと商品名のあいだに挟む区切り。**保存キーの一部なので後から変えない**
+// (変えると保存済みの割り当てが別の商品を指すことになる)。
+// 商品名にもURLにも現れない制御文字を使い、区切りの取り違えを起こさない
+const PRODUCT_KEY_SEPARATOR = " / ";
+
+// 手動割り当ての保存キー。同じ商品の別バリエーションを1つの商品として扱いたいので、
+// バリエーションを剥がした本体名とショップで決める。表示名は変わりうるが、
+// ここは保存済みデータ同士の突き合わせにしか使わないので取り違えは起きない
+function itemProductKey(item) {
+  const { base } = parseItemName(item && item.name);
+  const shop = (item && (item.shopUrl || item.shop)) || "";
+  return `${shop}${PRODUCT_KEY_SEPARATOR}${base}`;
+}
+
+// 商品1件がどのアバター向けかを決める。優先順位は次のとおり。
+//  1. 手動割り当て(本人が決めたものを推測で覆さない)
+//  2. バリエーション名(「商品名 (エク)」の括弧の中。最も確度が高い)
+//  3. 商品名の本体(テクスチャ系など、素体名が品名側にしか出ない商品の補完)
+// 2 と 3 のどちらでも、素体名が2つ以上見つかれば「複数対応」にする。
+// 1つも見つからなければ「未分類」。ここで当てずっぽうに1つ選ばない
+function classifyItemAvatar(item, assignments) {
+  const manual = assignments ? assignments[itemProductKey(item)] : undefined;
+  if (typeof manual === "string" && manual) {
+    if (manual === AVATAR_MULTI_KEY) return { kind: "multi", key: AVATAR_MULTI_KEY, manual: true };
+    // 辞書に無いkey(将来の版で追加された素体のバックアップなど)は名前を出せない。
+    // 保存は消さず、この環境では未分類として扱う
+    if (avatarByKey(manual)) return { kind: "avatar", key: manual, manual: true };
+  }
+  const { base, variation } = parseItemName(item && item.name);
+  for (const text of [variation, base]) {
+    if (!text) continue;
+    if (hasAvatarMultiMarker(text)) return { kind: "multi", key: AVATAR_MULTI_KEY, manual: false };
+    const keys = matchAvatarKeys(text);
+    if (keys.length === 1) return { kind: "avatar", key: keys[0], manual: false };
+    if (keys.length > 1) return { kind: "multi", key: AVATAR_MULTI_KEY, manual: false };
+  }
+  return { kind: "none", key: "", manual: false };
+}
+
+function emptyAvatarRow(key, name) {
+  return { key, name, count: 0, total: 0, unknown: 0, items: new Set() };
+}
+
+function finishAvatarRow(row) {
+  const { items, ...rest } = row;
+  return { ...rest, items: Array.from(items).sort((a, b) => a.localeCompare(b, "ja")) };
+}
+
+// アバター別の合計・点数。
+//
+// **ショップ別ランキングと同じく、注文単位のお支払金額は使えない。**1つの注文が
+// 複数のアバター向け商品にまたがるため、商品の合計(単価×数量+BOOST)で集計する。
+// 送料やクーポンは入らないので、全部足しても全体の合計額とは一致しない。画面で断ること。
+//
+// 返り値の products は手動割り当てUIの受け皿。未分類のものと、手動で割り当て済みの
+// ものだけを載せる(割り当て済みを外すと、間違えたときに戻せなくなる)
+function aggregateByAvatar(results, assignments = {}, sortBy = DEFAULT_SHOP_SORT) {
+  const rows = new Map();
+  const multi = emptyAvatarRow(AVATAR_MULTI_KEY, "複数対応");
+  const none = emptyAvatarRow("", "未分類");
+  const products = new Map();
+
+  for (const result of results) {
+    if (!Array.isArray(result.items)) continue;
+    for (const item of result.items) {
+      const verdict = classifyItemAvatar(item, assignments);
+      let row;
+      if (verdict.kind === "multi") row = multi;
+      else if (verdict.kind === "none") row = none;
+      else {
+        if (!rows.has(verdict.key)) {
+          rows.set(verdict.key, emptyAvatarRow(verdict.key, avatarByKey(verdict.key).name));
+        }
+        row = rows.get(verdict.key);
+      }
+
+      const quantity = itemQuantity(item);
+      const count = typeof quantity === "number" ? quantity : 0;
+      row.count += count;
+      if (item.name) row.items.add(item.name);
+      const amount = itemAmount(item);
+      if (amount === null) row.unknown++;
+      else row.total += amount;
+
+      // 手動で直せる対象。自動で当たったものまで並べると一覧が長くなりすぎる
+      if (verdict.kind !== "none" && !verdict.manual) continue;
+      const productKey = itemProductKey(item);
+      if (!products.has(productKey)) {
+        products.set(productKey, {
+          key: productKey,
+          name: parseItemName(item.name).base,
+          shop: item.shop || "",
+          count: 0,
+          total: 0,
+          // 今この商品に入っている割り当て(未割り当てなら空文字)
+          assigned: verdict.manual ? verdict.key : "",
+        });
+      }
+      const product = products.get(productKey);
+      product.count += count;
+      if (amount !== null) product.total += amount;
+    }
+  }
+
+  const compare = SHOP_SORTS[sortBy] || SHOP_SORTS[DEFAULT_SHOP_SORT];
+  return {
+    rows: Array.from(rows.values())
+      .map(finishAvatarRow)
+      .sort((a, b) => compare(a, b) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)),
+    multi: finishAvatarRow(multi),
+    none: finishAvatarRow(none),
+    products: Array.from(products.values()).sort(
+      (a, b) => b.total - a.total || a.name.localeCompare(b.name, "ja")
+    ),
+  };
+}
+
+// 手動割り当ての保存値。壊れた値や、この版に無いアバターの割り当てが混ざっていても
+// 画面が壊れないよう、形だけを整える(知らないkeyは消さずに残す。辞書へ追加されれば
+// また使えるようになるし、消すと本人の指定を黙って失うことになる)
+function normalizeAvatarAssign(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const out = {};
+  for (const [key, assigned] of Object.entries(value)) {
+    if (typeof key === "string" && key && typeof assigned === "string" && assigned) {
+      out[key] = assigned;
+    }
+  }
+  return out;
+}
+
 // ---- 年ごとの振り返り --------------------------------------------------
 
 const YEAR_SUMMARY_TOP_SHOPS = 3;
@@ -787,6 +997,15 @@ function saveIndex(index) {
 
 function saveCache(cache) {
   return writeStored(CACHE_KEY, cache);
+}
+
+// D14 手動割り当て。保存が無い環境(この機能より前の版)では空として扱う
+async function loadAvatarAssign() {
+  return normalizeAvatarAssign(await readStored(AVATAR_ASSIGN_KEY, {}));
+}
+
+function saveAvatarAssign(assignments) {
+  return writeStored(AVATAR_ASSIGN_KEY, normalizeAvatarAssign(assignments));
 }
 
 function loadSummary() {

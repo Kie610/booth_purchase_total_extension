@@ -118,6 +118,17 @@ const summaryYear = document.getElementById("summaryYear");
 const summaryCards = document.getElementById("summaryCards");
 const summaryNewShopWarn = document.getElementById("summaryNewShopWarn");
 const summaryTopShopsBody = document.getElementById("summaryTopShopsBody");
+const avatarEmpty = document.getElementById("avatarEmpty");
+const avatarArea = document.getElementById("avatarArea");
+const avatarStats = document.getElementById("avatarStats");
+const avatarUnknown = document.getElementById("avatarUnknown");
+const avatarTableBody = document.getElementById("avatarTableBody");
+const avatarOtherBody = document.getElementById("avatarOtherBody");
+const avatarAssignBody = document.getElementById("avatarAssignBody");
+const avatarAssignBox = document.getElementById("avatarAssignBox");
+const avatarAssignCount = document.getElementById("avatarAssignCount");
+const avatarYear = document.getElementById("avatarYear");
+const avatarSortToggle = document.getElementById("avatarSortToggle");
 const rankingYear = document.getElementById("rankingYear");
 const rankingSortToggle = document.getElementById("rankingSortToggle");
 const rankingHideNumbers = document.getElementById("rankingHideNumbers");
@@ -155,6 +166,9 @@ const shareOpenBtn = document.getElementById("shareOpenBtn");
 const shareCardStatus = document.getElementById("shareCardStatus");
 // D13 品名・ショップ名を出さずに共有する
 const shareHideNames = document.getElementById("shareHideNames");
+// D14 沼レポートには伏せる品名・ショップ名が無いので、その共有では行ごと隠す。
+// 押しても何も変わらないチェックが残っていると、効いていないのか壊れているのか分からない
+const shareHideNamesRow = shareHideNames.closest(".share-hide-names");
 
 // 実行中は押せなくするボタン
 const ACTION_BUTTONS = [
@@ -174,12 +188,13 @@ const ACTION_BUTTONS = [
 // (ポップアップではなく専用タブで処理しているのと同じ理由)。
 // 現在の画面はURLのハッシュに持たせるので、再読み込みしても同じ画面に戻る。
 
-const VIEW_NAMES = ["report", "ranking", "trends", "summary", "export", "backup"];
+const VIEW_NAMES = ["report", "ranking", "avatars", "trends", "summary", "export", "backup"];
 const DEFAULT_VIEW = "report";
 // 見出しの右に添える画面名。既定の画面では何も足さない
 const VIEW_TITLES = {
   report: "",
   ranking: "推し作者ランキング",
+  avatars: "沼レポート（アバター別）",
   trends: "支出推移・前年比較",
   summary: "今年のまとめ",
   export: "データ出力",
@@ -455,6 +470,7 @@ const expandedTrendPeriodYears = new Set();
 let shareStats = null;
 let rankingShareStats = null;
 let summaryShareStats = null;
+let avatarShareStats = null;
 
 // ---- 要素の組み立て ----------------------------------------------------
 
@@ -620,6 +636,7 @@ function render() {
   updatePlannedCount();
   renderClearArea();
   renderRankingArea(results);
+  renderAvatarArea(results);
   renderYearSummary(results);
   renderExportArea(results);
   renderBackupArea(results);

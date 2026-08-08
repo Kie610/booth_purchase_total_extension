@@ -158,6 +158,108 @@ function rankingShareConfirmMessage(stats) {
   );
 }
 
+// ---- D14 沼レポートの共有 ----------------------------------------------
+//
+// **伏せ字(D13「品名・ショップ名を出さない」)でもアバター名は出す。**
+// 根拠: 伏せたいのは「誰から何を買ったか」という購買行動の細部であり、
+// アバター名はVRChatの利用者が日常的に公開している一般名詞に近い。
+// マヌカ・森羅といった素体名は数万人規模で共有されていて、
+// 名前だけでは個人を特定する手掛かりにならない。一方でショップ名・品名は
+// 買った先と品目が一意に近く決まるため、従来どおり伏せる。
+// この画面の共有では品名・ショップ名をそもそも出していないので、
+// 伏せ字ONでも落とすものが無く、順位表はそのまま残す。
+
+function avatarShareValue(row, sort) {
+  return sort === "count" ? `${row.count}点` : formatYen(row.total);
+}
+
+function avatarShareCaption(stats) {
+  const period = stats.periodLabel ? `${stats.periodLabel}・` : "";
+  const filter = giftFilterShareLabel(stats);
+  return `${period}${filter ? `${filter}・` : ""}${RANKING_SORT_LABELS[stats.sort]}`;
+}
+
+// 最推しアバター(1位)。同率の扱いは画面の順位と同じで、先頭をそのまま採る
+function topAvatarName(stats) {
+  return stats && stats.rows.length > 0 ? stats.rows[0].name : "";
+}
+
+// 順位に入らなかった分は必ず添える。順位表だけだと、Full Packや未分類に
+// 使った額まで順位のどこかに入っているように読めてしまう
+function avatarShareOtherLine(stats) {
+  const parts = [];
+  if (stats.multiCount > 0) parts.push(`複数対応 ${stats.multiCount}点`);
+  if (stats.unclassifiedCount > 0) parts.push(`未分類 ${stats.unclassifiedCount}点`);
+  return parts.length > 0 ? `※順位の外: ${parts.join(" / ")}` : "";
+}
+
+function buildAvatarShareText(stats) {
+  const other = avatarShareOtherLine(stats);
+  return [
+    `BOOTHの沼レポート🛍️（${avatarShareCaption(stats)}）`,
+    "",
+    `最推しアバター：${topAvatarName(stats)}`,
+    "",
+    ...stats.rows.map((row, index) => {
+      const rank = RANKING_MEDALS[index] || `${index + 1}.`;
+      return `${rank} ${row.name} ${avatarShareValue(row, stats.sort)}`;
+    }),
+    ...(stats.sort === "amount" ? ["", "※金額は商品の合計（送料・クーポンを除く）"] : []),
+    ...(other ? [other] : []),
+    "",
+    SHARE_HASHTAG,
+  ].join("\n");
+}
+
+// 順位や数字がずれうる理由。ランキングと同じ作法で、出す前に本人へ断る
+function avatarShareIssues(stats) {
+  const issues = [];
+  if (stats.pending > 0) issues.push(`未収集の注文が${stats.pending}件あります`);
+  if (!stats.indexComplete) issues.push("注文履歴の取得が途中で終わっています");
+  if (stats.sort === "amount" && stats.unknown > 0) {
+    issues.push(`金額を読み取れなかった商品が${stats.unknown}点あります`);
+  }
+  // 未分類は「まだどのアバターにも数えられていない支出」。多いほど順位は当てにならない
+  if (stats.unclassifiedCount > 0) {
+    issues.push(`素体名を読み取れなかった商品が${stats.unclassifiedCount}点あります`);
+  }
+  return issues;
+}
+
+function avatarShareConfirmMessage(stats) {
+  return (
+    `${avatarShareIssues(stats).join("。")}。\n` +
+    "このまま共有すると、順位や数字が実際とは違うことがあります。\n" +
+    "よろしいですか?"
+  );
+}
+
+function buildAvatarShareCard(stats) {
+  const card = shareCardBase(
+    `沼レポート（${avatarShareCaption(stats)}）`,
+    shareSubtitle(stats)
+  );
+  card.stats.push({
+    label: "最推しアバター",
+    value: topAvatarName(stats),
+    note: `${stats.avatarCount}体`,
+  });
+  card.list = stats.rows.map((row, index) => ({
+    rank: index + 1,
+    name: row.name,
+    value: avatarShareValue(row, stats.sort),
+  }));
+  // 画面と文面に出している断りは画像にも要る。画像だけが転載されることがある
+  const other = avatarShareOtherLine(stats);
+  card.note = [
+    stats.sort === "amount" ? "金額は商品の合計（送料・クーポンを除く）" : "",
+    other,
+  ]
+    .filter(Boolean)
+    .join(" / ");
+  return card;
+}
+
 // ---- 今年のまとめの共有 ------------------------------------------------
 
 function buildSummaryShareText(stats, hideNames) {
@@ -172,6 +274,8 @@ function buildSummaryShareText(stats, hideNames) {
   // はじめて買った作者がいない年に「はじめて 0人」と出すと寂しいだけなので落とす
   if (stats.newShopCount > 0) lines.push(`うちはじめて ${stats.newShopCount}人`);
   if (stats.busiestMonth) lines.push(`いちばん買った月 ${monthLabel(stats.busiestMonth.key)}`);
+  // D14 アバター名は伏せ字(hideNames)でも出す。根拠は沼レポートの共有の節を参照
+  if (stats.topAvatar) lines.push(`最推しアバター ${stats.topAvatar.name}`);
   if (hideNames) {
     lines.push("", HIDE_NAMES_NOTE, "", SHARE_HASHTAG);
     return lines.join("\n");
@@ -312,6 +416,10 @@ function buildSummaryShareCard(stats, hideNames) {
     value: `${stats.shopCount}人`,
     note: stats.newShopCount > 0 ? `はじめて ${stats.newShopCount}人` : "",
   });
+  // D14 アバター名は伏せ字でも出す(根拠は沼レポートの共有の節)
+  if (stats.topAvatar) {
+    card.stats.push({ label: "最推しアバター", value: stats.topAvatar.name, note: "" });
+  }
   if (hideNames) {
     card.bars = monthlyBars(`${stats.year}年の月別`, stats.monthlyTotals);
     card.note = "ショップ名は伏せています";

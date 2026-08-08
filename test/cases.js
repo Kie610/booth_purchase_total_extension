@@ -1005,6 +1005,127 @@ location.hash = "#/report";
 renderCurrentView();
 check("他の画面では合計の共有に戻る", shareBtn.textContent, "𝕏で共有");
 
+// --- D14 沼レポート: 商品名からバリエーション名を取り出す ---
+// BOOTHは「商品名 (バリエーション名)」の形で保存されている。末尾の対応括弧グループだけを
+// 剥がす(途中の括弧は商品名の一部でありうる)
+check("末尾の括弧をバリエーションとして取る",
+  parseItemName("ふわもこパーカー (マヌカ)"), { base: "ふわもこパーカー", variation: "マヌカ" });
+// 入れ子。外側のグループを採るので中身の括弧はそのまま残る
+check("入れ子の括弧は外側を採る",
+  parseItemName("衣装セット (エク(ミルフィ))"), { base: "衣装セット", variation: "エク(ミルフィ)" });
+check("全角括弧も同じ扱い",
+  parseItemName("衣装セット（森羅）"), { base: "衣装セット", variation: "森羅" });
+check("括弧が無ければバリエーションなし",
+  parseItemName("シンプルなワンピース"), { base: "シンプルなワンピース", variation: null });
+// 単一バリエーション商品は商品名と同文が付く。これを「バリエーション」と数えない
+check("商品名と同文はバリエーションなし",
+  parseItemName("マヌカ (マヌカ)"), { base: "マヌカ", variation: null });
+check("途中の括弧は剥がさない",
+  parseItemName("(限定)コート"), { base: "(限定)コート", variation: null });
+check("閉じ括弧だけの壊れた名前はそのまま",
+  parseItemName("こわれた名前)"), { base: "こわれた名前)", variation: null });
+check("括弧の中が空ならバリエーションなし",
+  parseItemName("なにか ()"), { base: "なにか", variation: null });
+check("名前がまるごと括弧なら剥がさない",
+  parseItemName("(Milfy)"), { base: "(Milfy)", variation: null });
+check("空の名前でも落ちない", parseItemName(undefined), { base: "", variation: null });
+
+// --- D14 素体名辞書との照合 ---
+check("日本語表記で当たる", matchAvatarKeys("マヌカ"), ["manuka"]);
+check("ローマ字表記でも当たる", matchAvatarKeys("for Manuka"), ["manuka"]);
+check("ローマ字の大文字小文字は問わない", matchAvatarKeys("MANUKA/SHINRA"), ["manuka", "shinra"]);
+// 部分一致にすると "Eku" が "Nekura" に、"Lime" が "Sublime" に当たってしまう
+check("英字は語の切れ目で照合する",
+  [matchAvatarKeys("Nekura"), matchAvatarKeys("Sublime"), matchAvatarKeys("Eku ver")],
+  [[], [], ["eku"]]);
+check("辞書に無ければ空", matchAvatarKeys("しらないそたい"), []);
+check("Full Packの印を見分ける",
+  [hasAvatarMultiMarker("【Full Pack】"), hasAvatarMultiMarker("フルパック"),
+   hasAvatarMultiMarker("マヌカ")], [true, true, false]);
+check("辞書は日本語とローマ字の両方を持つ",
+  AVATAR_MASTER.every((a) => a.aliases.length >= 2 && a.key && a.name), true);
+check("辞書のkeyは重複しない",
+  new Set(AVATAR_MASTER.map((a) => a.key)).size, AVATAR_MASTER.length);
+
+// --- D14 商品1件の振り分け ---
+const avatarItem = (name, price) => ({ ...item(name, price), name });
+check("バリエーション名から1体に決まる",
+  classifyItemAvatar(avatarItem("パーカー (Milfy)", 100), {}),
+  { kind: "avatar", key: "milfy", manual: false });
+check("複数名が並べば複数対応",
+  classifyItemAvatar(avatarItem("パーカー (Milfy&Eku)", 100), {}).kind, "multi");
+check("Full Packは複数対応",
+  classifyItemAvatar(avatarItem("パーカー (【Full Pack】)", 100), {}).kind, "multi");
+// 素体名が品名側にしか出ない商品(テクスチャ系)の補完。バリエーションより後に見る
+check("バリエーションで当たらなければ品名本体で見る",
+  classifyItemAvatar(avatarItem("森羅用テクスチャ (差分A)", 100), {}),
+  { kind: "avatar", key: "shinra", manual: false });
+check("バリエーションの照合を品名より優先する",
+  classifyItemAvatar(avatarItem("森羅用パーカー (マヌカ)", 100), {}).key, "manuka");
+// 読み取れなかったものを当てずっぽうで埋めない
+check("素体名が無ければ未分類",
+  classifyItemAvatar(avatarItem("かわいい服 (Sサイズ)", 100), {}),
+  { kind: "none", key: "", manual: false });
+
+// --- D14 手動割り当て(自動の判定より本人の指定を優先する) ---
+const assignTarget = avatarItem("かわいい服 (Sサイズ)", 100);
+const assignKey = itemProductKey(assignTarget);
+check("商品キーはバリエーションを剥がした本体とショップで決まる",
+  assignKey, "https://sourflavor.booth.pm/ / かわいい服");
+check("同じ商品の別バリエーションは同じキーになる",
+  itemProductKey(avatarItem("かわいい服 (Mサイズ)", 100)), assignKey);
+check("手動割り当てが自動判定より優先される",
+  classifyItemAvatar(avatarItem("パーカー (Milfy)", 100),
+    { [itemProductKey(avatarItem("パーカー (Milfy)", 100))]: "shinra" }),
+  { kind: "avatar", key: "shinra", manual: true });
+check("手動で複数対応にもできる",
+  classifyItemAvatar(assignTarget, { [assignKey]: AVATAR_MULTI_KEY }).kind, "multi");
+// 辞書に無いkey(将来の版のバックアップなど)は名前を出せない。推測で別の素体へ寄せない
+check("辞書に無いkeyは未分類として扱う",
+  classifyItemAvatar(assignTarget, { [assignKey]: "unknown-avatar" }).kind, "none");
+check("壊れた保存値は整えて読む",
+  normalizeAvatarAssign({ ok: "manuka", "": "x", bad: 5, empty: "" }), { ok: "manuka" });
+check("保存が無ければ空", normalizeAvatarAssign(undefined), {});
+// 知らないkeyでも保存は消さない(辞書へ足せばまた使えるし、消すと指定を黙って失う)
+check("知らないkeyでも保存は残す",
+  normalizeAvatarAssign({ p: "unknown-avatar" }), { p: "unknown-avatar" });
+
+// --- D14 アバター別の集計 ---
+const avatarRows = [
+  { id: "v1", date: "2026年1月5日 10:00", amount: 3000,
+    items: [avatarItem("パーカー (マヌカ)", 1000), avatarItem("スカート (マヌカ)", 500),
+            avatarItem("髪 (森羅)", 1200), avatarItem("セット (【Full Pack】)", 300)] },
+  { id: "v2", date: "2025年8月1日 10:00", amount: 800,
+    items: [avatarItem("なぞの服 (Lサイズ)", 800)] },
+];
+const avatarAgg = aggregateByAvatar(avatarRows, {});
+check("アバター別は金額の多い順", avatarAgg.rows.map((r) => [r.name, r.count, r.total]),
+  [["マヌカ", 2, 1500], ["森羅", 1, 1200]]);
+check("Full Packは複数対応の枠へ", [avatarAgg.multi.count, avatarAgg.multi.total], [1, 300]);
+check("素体名の無い商品は未分類の枠へ", [avatarAgg.none.count, avatarAgg.none.total], [1, 800]);
+check("順位に複数対応・未分類を混ぜない",
+  avatarAgg.rows.some((r) => r.key === AVATAR_MULTI_KEY || r.key === ""), false);
+check("購入数編にも切り替えられる",
+  aggregateByAvatar(avatarRows, {}, "count").rows.map((r) => r.name), ["マヌカ", "森羅"]);
+// 未分類は手で割り当てる受け皿として並べる(自動で当たったものは並べない)
+check("手動割り当ての候補は未分類のものだけ",
+  avatarAgg.products.map((p) => p.name), ["なぞの服"]);
+const avatarAssigned = aggregateByAvatar(avatarRows, {
+  [itemProductKey(avatarItem("なぞの服 (Lサイズ)", 800))]: "shinra",
+});
+check("手動割り当てが集計に効く",
+  avatarAssigned.rows.map((r) => [r.name, r.total]), [["森羅", 2000], ["マヌカ", 1500]]);
+// 割り当て済みを一覧から外すと、間違えたときに戻せなくなる
+check("割り当て済みも一覧に残して直せるようにする",
+  avatarAssigned.products.map((p) => [p.name, p.assigned]), [["なぞの服", "shinra"]]);
+check("明細の無い注文は数えない", aggregateByAvatar([{ id: "x", items: null }], {}).rows, []);
+// 読めなかった分を0として足すと、少ない額を正しい合計に見せてしまう
+check("金額を読めない商品は合計に足さない",
+  aggregateByAvatar([{ id: "u1", items: [
+    { ...avatarItem("服 (マヌカ)", 100) }, { ...avatarItem("靴 (マヌカ)", 0), price: null },
+  ] }], {}).rows[0], { key: "manuka", name: "マヌカ", count: 2, total: 100, unknown: 1,
+    items: ["靴 (マヌカ)", "服 (マヌカ)"] });
+
 // --- 今年のまとめ ---
 // 「はじめて出会った作者」を出すため、その年より前の注文も見る必要がある
 const summaryRows = [
@@ -1598,10 +1719,10 @@ renderCurrentView();
 check("データ出力へ切り替わる",
   [document.getElementById("view-report").hidden, document.getElementById("view-export").hidden], [true, false]);
 check("メニューに現在地が出る",
-  [...navDrawer.querySelectorAll(".nav-link")].map(a => a.classList.contains("current")), [false, false, false, false, true, false]);
+  [...navDrawer.querySelectorAll(".nav-link")].map(a => a.classList.contains("current")), [false, false, false, false, false, true, false]);
 check("現在地は読み上げにも出す",
   [...navDrawer.querySelectorAll(".nav-link")].map(a => a.getAttribute("aria-current")),
-  [null, null, null, null, "page", null]);
+  [null, null, null, null, null, "page", null]);
 check("画面名を見出しに添える", viewTitle.textContent, "データ出力");
 location.hash = "#/trends";
 renderCurrentView();
@@ -1820,6 +1941,34 @@ const mergedResult = mergeBackup(
 check("併合で増えた注文の件数", mergedResult.addedOrders, 1);
 check("併合で増えた金額の件数", mergedResult.addedAmounts, 1);
 check("併合しても今の収集済みは残る", mergedResult.cache.x.amount, 500);
+
+// --- D14 手動割り当てのバックアップ往復(公開契約への追加) ---
+const assignBackup = buildBackup(state.index, state.cache, new Date(2026, 6, 5), { p1: "manuka" });
+check("バックアップにアバター割り当てが入る", assignBackup.avatarAssign, { p1: "manuka" });
+// 足したのは省略可能な項目1つだけ。版数を上げると旧バージョンが丸ごと拒否してしまう
+check("項目を足しても版数は上げない", assignBackup.version, 1);
+check("書き出したアバター割り当てを読み戻せる",
+  parseBackup(JSON.stringify(assignBackup)).avatarAssign, { p1: "manuka" });
+// この項目を持たない古いバックアップも今までどおり読める(後方互換)
+const legacyBackup = parseBackup(JSON.stringify({ ...backupEnvelope }));
+check("割り当ての無い古いバックアップも読める",
+  [legacyBackup.ok, legacyBackup.avatarAssign], [true, {}]);
+check("割り当てが壊れていれば拒否する",
+  parseBackup(JSON.stringify({ ...backupEnvelope, avatarAssign: { p1: 5 } })).message,
+  "バックアップのアバター割り当てが壊れています。");
+check("割り当てがオブジェクトでなければ拒否する",
+  parseBackup(JSON.stringify({ ...backupEnvelope, avatarAssign: [] })).ok, false);
+// 読み込みで本人の指定が黙って別の素体へ変わらないよう、今ある側を残す
+const mergedAssign = mergeBackup(
+  { index: idxA, cache: {}, avatarAssign: { p1: "manuka", p2: "eku" } },
+  { index: idxB, cache: {}, avatarAssign: { p1: "shinra", p3: "lime" } },
+  stamp
+);
+check("割り当ての併合は今ある側を残す",
+  mergedAssign.avatarAssign, { p1: "manuka", p3: "lime", p2: "eku" });
+check("併合で増えた割り当ての件数", mergedAssign.addedAssign, 1);
+check("割り当てを持たない同士でも壊れない",
+  mergeBackup({ index: null, cache: {} }, { index: null, cache: {} }, stamp).avatarAssign, {});
 
 // 画面下部の固定フッター(収集済みのみを対象にする)
 const nowYear = new Date().getFullYear();
@@ -2535,6 +2684,102 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
     [memoDeclIndex >= 0, earlyCallIndex >= 0, memoDeclIndex < earlyCallIndex],
     [true, true, true]);
 
+  // --- D14 沼レポートの画面と手動割り当ての保存 ---
+  const savedAvatarIndex = state.index;
+  const savedAvatarCache = state.cache;
+  state.index = {
+    updatedAt: "2026-07-26T00:00:00.000Z",
+    complete: true,
+    orders: [
+      { id: "n1", status: "completed", date: "2026年1月5日 10:00" },
+      { id: "n2", status: "completed", date: "2025年8月1日 10:00" },
+    ],
+  };
+  state.cache = {
+    n1: { v: CACHE_SCHEMA_VERSION, amount: 3000, gift: 0, shipping: 0,
+      status: "completed", date: "2026年1月5日 10:00",
+      items: [item("パーカー (マヌカ)", 1000), item("スカート (マヌカ)", 500),
+              item("髪 (森羅)", 1200), item("セット (【Full Pack】)", 300)] },
+    n2: { v: CACHE_SCHEMA_VERSION, amount: 800, gift: 0, shipping: 0,
+      status: "completed", date: "2025年8月1日 10:00",
+      items: [item("なぞの服 (Lサイズ)", 800)] },
+  };
+  state.avatarAssign = {};
+  setAvatarYear("all");
+  setAvatarSort("amount");
+  render();
+
+  check("沼レポートの順位表",
+    [...avatarTableBody.querySelectorAll("tr.shop-row")].map((tr) =>
+      [tr.cells[1].textContent, tr.cells[2].textContent, tr.cells[3].textContent]),
+    [["マヌカ", "2点", "¥1,500"], ["森羅", "1点", "¥1,200"]]);
+  // 複数対応・未分類は順位に混ぜず、別枠で必ず見せる(隠すと支出が消えたように見える)
+  check("複数対応と未分類を別枠で出す",
+    [...avatarOtherBody.querySelectorAll("tr")].map((tr) =>
+      [tr.cells[0].textContent, tr.cells[2].textContent, tr.cells[3].textContent]),
+    [["複数対応", "1点", "¥300"], ["未分類", "1点", "¥800"]]);
+  check("件数を見出しにも出す",
+    [avatarStats.textContent.includes("複数対応: 1点"),
+     avatarStats.textContent.includes("未分類: 1点")], [true, true]);
+
+  // 未分類は手で割り当てられる。選択肢は辞書から作るので、辞書へ足すだけで増える
+  const assignSelect = avatarAssignBody.querySelector("select[data-product-key]");
+  check("未分類の商品を手で割り当てられる",
+    [avatarAssignBody.querySelectorAll("tr").length,
+     assignSelect.options.length, assignSelect.value],
+    [1, AVATAR_MASTER.length + 2, ""]);
+  check("割り当ての選択肢に複数対応がある",
+    [...assignSelect.options].map((o) => o.value).slice(0, 2), ["", AVATAR_MULTI_KEY]);
+
+  assignSelect.value = "shinra";
+  assignSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  check("割り当てが集計に効く",
+    [...avatarTableBody.querySelectorAll("tr.shop-row")].map((tr) => tr.cells[1].textContent),
+    ["森羅", "マヌカ"]);
+  check("割り当てを保存する", await readStored(AVATAR_ASSIGN_KEY, null),
+    { "https://sourflavor.booth.pm/ / なぞの服": "shinra" });
+  // 保存から読み戻せること(引っ越し・開き直しで消えない)
+  check("保存した割り当てを読み戻せる", await loadAvatarAssign(),
+    { "https://sourflavor.booth.pm/ / なぞの服": "shinra" });
+
+  // 「未分類のまま」は指定を持たない状態そのもの。項目ごと消して元へ戻す
+  const undoSelect = avatarAssignBody.querySelector("select[data-product-key]");
+  undoSelect.value = "";
+  undoSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  check("未分類へ戻すと保存から消える", await readStored(AVATAR_ASSIGN_KEY, null), {});
+  await removeStored(AVATAR_ASSIGN_KEY);
+
+  // 期間フィルタ(D5と同じ作法)。年を選ぶとその年の注文だけで順位を出す
+  setAvatarYear("2025");
+  check("期間を絞ると対象が変わる",
+    [avatarTableBody.querySelectorAll("tr.shop-row").length,
+     avatarOtherBody.querySelectorAll("tr")[1].cells[2].textContent], [0, "1点"]);
+  setAvatarYear("all");
+
+  // 共有(画面に出している順位そのものを出す。順位の外の件数も必ず添える)
+  location.hash = "#/avatars";
+  renderCurrentView();
+  check("沼レポートでは共有の対象が変わる",
+    [shareBtn.textContent, shareBtn.disabled], ["𝕏で沼レポートを共有", false]);
+  check("沼レポートの共有文面", buildAvatarShareText(avatarShareStats),
+    "BOOTHの沼レポート🛍️（金額編）\n\n最推しアバター：マヌカ\n\n🥇 マヌカ ¥1,500\n🥈 森羅 ¥1,200\n\n" +
+    "※金額は商品の合計（送料・クーポンを除く）\n※順位の外: 複数対応 1点 / 未分類 1点\n\n#BOOTHお買いものレポート");
+  const avatarCard = buildAvatarShareCard(avatarShareStats);
+  check("共有カードに最推しアバターを出す",
+    [avatarCard.stats[0].label, avatarCard.stats[0].value], ["最推しアバター", "マヌカ"]);
+  check("共有カードにも順位の外を断る",
+    avatarCard.note.includes("順位の外: 複数対応 1点 / 未分類 1点"), true);
+  // 未分類が残っているうちは順位が当てにならない。出す前に断る
+  check("未分類が残っていれば共有前に断る",
+    avatarShareIssues(avatarShareStats).some((s) => s.includes("素体名を読み取れなかった")), true);
+  location.hash = "#/report";
+  renderCurrentView();
+
+  state.index = savedAvatarIndex;
+  state.cache = savedAvatarCache;
+  state.avatarAssign = {};
+  render();
+
   // --- 𝕏共有ボタン(実際のHTMLとCSSが表示仕様どおりか) ---
   const dashboardHtml = await (await fetch("../extension/dashboard.html")).text();
   const dashboardDoc = new DOMParser().parseFromString(dashboardHtml, "text/html");
@@ -2554,7 +2799,14 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
     dashboardDoc.querySelector('.nav-link[data-view="ranking"]').getAttribute("href"), "#/ranking");
   check("メニューに追加した画面が並んでいる",
     [...dashboardDoc.querySelectorAll(".nav-link")].map((a) => a.getAttribute("href")),
-    ["#/report", "#/ranking", "#/trends", "#/summary", "#/export", "#/backup"]);
+    ["#/report", "#/ranking", "#/avatars", "#/trends", "#/summary", "#/export", "#/backup"]);
+  // D14 沼レポートの断り書き。アバター別の金額もショップ別と同じく商品の合計なので、
+  // 外すと少ない額を「そのアバターに使った額」として見せることになる
+  check("沼レポートに合計と一致しない旨の断りがある",
+    dashboardDoc.getElementById("avatarBasis").textContent.includes("全体の合計額とは一致しません"),
+    true);
+  check("沼レポートは推測で振り分けないと明記する",
+    dashboardDoc.getElementById("view-avatars").textContent.includes("推測で振り分けません"), true);
   check("作者情報はメニューの最後に置く",
     dashboardDoc.getElementById("navDrawer").lastElementChild.id, "authorBtn");
   check("ヘッダー右端にコピーライトを置く",
@@ -2748,7 +3000,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
      dashboardDoc.getElementById("confirmPanel").getAttribute("aria-modal")], ["dialog", "true"]);
   check("ナビは1組のリンクを画面幅で見せ分ける",
     [dashboardDoc.querySelectorAll(".nav-link").length,
-     dashboardDoc.getElementById("navDrawer").parentElement.id], [6, "navBar"]);
+     dashboardDoc.getElementById("navDrawer").parentElement.id], [7, "navBar"]);
 
   // 読み込めなかったファイルを名指しできるよう、スクリプトの一覧と対応させる
   const harnessDoc = new DOMParser().parseFromString(await (await fetch("index.html")).text(), "text/html");

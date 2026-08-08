@@ -36,7 +36,9 @@ let running = false;
 let abortController = null;
 let lastRunStateWrite = 0;
 let runLockHeartbeatTimer = null;
-const state = { index: null, cache: {} };
+// avatarAssign は D14 沼レポートの手動割り当て。集計結果ではなく本人の指定なので、
+// キャッシュ削除や再収集では消さない(消すと割り当て直しになる)
+const state = { index: null, cache: {}, avatarAssign: {} };
 
 // 描画1回のあいだ使い回す buildResults() の結果。
 // buildResults() は注文数に比例して新しい配列を組み立てるため、各描画関数が
@@ -163,7 +165,11 @@ exportItemsBtn.addEventListener("click", () =>
 
 backupSaveBtn.addEventListener("click", () =>
   downloadFile(
-    JSON.stringify(buildBackup(state.index, state.cache), null, 1),
+    JSON.stringify(
+      buildBackup(state.index, state.cache, undefined, state.avatarAssign),
+      null,
+      1
+    ),
     backupFileName(),
     "application/json"
   )
@@ -199,13 +205,16 @@ restoreFile.addEventListener("change", async () => {
   const merged = mergeBackup(state, parsed);
   state.index = merged.index;
   state.cache = merged.cache;
+  state.avatarAssign = merged.avatarAssign;
   if (state.index) await saveIndex(state.index);
   await saveCache(state.cache);
+  await saveAvatarAssign(state.avatarAssign);
   await saveSummary(buildSummary(false));
   render();
 
   restoreStatus.textContent =
     `復元しました。注文が${merged.addedOrders}件、収集済みの金額が${merged.addedAmounts}件増えました` +
+    (merged.addedAssign > 0 ? `(アバターの割り当ても${merged.addedAssign}件増えました)` : "") +
     (parsed.exportedAt ? `(バックアップ日時: ${formatTimestamp(parsed.exportedAt)})` : "") +
     "。";
   restoreFile.value = "";
@@ -289,6 +298,10 @@ shareBtn.addEventListener("click", async () => {
     await shareRanking();
     return;
   }
+  if (shareMode() === "avatars") {
+    await shareAvatarReport();
+    return;
+  }
   if (shareMode() === "summary") {
     await shareYearSummary();
     return;
@@ -337,6 +350,23 @@ async function shareRanking() {
     build: (hideNames) => ({
       text: buildRankingShareText(rankingShareStats, hide, hideNames),
       card: buildRankingShareCard(rankingShareStats, hide, hideNames),
+    }),
+  });
+}
+
+// D14 沼レポート。順位のずれる理由はランキングと同じに加え、未分類が残っていること。
+// 伏せ字(hideNames)はアバター名に効かせない(根拠は share.js の沼レポートの節)
+async function shareAvatarReport() {
+  if (!avatarShareStats || avatarShareStats.rows.length === 0) return;
+  if (avatarShareIssues(avatarShareStats).length > 0) {
+    if (!(await askConfirm(avatarShareConfirmMessage(avatarShareStats), "共有する"))) return;
+  }
+  openSharePanel({
+    name: "booth-avatars",
+    maskable: false,
+    build: () => ({
+      text: buildAvatarShareText(avatarShareStats),
+      card: buildAvatarShareCard(avatarShareStats),
     }),
   });
 }
@@ -583,7 +613,7 @@ trendBaseYear.addEventListener("change", () =>
 // 順位横の ▸ だけが対象だと小さすぎて開けることに気付けないため、行全体を効かせる。
 // ただしショップ名のリンクは本来の遷移(ショップページ)を優先する。
 // 明細を見るつもりで踏んだ人が別ページへ飛ばされる方が困る
-for (const tbody of [rankingTableBody, summaryTopShopsBody]) {
+for (const tbody of [rankingTableBody, summaryTopShopsBody, avatarTableBody]) {
   tbody.addEventListener("click", (event) => {
     const button = event.target.closest("button.rank-toggle");
     if (button) {
@@ -603,6 +633,28 @@ rankingYear.addEventListener("change", () => setRankingYear(rankingYear.value));
 rankingSortToggle.addEventListener("click", (event) => {
   const btn = event.target.closest(".segmented-btn");
   if (btn) setRankingSort(btn.dataset.sort);
+});
+
+// D14 沼レポートの対象期間と基準。推し作者ランキングと同じ作法にそろえる
+avatarYear.addEventListener("change", () => setAvatarYear(avatarYear.value));
+
+avatarSortToggle.addEventListener("click", (event) => {
+  const btn = event.target.closest(".segmented-btn");
+  if (btn) setAvatarSort(btn.dataset.sort);
+});
+
+// D14 未分類の手動割り当て。保存を待たずに描き直す(待つと選んでから
+// 反映まで間が空き、効かなかったように見える)。保存に失敗してもその場の表示は残る
+avatarAssignBody.addEventListener("change", (event) => {
+  const select = event.target.closest("select[data-product-key]");
+  if (!select) return;
+  const key = select.dataset.productKey;
+  // 「未分類のまま」は指定を持たない状態そのもの。空文字を保存すると
+  // 「未分類だと明示した」という別の状態が増えてしまうので、項目ごと消す
+  if (select.value) state.avatarAssign[key] = select.value;
+  else delete state.avatarAssign[key];
+  render();
+  saveAvatarAssign(state.avatarAssign);
 });
 
 function openShareWindow(text) {
@@ -752,6 +804,7 @@ async function init() {
 
   state.index = await loadIndex();
   state.cache = await loadCache();
+  state.avatarAssign = await loadAvatarAssign();
   render();
 }
 

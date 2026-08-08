@@ -9,13 +9,18 @@
 const BACKUP_FORMAT = "booth-purchase-report";
 const BACKUP_VERSION = 1;
 
-function buildBackup(index, cache, exportedAt) {
+// D14 沼レポートの手動割り当て(avatarAssign)を足した。
+// **版数は上げない。**足したのは省略可能な項目1つだけで、この項目を知らない
+// 旧バージョンの読み込みは無視して従来どおり動く。版数を上げると、旧バージョンが
+// 「対応していない」として新しいバックアップを丸ごと拒否してしまう
+function buildBackup(index, cache, exportedAt, avatarAssign) {
   return {
     format: BACKUP_FORMAT,
     version: BACKUP_VERSION,
     exportedAt: (exportedAt || new Date()).toISOString(),
     index: index || null,
     cache: cache || {},
+    avatarAssign: avatarAssign || {},
   };
 }
 
@@ -120,10 +125,20 @@ function parseBackup(text) {
   ) {
     return { ok: false, message: "バックアップの金額データが壊れています。" };
   }
+  // D14 の手動割り当て。**この項目を持たない古いバックアップも受け付ける**
+  // (無ければ空として読む)。中身が壊れているときだけ拒む
+  if (
+    data.avatarAssign !== undefined &&
+    (!isObject(data.avatarAssign) ||
+      Object.values(data.avatarAssign).some((value) => typeof value !== "string"))
+  ) {
+    return { ok: false, message: "バックアップのアバター割り当てが壊れています。" };
+  }
   return {
     ok: true,
     index: data.index || null,
     cache: data.cache || {},
+    avatarAssign: normalizeAvatarAssign(data.avatarAssign),
     exportedAt: typeof data.exportedAt === "string" ? data.exportedAt : "",
   };
 }
@@ -156,15 +171,25 @@ function mergeOrderCache(current, incoming) {
   return merged;
 }
 
+// 手動割り当ても今ある側を優先する。同じ商品を両方で割り当てていたら、
+// この環境で本人が最後に選んだものを残す(読み込みで黙って別の素体へ変わらない)
+function mergeAvatarAssign(current, incoming) {
+  return { ...normalizeAvatarAssign(incoming), ...normalizeAvatarAssign(current) };
+}
+
 // 併合の結果と、それによって何件増えたか(画面に出して確かめられるようにする)
 function mergeBackup(current, incoming, updatedAt) {
   const index = mergeOrderIndex(current.index, incoming.index, updatedAt);
   const cache = mergeOrderCache(current.cache, incoming.cache);
+  const avatarAssign = mergeAvatarAssign(current.avatarAssign, incoming.avatarAssign);
   const beforeOrders = current.index ? current.index.orders.length : 0;
   const beforeCollected = Object.values(current.cache).filter((e) => !needsCollect(e)).length;
+  const beforeAssign = Object.keys(normalizeAvatarAssign(current.avatarAssign)).length;
   return {
     index,
     cache,
+    avatarAssign,
+    addedAssign: Object.keys(avatarAssign).length - beforeAssign,
     addedOrders: (index ? index.orders.length : 0) - beforeOrders,
     addedAmounts:
       Object.values(cache).filter((e) => !needsCollect(e)).length - beforeCollected,

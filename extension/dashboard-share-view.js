@@ -25,11 +25,29 @@ function buildRankingShareStats(results, shops, periodLabel = "") {
   };
 }
 
+// D14 沼レポートの共有。ランキングと同じで、画面に出した順位をそのまま持ち回る
+function buildAvatarShareStats(results, stats, periodLabel = "") {
+  return {
+    sort: avatarSort,
+    periodLabel,
+    rows: stats.rows.slice(0, RANKING_SHARE_LIMIT),
+    avatarCount: stats.rows.length,
+    // 別枠のぶんも共有側で断る。順位表だけを見せると、Full Packや未分類が
+    // 消えた分の金額まで順位に入っているように読めてしまう
+    multiCount: stats.multi.count,
+    unclassifiedCount: stats.none.count,
+    pending: results.filter((r) => needsCollect(state.cache[r.id])).length,
+    unknown: [...stats.rows, stats.multi, stats.none].reduce((sum, row) => sum + row.unknown, 0),
+    indexComplete: indexIsComplete(state.index),
+    giftFilter,
+  };
+}
+
 // フッターの共有ボタンは開いている画面によって共有するものが変わる。
 // ボタンの文言も変えないと、何が投稿されるのか押すまで分からない
 function shareMode() {
   const view = viewFromHash(location.hash);
-  return view === "ranking" || view === "summary" ? view : "total";
+  return view === "ranking" || view === "summary" || view === "avatars" ? view : "total";
 }
 
 function updateShareButton() {
@@ -47,6 +65,14 @@ function updateShareButton() {
       ? `𝕏で${period}のランキングを共有`
       : "𝕏でランキングを共有";
     shareBtn.disabled = !rankingShareStats || rankingShareStats.rows.length === 0;
+    return;
+  }
+  if (mode === "avatars") {
+    const period = avatarShareStats ? avatarShareStats.periodLabel : "";
+    shareBtn.textContent = period
+      ? `𝕏で${period}の沼レポートを共有`
+      : "𝕏で沼レポートを共有";
+    shareBtn.disabled = !avatarShareStats || avatarShareStats.rows.length === 0;
     return;
   }
   if (mode === "summary") {
@@ -122,6 +148,8 @@ function trapSharePanelFocus(event) {
 function openSharePanel(payload) {
   shareReturnFocus = document.activeElement;
   sharePayload = payload;
+  // D14 伏せる名前を持たない共有(沼レポート)では、効かないチェックを出さない
+  shareHideNamesRow.hidden = payload.maskable === false;
   applyShareNameMask();
   setShareCardStatus("");
   shareOverlay.hidden = false;

@@ -11,6 +11,7 @@
 
 const REQUIRED_GLOBALS = [
   ["common.js", () => CACHE_SCHEMA_VERSION],
+  ["avatar-master.js", () => AVATAR_MASTER],
   ["purchase-examples.js", () => PURCHASE_EXAMPLE_MASTER],
   ["csv.js", () => buildOrdersCsv],
   ["backup.js", () => buildBackup],

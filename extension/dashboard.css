@@ -2269,6 +2269,21 @@ tr.shop-row:hover td {
   font-weight: 700;
 }
 
+/* ---- D14 沼レポート(アバター別支出内訳) ---- */
+
+/* 「複数対応」「未分類」は順位に混ぜない別枠。順位の列と同じ幅にそろえつつ、
+   押しても開かないので押せる見た目(順位行の cursor: pointer)は付けない */
+.avatar-other-row td.avatar-other-label {
+  width: 84px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* 手動割り当ての選択。素体名が増えても列が広がらないよう上限を決める */
+.avatar-assign-select {
+  max-width: 200px;
+}
+
 /* ---- データ出力 ---- */
 
 .export-preview-title {

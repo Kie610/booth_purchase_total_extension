@@ -31,6 +31,7 @@
     <nav id="navDrawer" class="nav-drawer" aria-label="画面の切り替え" hidden>
       <a class="nav-link" href="#/report" data-view="report">お買いものレポート</a>
       <a class="nav-link" href="#/ranking" data-view="ranking">推し作者ランキング</a>
+      <a class="nav-link" href="#/avatars" data-view="avatars">沼レポート</a>
       <a class="nav-link" href="#/trends" data-view="trends">支出推移・前年比較</a>
       <a class="nav-link" href="#/summary" data-view="summary">今年のまとめ</a>
       <a class="nav-link" href="#/export" data-view="export">データ出力</a>
@@ -524,6 +525,82 @@
      </section>
    </div>
 
+   <!-- D14 沼レポート。商品名の末尾括弧(バリエーション名)を素体名の辞書と
+        突き合わせて、アバターごとの支出を出す。商品ページへは一切アクセスしない -->
+   <div class="view" id="view-avatars" hidden>
+     <section class="step">
+       <div class="section-head">
+         <h2>沼レポート（アバター別）</h2>
+         <label class="summary-year">
+           対象の期間
+           <select id="avatarYear"></select>
+         </label>
+         <div class="segmented" id="avatarSortToggle" role="group" aria-label="沼レポートの基準">
+           <button type="button" class="segmented-btn" data-sort="amount" aria-pressed="true">金額編</button>
+           <button type="button" class="segmented-btn" data-sort="count" aria-pressed="false">購入数編</button>
+         </div>
+       </div>
+       <p class="hint">
+         商品名の末尾に付くバリエーション名（「商品名 (エク)」の括弧の中）を素体名と
+         照合し、アバターごとの支出を集計します。素体名を1つに絞れないものは「複数対応」、
+         見つからないものは「未分類」として別に数えます（推測で振り分けません）。
+       </p>
+
+       <div id="avatarEmpty" class="empty-note">
+         まだ商品の明細がありません。「お買いものレポート」で金額を収集してください。
+       </div>
+
+       <div id="avatarArea" hidden>
+         <div class="index-status">
+           <div class="status" id="avatarStats"></div>
+           <!-- ショップ別ランキングと同じ理由の断り。外すと少ない額を「そのアバターに
+                使った額」として見せることになる -->
+           <div class="status" id="avatarBasis">
+             金額は商品の合計です。送料やクーポンは含まないため、全体の合計額とは一致しません。
+           </div>
+           <div class="status warn" id="avatarUnknown" hidden></div>
+         </div>
+
+         <table class="data-table ranking-table">
+           <thead>
+             <tr>
+               <th class="rank">順位</th>
+               <th>アバター</th>
+               <th class="num" data-sort="count">購入商品数</th>
+               <th class="num" data-sort="amount">合計額</th>
+             </tr>
+           </thead>
+           <tbody id="avatarTableBody"></tbody>
+         </table>
+
+         <h3 class="export-preview-title">複数対応・未分類</h3>
+         <p class="hint">
+           順位には入れずに別枠で数えています。「複数対応」はFull Packなど複数の素体に
+           対応する商品、「未分類」は素体名を読み取れなかった商品です。
+         </p>
+         <table class="data-table ranking-table">
+           <tbody id="avatarOtherBody"></tbody>
+         </table>
+
+         <details class="accordion" id="avatarAssignBox">
+           <summary><h3>未分類の商品を手で割り当てる<span class="accordion-count" id="avatarAssignCount"></span></h3></summary>
+           <p class="hint">
+             選んだ内容はブラウザに保存され、バックアップ（データの引っ越し）にも含まれます。
+             「未分類のまま」を選べば取り消せます。
+           </p>
+           <div class="table-scroll">
+             <table class="data-table">
+               <thead>
+                 <tr><th>商品名</th><th>ショップ</th><th class="num">点数</th><th class="num">合計額</th><th>割り当て</th></tr>
+               </thead>
+               <tbody id="avatarAssignBody"></tbody>
+             </table>
+           </div>
+         </details>
+       </div>
+     </section>
+   </div>
+
    <div class="view" id="view-export" hidden>
      <section class="step">
        <h2>データ出力</h2>
@@ -768,6 +845,7 @@
   </div>
 
 <script src="common.js"></script>
+<script src="avatar-master.js"></script>
 <script src="purchase-examples.js"></script>
 <script src="csv.js"></script>
 <script src="backup.js"></script>

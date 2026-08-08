@@ -28,6 +28,7 @@
 <nav id="navDrawer" class="nav-drawer" hidden>
 <a class="nav-link" href="#/report" data-view="report">お買いものレポート</a>
 <a class="nav-link" href="#/ranking" data-view="ranking">推し作者ランキング</a>
+<a class="nav-link" href="#/avatars" data-view="avatars">沼レポート</a>
 <a class="nav-link" href="#/trends" data-view="trends">支出推移・前年比較</a>
 <a class="nav-link" href="#/summary" data-view="summary">今年のまとめ</a>
 <a class="nav-link" href="#/export" data-view="export">データ出力</a>
@@ -112,6 +113,28 @@
       <thead><tr><th data-sort="count">購入商品数</th><th data-sort="amount">合計金額</th></tr></thead>
       <tbody id="rankingTableBody"></tbody>
     </table>
+  </div>
+</div>
+<!-- D14 沼レポート(dashboard.html と同じ id / class 構成) -->
+<div class="view" id="view-avatars" hidden>
+  <label>対象の期間<select id="avatarYear"></select></label>
+  <div class="segmented" id="avatarSortToggle">
+    <button class="segmented-btn" data-sort="amount" aria-pressed="true">金額編</button>
+    <button class="segmented-btn" data-sort="count" aria-pressed="false">購入数編</button>
+  </div>
+  <div id="avatarEmpty" class="empty-note"></div>
+  <div id="avatarArea" hidden>
+    <div class="status" id="avatarStats"></div>
+    <div id="avatarUnknown" class="status warn" hidden></div>
+    <table>
+      <thead><tr><th data-sort="count">購入商品数</th><th data-sort="amount">合計額</th></tr></thead>
+      <tbody id="avatarTableBody"></tbody>
+    </table>
+    <table><tbody id="avatarOtherBody"></tbody></table>
+    <details class="accordion" id="avatarAssignBox">
+      <summary><h3>未分類の商品を手で割り当てる<span class="accordion-count" id="avatarAssignCount"></span></h3></summary>
+      <table><tbody id="avatarAssignBody"></tbody></table>
+    </details>
   </div>
 </div>
 <div class="view" id="view-export" hidden>
@@ -261,6 +284,7 @@
 
 <script src="stub.js"></script>
 <script src="../extension/common.js"></script>
+<script src="../extension/avatar-master.js"></script>
 <script src="../extension/purchase-examples.js"></script>
 <script src="../extension/csv.js"></script>
 <script src="../extension/backup.js"></script>

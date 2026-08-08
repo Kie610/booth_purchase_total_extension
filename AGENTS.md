@@ -12,7 +12,8 @@
 
 - 利用者: 第三者へ配布する(GitHub Releaseで公開)。
 - 互換性を守る公開契約: `ext.storage.local` の保存形式(`boothOrderCache`・`boothOrderIndex`・
-  `boothSummary`・`boothTheme` など)、バックアップJSON、CSVエクスポート形式、ユーザーに見える設定。
+  `boothSummary`・`boothTheme`・`boothAvatarAssign` など)、バックアップJSON(`avatarAssign` を含む)、
+  CSVエクスポート形式、ユーザーに見える設定。
 - 上記以外は内部実装であり、互換層や到達不能コードを残さず変更してよい。
 - 公開契約の形式を変えるときは移行手段を先に用意する。内部か公開か判断できないときは削除せず確認する。
 

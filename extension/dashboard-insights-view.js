@@ -58,21 +58,22 @@ function resultsInRankingPeriod(results, year = rankingSelectedYear) {
 }
 
 // 選択肢は「全期間」と、注文のある年。中身が同じなら作り直さない
-// (開いたまま再描画すると選択が閉じてしまう)
-function renderRankingYearOptions(years) {
+// (開いたまま再描画すると選択が閉じてしまう)。
+// 沼レポート(D14)も同じ選び方をするので、対象の select と選択値を受け取る
+function renderRankingYearOptions(years, select = rankingYear, selected = rankingSelectedYear) {
   const values = [RANKING_ALL_PERIOD, ...years.map(String)];
   const same =
-    rankingYear.options.length === values.length &&
-    values.every((value, index) => rankingYear.options[index].value === value);
+    select.options.length === values.length &&
+    values.every((value, index) => select.options[index].value === value);
   if (!same) {
-    rankingYear.innerHTML = "";
+    select.innerHTML = "";
     for (const value of values) {
-      rankingYear.appendChild(
+      select.appendChild(
         el("option", "", value === RANKING_ALL_PERIOD ? "全期間" : `${value}年`)
       ).value = value;
     }
   }
-  rankingYear.value = String(rankingSelectedYear);
+  select.value = String(selected);
 }
 
 // 数量の左に小さく添えるギフト表記。金額のセルと置き方をそろえる
@@ -240,6 +241,152 @@ function toggleShopItems(key) {
   });
 }
 
+// ---- D14 沼レポート(アバター別支出内訳) --------------------------------
+//
+// 集計そのものは common.js の aggregateByAvatar。ここは画面への出し方と、
+// 未分類を手で直すための操作だけを持つ。
+//
+// 期間と基準(金額編・購入数編)は推し作者ランキングと同じ作法にそろえるが、
+// 選択は画面ごとに別で持つ。共有すると片方だけ見て「同じ期間の話」と
+// 読み違えるため、どちらの画面にも自分の期間を出す。
+// D12の集計対象(すべて/自分用/ギフト)は results が既に絞られているので自動で従う。
+
+let avatarSort = DEFAULT_SHOP_SORT;
+let avatarSelectedYear = RANKING_ALL_PERIOD;
+
+function setAvatarSort(sort) {
+  if (!SHOP_SORTS[sort] || sort === avatarSort) return;
+  avatarSort = sort;
+  renderAvatarArea();
+  updateShareButton();
+}
+
+function setAvatarYear(value) {
+  const next = value === RANKING_ALL_PERIOD ? RANKING_ALL_PERIOD : Number(value);
+  if (next !== RANKING_ALL_PERIOD && !Number.isFinite(next)) return;
+  if (next === avatarSelectedYear) return;
+  avatarSelectedYear = next;
+  renderAvatarArea();
+  updateShareButton();
+}
+
+function avatarPeriodLabel() {
+  return avatarSelectedYear === RANKING_ALL_PERIOD ? "" : `${avatarSelectedYear}年`;
+}
+
+// 割り当ての選択肢。辞書(avatar-master.js)へ足せば、コードを触らずここにも増える
+function avatarAssignSelect(product) {
+  const select = el("select", "avatar-assign-select");
+  select.dataset.productKey = product.key;
+  select.setAttribute("aria-label", `${product.name}の割り当て`);
+  const options = [
+    ["", "未分類のまま"],
+    [AVATAR_MULTI_KEY, "複数対応"],
+    ...AVATAR_MASTER.map((avatar) => [avatar.key, avatar.name]),
+  ];
+  for (const [value, label] of options) {
+    select.appendChild(el("option", "", label)).value = value;
+  }
+  // 辞書に無いkeyが保存されていると select は空選択になる。無い素体を勝手に
+  // 別の素体へ寄せないよう、選択肢を足さずそのままにする(保存値は消さない)
+  select.value = product.assigned;
+  return select;
+}
+
+function renderAvatarAssignRows(products) {
+  avatarAssignBody.innerHTML = "";
+  avatarAssignCount.textContent = `${products.length}件`;
+  avatarAssignBox.hidden = products.length === 0;
+  for (const product of products) {
+    const tr = el("tr");
+    tr.appendChild(td(product.name));
+    tr.appendChild(td(product.shop));
+    tr.appendChild(td(`${product.count}点`, "num"));
+    tr.appendChild(td(formatYen(product.total), "num"));
+    const cell = td("");
+    cell.appendChild(avatarAssignSelect(product));
+    tr.appendChild(cell);
+    avatarAssignBody.appendChild(tr);
+  }
+}
+
+// 複数対応・未分類は順位に混ぜない。混ぜると「Full Packが1位」のような、
+// アバター別の内訳として意味の無い順位になる
+function renderAvatarOtherRows(result) {
+  avatarOtherBody.innerHTML = "";
+  for (const row of [result.multi, result.none]) {
+    // .shop-row を付けない。押しても開かない行に押せる見た目を付けない
+    const tr = el("tr", "avatar-other-row");
+    tr.appendChild(td(row.name, "avatar-other-label"));
+    tr.appendChild(td(`${row.items.length}種類`));
+    tr.appendChild(countCell(row.count));
+    tr.appendChild(amountCell(row.total));
+    avatarOtherBody.appendChild(tr);
+  }
+}
+
+function renderAvatarSortToggle() {
+  avatarSortToggle.querySelectorAll(".segmented-btn").forEach((btn) => {
+    const on = btn.dataset.sort === avatarSort;
+    btn.classList.toggle("current", on);
+    btn.setAttribute("aria-pressed", String(on));
+  });
+  avatarTableBody
+    .closest("table")
+    .querySelectorAll("th[data-sort]")
+    .forEach((th) => th.classList.toggle("sorted", th.dataset.sort === avatarSort));
+}
+
+function renderAvatarArea(results = currentResults()) {
+  const years = orderYears(results);
+  if (avatarSelectedYear !== RANKING_ALL_PERIOD && !years.includes(avatarSelectedYear)) {
+    avatarSelectedYear = RANKING_ALL_PERIOD;
+  }
+  renderRankingYearOptions(years, avatarYear, avatarSelectedYear);
+
+  const scoped = resultsInRankingPeriod(results, avatarSelectedYear);
+  const stats = aggregateByAvatar(scoped, state.avatarAssign, avatarSort);
+  renderAvatarSortToggle();
+
+  // 素体を特定できた商品が1つも無ければ、順位表を出しても空欄が並ぶだけ。
+  // ただし未分類が残っているなら、手で割り当てられるよう画面は出す
+  const hasAny = stats.rows.length > 0 || stats.multi.count > 0 || stats.none.count > 0;
+  avatarEmpty.hidden = hasAny;
+  avatarArea.hidden = !hasAny;
+  avatarShareStats = buildAvatarShareStats(scoped, stats, avatarPeriodLabel());
+  if (!hasAny) {
+    avatarTableBody.innerHTML = "";
+    avatarOtherBody.innerHTML = "";
+    avatarAssignBody.innerHTML = "";
+    avatarEmpty.textContent =
+      avatarSelectedYear === RANKING_ALL_PERIOD
+        ? "まだ商品の明細がありません。「お買いものレポート」で金額を収集してください。"
+        : `${avatarPeriodLabel()}に商品の明細がある注文がありません。期間を選び直してください。`;
+    return;
+  }
+
+  const shown = stats.rows.slice(0, RANKING_LIMIT);
+  avatarStats.textContent =
+    `対象の期間: ${avatarPeriodLabel() || "全期間"} / アバター: ${stats.rows.length}体` +
+    (stats.rows.length > shown.length ? ` (上位${shown.length}体を表示)` : "") +
+    ` / 複数対応: ${stats.multi.count}点 / 未分類: ${stats.none.count}点`;
+
+  // 金額を読めなかった商品を0として足すと、少ない額を正しい合計に見せてしまう
+  const unknown = [...stats.rows, stats.multi, stats.none].reduce(
+    (sum, row) => sum + row.unknown,
+    0
+  );
+  avatarUnknown.hidden = unknown === 0;
+  if (unknown > 0) {
+    avatarUnknown.textContent =
+      `金額を読み取れなかった商品が${unknown}点あります。その分は合計額に入っていません。`;
+  }
+
+  renderShopRows(avatarTableBody, shown, RANKING_BOLD);
+  renderAvatarOtherRows(stats);
+  renderAvatarAssignRows(stats.products);
+}
+
 // ---- 今年のまとめ ------------------------------------------------------
 
 // 選んでいる年。注文の無い年は選べないので、描画のたびに実在する年へ寄せる
@@ -289,8 +436,16 @@ function renderYearSummary(results = currentResults()) {
 
   summarySelectedYear = resolveSummaryYear(years);
   renderYearOptions(summaryYear, years, summarySelectedYear);
-  // D12 絞り込み中のまとめを、その年の全体として外へ出さない
-  const stats = { ...buildYearSummary(results, summarySelectedYear), giftFilter };
+  // D12 絞り込み中のまとめを、その年の全体として外へ出さない。
+  // D14 その年の最推しアバターも添える(素体名を1つも読み取れなければ空のまま)
+  const stats = {
+    ...buildYearSummary(results, summarySelectedYear),
+    giftFilter,
+    topAvatar: aggregateByAvatar(
+      resultsInRankingPeriod(results, summarySelectedYear),
+      state.avatarAssign
+    ).rows[0] || null,
+  };
   // 共有するのは画面に出したものそのもの。共有時に集計し直さない
   summaryShareStats = stats;
 
@@ -317,6 +472,11 @@ function renderYearSummary(results = currentResults()) {
       monthLabel(stats.busiestMonth.key),
       formatYen(stats.busiestMonth.total),
     ]);
+  }
+  // D14 素体名を1つも読み取れない年に「最推し なし」と出しても意味が無いので、
+  // 読み取れたときだけ添える
+  if (stats.topAvatar) {
+    cards.push(["最推しアバター", stats.topAvatar.name, formatYen(stats.topAvatar.total)]);
   }
   summaryCards.innerHTML = "";
   for (const [label, value, note] of cards) {
