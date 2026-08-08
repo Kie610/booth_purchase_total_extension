@@ -3,7 +3,7 @@
 updated: 2026-08-08
 repo: https://github.com/Kie610/booth_purchase_total_extension
 work_branch: 1.1.0
-upstream: none (未push。pushはユーザー許可後)
+upstream: origin/1.1.0 (2026-08-08にユーザー許可を得てpush・追跡設定済み)
 base: 1.0.0@cc090b9ddbd42753522e4c050f939d43ee0a8713
 goal: docs/improvement-plan.md の改善タスクをv1.1.0として統合し、検証後に正式リリースへ進める。
 
