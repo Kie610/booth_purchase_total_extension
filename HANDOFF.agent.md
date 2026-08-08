@@ -17,6 +17,7 @@ complete:
   「2026-08-08 HANDOFF.agent.md 縮小前の原文」を参照。
 - C: 運用ルール合成(2026-08-08): AGENTS.mdへプロジェクト契約・設計の優先順位・委任と検品を追記し、
   本ファイルを縮小した(原文は履歴へ保存済み)。
+- C: VRChatter調査(2026-08-08)より D12〜D14 と P9・P10 を improvement-plan へ起票(不採用案も同書に記録)。
 
 verified:
 - C: 2026-08-07 — evidence: status=PASS; kind=compile; command=node --check をextensionとtestの
@@ -25,6 +26,8 @@ verified:
   両方で確認; counts=passed=794, failed=0, skipped=0, not-run=0
 - C: 2026-08-07 — evidence: status=PASS; kind=runtime; command=ユーザーが実環境でD10「物理アイテムの
   ステータスを再取得」を確認したと報告; counts=確認1件, failed=0
+- C: 2026-08-08 — evidence: status=PASS; kind=runtime; command=ユーザー実ブラウザでBOOTH注文詳細20件を
+  実測; scope=nameへのバリエーション名連結・ファイル名行・既存セレクタ健在(D14前提); counts=20件, failed=0
 - 上記より前の検証証跡の全文は docs/handoff-history.md を参照。
 
 not-run:
@@ -42,8 +45,9 @@ not-run:
 
 ## Next
 
-1. `docs/improvement-plan.md`(2026-08-07レビュー)の残りP5(調査)を委任する — blocked-by: ユーザーの着手判断
-2. 次回の正式リリースでも検証後にバージョンブランチ、`main`、リモートのSHAを一致させる — blocked-by: none
+1. P9(D12+D13ギフトフィルタ・伏せ字共有)→P10(D14沼レポート)を委任する — blocked-by: ユーザーの着手判断
+2. `docs/improvement-plan.md` の残りP5(Firefox調査)を委任する — blocked-by: ユーザーの着手判断
+3. 次回の正式リリースでも検証後にバージョンブランチ、`main`、リモートのSHAを一致させる — blocked-by: none
 
 ## Paths
 
