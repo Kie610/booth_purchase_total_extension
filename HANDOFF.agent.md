@@ -13,16 +13,16 @@ complete:
 - C: v1.0.0を正式リリース済み(GitHub Release公開、`main`を同じSHAへfast-forward同期済み)。
 - C: `1.1.0`へP1〜P9を統合済み。P2=A1〜A3、P1=C1〜C11(+A4・A5)、P3=B1〜B4(+TDZホットフィックス)、
   P4=D1〜D5、P6=C12〜C15(+[hidden]ホットフィックス)、P7=C16〜C18・D10・T1、P8=D11、
-  P9=D12・D13(Opus 5委任、8d295cf、ランキングカードの月別棒グラフのみ見送り)。
+  P9=D12・D13(8d295cf。保留点はimprovement-planの済注記を参照)。
   実装詳細・設計判断・過去の検証証跡の全文は docs/handoff-history.md
   「2026-08-08 HANDOFF.agent.md 縮小前の原文」を参照。
 - C: 運用ルール合成(2026-08-08): AGENTS.mdへプロジェクト契約・設計の優先順位・委任と検品を追記し、
   本ファイルを縮小した(原文は履歴へ保存済み)。
-- C: VRChatter調査(2026-08-08)より D12〜D14 と P9・P10 を improvement-plan へ起票(不採用案も同書に記録)。
+- C: VRChatter調査(2026-08-08)より D12〜D14 と P9・P10 を improvement-plan へ起票。
 
 verified:
 - C: 2026-08-08 — evidence: status=PASS; kind=compile; command=node --check をextensionとtestの
-  全.jsへ実行(P9統合後の1.1.0=8d295cf); counts=passed=16, failed=0, skipped=0, not-run=0
+  全.jsへ実行(P9統合後の1.1.0); counts=passed=16, failed=0
 - C: 2026-08-08 — evidence: status=PASS; kind=runtime; command=python -m http.server 8783 +
   Browserで/test/index.htmlを確認(P9統合後); counts=passed=830, failed=0(794→830。P9で36件追加)
 - C: 2026-08-07 — evidence: status=PASS; kind=runtime; command=ユーザーが実環境でD10「物理アイテムの
