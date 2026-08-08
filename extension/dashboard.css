@@ -839,6 +839,25 @@ button.share-btn:hover:not(:disabled) {
   padding-right: 44px;
 }
 
+/* D12 集計対象(すべて/自分用/ギフト)。すべての画面の上に1つだけ出す帯。
+   注記は display を持たせない([hidden] を必ず勝たせるため) */
+.gift-filter {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 12px;
+}
+
+.gift-filter .share-field-label {
+  margin-bottom: 0;
+}
+
+.gift-filter-note {
+  flex-basis: 100%;
+  margin: 0;
+}
+
 button.banner-close {
   position: absolute;
   top: 4px;
@@ -1717,6 +1736,11 @@ button.icon-btn:hover:not(:disabled) {
 
 .share-canvas-help {
   margin: -10px 0 16px;
+}
+
+/* D13 品名・ショップ名を伏せる設定。文面の枠のすぐ上に置く */
+.share-hide-names {
+  margin-top: 4px;
 }
 
 .share-field-label {

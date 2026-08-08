@@ -394,6 +394,63 @@ check("未収集はundefined", results.find(r => r.id === "a2").amount, undefine
 check("取得失敗はnull", results.find(r => r.id === "c2").amount, null);
 check("収集済みは数値", results.find(r => r.id === "a1").amount, 1000);
 
+// --- D12 集計対象の絞り込み(すべて / 自分用 / ギフト) ---
+//
+// 注文単位のお支払金額は自分用とギフトへ分けられないので、絞り込み中だけ
+// 商品の内訳から金額を出す。分けられなかった差額(送料・クーポン)は消さない
+const giftRows = [
+  // 自分用とギフトが混ざった注文。送料500のぶん、内訳の合計と支払額がずれる
+  { id: "g1", date: "2026年5月3日 12:34", status: "completed", amount: 2100, gift: 400, shipping: 500,
+    items: [item("自分用A", 1200), item("贈り物B", 400, true)] },
+  { id: "g2", date: "2026年4月1日 10:00", status: "completed", amount: 800, gift: 800, shipping: 0,
+    items: [item("贈り物C", 800, true)] },
+  // 明細を読めていない注文。自分用とギフトへ分けようがない
+  { id: "g3", date: "2026年3月1日 10:00", status: "completed", amount: 5000, gift: 0, shipping: 0, items: null },
+  // 単価を読めなかった商品。0として足すと少ない額を正しい合計に見せてしまう
+  { id: "g4", date: "2026年2月1日 10:00", status: "completed", amount: 300, gift: 300, shipping: 0,
+    items: [{ ...item("読めない", 0, true), price: null }] },
+];
+check("すべてでは絞り込まない",
+  (() => { const f = filterResultsByGift(giftRows, "all"); return [f.rows.length, f.gap, f.gapUnknown, f.rows === giftRows]; })(),
+  [4, 0, 0, true]);
+check("知らない指定はすべてに落とす", filterResultsByGift(giftRows, "unknown").rows.length, 4);
+
+const giftOnly = filterResultsByGift(giftRows, "gift");
+const selfOnly = filterResultsByGift(giftRows, "self");
+check("ギフトは該当商品のある注文だけ残す", giftOnly.rows.map(r => r.id), ["g1", "g2", "g3", "g4"]);
+check("ギフトの金額は内訳ベース", giftOnly.rows.map(r => r.amount), [400, 800, undefined, null]);
+check("ギフト分は金額と同じ額を持つ", giftOnly.rows.map(r => r.gift), [400, 800, undefined, null]);
+check("自分用は該当商品のある注文だけ残す", selfOnly.rows.map(r => r.id), ["g1", "g3"]);
+check("自分用の金額は内訳ベース", selfOnly.rows.map(r => r.amount), [1200, undefined]);
+check("自分用ではギフト分を0にする", selfOnly.rows[0].gift, 0);
+// 送料やクーポンは注文に1つしか無く、対象別に割り振れない。黙って消さない
+check("分けられない差額を残す", [giftOnly.gap, selfOnly.gap], [500, 500]);
+check("差額を出せない注文は件数で数える", [giftOnly.gapUnknown, selfOnly.gapUnknown], [2, 1]);
+// 明細の無い注文を除外すると、未収集の断り書きから消えてしまう
+check("明細の無い注文は未収集として残す",
+  [giftOnly.rows[2].amount, giftOnly.rows[2].items, giftOnly.rows[2].shipping],
+  [undefined, null, undefined]);
+// 送料は対象別に分けられないので、絞り込んだ行には持たせない(差額の側で数える)
+check("絞り込んだ行は送料を持たない", giftOnly.rows[0].shipping, undefined);
+
+// 画面への反映。絞り込み中であることを注記と見出しに必ず出す
+const summaryTotalBefore = buildSummary(false).total;
+setGiftFilter("gift");
+check("絞り込み中は買った分だけを集計する", buildResults().map(r => r.amount).filter(a => typeof a === "number"), [400]);
+check("絞り込み中は注記を出す",
+  [giftFilterNote.hidden,
+   giftFilterNote.textContent.includes("全体の合計ではありません"),
+   giftFilterNote.textContent.includes("分けられない金額")],
+  [false, true, true]);
+check("絞り込み中は見出しにも出す", viewTitle.textContent.includes("ギフトのみ"), true);
+check("選択中の対象に印を付ける",
+  [...giftFilterSwitch.querySelectorAll("button[data-gift-filter]")].map(b => b.getAttribute("aria-pressed")),
+  ["false", "false", "true"]);
+// ポップアップは現行のまま。集計ページで一時的に絞った数字を保存しない
+check("ポップアップの要約は絞り込みの影響を受けない", buildSummary(false).total, summaryTotalBefore);
+setGiftFilter("all");
+check("すべてに戻すと注記を畳む", [giftFilterNote.hidden, viewTitle.textContent.includes("のみ")], [true, false]);
+
 // --- 支出推移・前年比較の集計 ---
 const trend = buildSpendingTrend([
   { amount: 100, date: "2026年1月5日" },
@@ -1096,6 +1153,64 @@ check("金額を伏せたら断り書きも出さない", [hiddenCard.list[0].va
 const totalCard = buildTotalShareCard({ year: 2026, total: 100000, count: 5, yearTotal: 400, yearCount: 1, pendingCount: 0, indexComplete: true });
 check("合計のカードは合計と今年を並べる", totalCard.stats.map(s => s.label), ["合計額", "2026年"]);
 
+// --- D12 絞り込み中の共有(部分集計を全体の数字として外へ出さない) ---
+const filteredShare = { year: 2026, total: 5000, count: 3, yearTotal: 5000, yearCount: 3,
+  pendingCount: 0, indexComplete: true, giftFilter: "gift",
+  yearMonths: [0, 0, 1000, 0, 0, 4000, 0, 0, 0, 0, 0, 0] };
+check("絞り込み中は文面の2行目で断る", buildShareText(filteredShare).split("\n")[1],
+  "🎁贈ったギフトだけの集計です（送料・クーポンを除く商品の合計）");
+check("絞り込み中はカードの副題にも出す", buildTotalShareCard(filteredShare).subtitle,
+  "BOOTHお買いものレポート・🎁贈ったギフトだけ");
+check("自分用も同じ作法で断る", buildTotalShareCard({ ...filteredShare, giftFilter: "self" }).subtitle,
+  "BOOTHお買いものレポート・🙋自分用だけ");
+check("絞り込んでいなければ副題は変わらない", totalCard.subtitle, "BOOTHお買いものレポート");
+check("絞り込み中はランキングの見出しにも入れる",
+  buildRankingShareText({ sort: "amount", rows: [{ name: "A", count: 1, total: 100 }], shopCount: 1, giftFilter: "gift" }, true)
+    .split("\n")[0],
+  "BOOTHの推し作者ランキング🛍️（🎁贈ったギフトだけ・金額編）");
+
+// --- D13 品名・ショップ名を出さない共有 ---
+const maskedRankingStats = { sort: "amount", periodLabel: "", shopCount: 4,
+  rows: [{ name: "SOUR FLAVOR", count: 1, total: 100 }, { name: "べつのショップ", count: 1, total: 50 }] };
+const maskedRankingText = buildRankingShareText(maskedRankingStats, false, true);
+check("伏せ字ONの文面にショップ名を出さない",
+  [maskedRankingText.includes("SOUR FLAVOR"), maskedRankingText.includes("べつのショップ")], [false, false]);
+check("伏せ字ONの文面は数だけを出す",
+  [maskedRankingText.includes("推し作者 4ショップ"), maskedRankingText.includes("※ショップ名は伏せています")],
+  [true, true]);
+const maskedRankingCard = buildRankingShareCard(maskedRankingStats, false, true);
+check("伏せ字ONのランキングカードは順位表ごと畳む",
+  [maskedRankingCard.list.length, maskedRankingCard.stats.map(s => s.value), maskedRankingCard.note],
+  [0, ["4ショップ"], "ショップ名は伏せています"]);
+check("伏せ字OFFなら今までどおり順位表を出す",
+  buildRankingShareCard(maskedRankingStats, false, false).list.map(r => r.name),
+  ["SOUR FLAVOR", "べつのショップ"]);
+
+const maskedSummaryStats = buildYearSummary(summaryRows, 2026);
+const maskedSummaryText = buildSummaryShareText(maskedSummaryStats, true);
+check("伏せ字ONのまとめ文面から推し作者を落とす",
+  [maskedSummaryText.includes("推し作者"), maskedSummaryText.includes("SOUR FLAVOR"),
+   maskedSummaryText.includes("合計額"), maskedSummaryText.includes("※ショップ名は伏せています")],
+  [false, false, true, true]);
+const maskedSummaryCard = buildSummaryShareCard(maskedSummaryStats, true);
+check("伏せ字ONのまとめカードは合計額・件数と月別グラフだけ",
+  [maskedSummaryCard.list.length, maskedSummaryCard.stats.map(s => s.label),
+   maskedSummaryCard.bars.values.length],
+  [0, ["合計額", "買ったもの", "支援した作者"], 12]);
+check("月別グラフは1〜12月の並びで持つ",
+  maskedSummaryCard.bars.values.filter(v => v > 0).length > 0, true);
+// 買った月が1つも無ければ棒グラフは出さない(平らな棒を並べても意味がない)
+check("金額が無ければ棒グラフを付けない",
+  buildTotalShareCard({ ...filteredShare, yearMonths: Array.from({ length: 12 }, () => 0) }, true).bars, null);
+const maskedTotalCard = buildTotalShareCard(filteredShare, true);
+check("伏せ字ONの合計カードに月別グラフを載せる",
+  [maskedTotalCard.bars.label, maskedTotalCard.bars.values[5], maskedTotalCard.list.length],
+  ["2026年の月別", 4000, 0]);
+// D12とD13は直交する。併用しても互いの断り書きが消えない
+check("絞り込みと伏せ字を併用できる",
+  [maskedTotalCard.subtitle, buildShareText(filteredShare).includes("🎁贈ったギフトだけ")],
+  ["BOOTHお買いものレポート・🎁贈ったギフトだけ", true]);
+
 // 描画(実際にcanvasへ描けること。文字が1つも乗らないと真っ白なカードが出る)
 const testCanvas = document.createElement("canvas");
 testCanvas.width = SHARE_CARD_WIDTH;
@@ -1118,8 +1233,29 @@ check("収まる金額は大きいまま", testCtx.font.includes("52px"), true);
 
 // パネルの開閉(背景を選び直しても同じ数字で描き直せるよう、押した時点の中身を持つ)
 shareBtn.focus();
-openSharePanel({ name: "booth-2026", text: "本文", card: summaryShareCard });
+openSharePanel({ name: "booth-2026", build: () => ({ text: "本文", card: summaryShareCard }) });
 check("パネルを開くと本文を出す", [sharePanel.hidden, shareOverlay.hidden, shareText.value], [false, false, "本文"]);
+// D13 チェックはパネルを開いたまま切り替えられる。文面とカードを同じ設定で組み直す
+// (片方だけ伏せると、画像に無い名前が文面から出ていく)
+openSharePanel({
+  name: "booth-mask",
+  build: (hideNames) => ({
+    text: hideNames ? "伏せた本文" : "そのままの本文",
+    card: buildSummaryShareCard(maskedSummaryStats, hideNames),
+  }),
+});
+check("伏せ字OFFで開く", [shareText.value, sharePayload.card.list.length], ["そのままの本文", 2]);
+shareHideNames.checked = true;
+shareHideNames.dispatchEvent(new Event("change", { bubbles: true }));
+check("チェックすると文面とカードが同時に組み直される",
+  [shareText.value, sharePayload.card.list.length, Boolean(sharePayload.card.bars)],
+  ["伏せた本文", 0, true]);
+shareHideNames.checked = false;
+shareHideNames.dispatchEvent(new Event("change", { bubbles: true }));
+check("外せば元へ戻る", [shareText.value, sharePayload.card.list.length], ["そのままの本文", 2]);
+closeSharePanel();
+shareBtn.focus();
+openSharePanel({ name: "booth-2026", build: () => ({ text: "本文", card: summaryShareCard }) });
 check("モーダルを開くと閉じるボタンへ移動", document.activeElement === shareCloseBtn, true);
 check("モーダルの後ろは操作できない", document.getElementById("view-report").inert, true);
 check("保存するファイル名", shareCardFileName(), "booth-2026.png");
@@ -2868,7 +3004,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
 
   // 3つのモーダルの開閉。開けば見え、閉じれば消えること
   const panelCycle = [];
-  openSharePanel({ name: "booth-2026", text: "本文", card: summaryShareCard });
+  openSharePanel({ name: "booth-2026", build: () => ({ text: "本文", card: summaryShareCard }) });
   panelCycle.push(displayOf("sharePanel") !== "none", displayOf("shareOverlay") !== "none");
   closeSharePanel();
   panelCycle.push(displayOf("sharePanel") === "none", displayOf("shareOverlay") === "none");

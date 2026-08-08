@@ -76,6 +76,19 @@
          また出す(閉じた状態は保存しないので、開き直しても再表示される) -->
     <div id="pendingBanner" class="notice pending-banner" role="status" aria-live="polite" hidden><span id="pendingBannerText"></span><a href="#/report">お買いものレポートで収集する</a><button type="button" id="pendingBannerClose" class="icon-btn banner-close" aria-label="この案内を閉じる">×</button></div>
 
+    <!-- D12 集計対象の絞り込み。画面の外(すべてのビューの上)に1つだけ置くので、
+         レポート・ランキング・まとめ・支出推移・CSV・共有がまとめて追従する。
+         選択は保存しない(既定は「すべて」)。絞り込み中は注記を必ず出す -->
+    <div class="gift-filter" id="giftFilterBar">
+      <span class="share-field-label" id="giftFilterLabel">集計対象</span>
+      <div class="segmented" id="giftFilterSwitch" role="group" aria-labelledby="giftFilterLabel">
+        <button type="button" class="segmented-btn current" data-gift-filter="all" aria-pressed="true">すべて</button>
+        <button type="button" class="segmented-btn" data-gift-filter="self" aria-pressed="false">🙋自分用</button>
+        <button type="button" class="segmented-btn" data-gift-filter="gift" aria-pressed="false">🎁ギフト</button>
+      </div>
+      <p class="status warn gift-filter-note" id="giftFilterNote" role="status" hidden></p>
+    </div>
+
    <div class="view" id="view-report">
     <p class="lead">
       <a href="https://accounts.booth.pm/orders" target="_blank" rel="noopener">accounts.booth.pm</a>
@@ -702,6 +715,13 @@
 
       <!-- C18 操作ボタンはパネル下部に貼り付いていて文面に押し出されないので、
            何が𝕏へ渡るのかは畳まずそのまま見せる -->
+      <!-- D13 品名・ショップ名を出さずに共有する。ランキングの「金額を含めない」と
+           直交する設定なので、共有パネル側に置いてどの画面からでも使えるようにする -->
+      <label class="checkbox share-hide-names">
+        <input type="checkbox" id="shareHideNames">
+        品名・ショップ名を出さない（合計額・件数・期間と月別グラフだけにする）
+      </label>
+
       <div class="share-text-box">
         <label class="share-field-label" for="shareText">投稿する文面</label>
         <textarea id="shareText" class="share-text" readonly aria-describedby="shareTextDescription"></textarea>

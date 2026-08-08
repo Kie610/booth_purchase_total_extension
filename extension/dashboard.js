@@ -85,6 +85,13 @@ themeSwitch.addEventListener("click", (event) => {
   saveTheme(theme);
 });
 
+// D12 集計対象(すべて/自分用/ギフト)の切り替え。選択は保存しない
+// (保存すると、次に開いたときに絞り込まれた数字を全体の合計だと思わせる)
+giftFilterSwitch.addEventListener("click", (event) => {
+  const btn = event.target.closest("button[data-gift-filter]");
+  if (btn) setGiftFilter(btn.dataset.giftFilter);
+});
+
 // ポップアップや別タブの集計ページで変えられたときにも追従する。
 // 自分で押したときも同じ値で流れてくるが、当て直すだけなので実害はない
 ext.storage.onChanged.addListener((changes, areaName) => {
@@ -310,8 +317,10 @@ shareBtn.addEventListener("click", async () => {
   }
   openSharePanel({
     name: "booth-share",
-    text: buildShareText(shareStats),
-    card: buildTotalShareCard(shareStats),
+    build: (hideNames) => ({
+      text: buildShareText(shareStats),
+      card: buildTotalShareCard(shareStats, hideNames),
+    }),
   });
 });
 
@@ -325,8 +334,10 @@ async function shareRanking() {
   const hide = rankingHideNumbers.checked;
   openSharePanel({
     name: "booth-ranking",
-    text: buildRankingShareText(rankingShareStats, hide),
-    card: buildRankingShareCard(rankingShareStats, hide),
+    build: (hideNames) => ({
+      text: buildRankingShareText(rankingShareStats, hide, hideNames),
+      card: buildRankingShareCard(rankingShareStats, hide, hideNames),
+    }),
   });
 }
 
@@ -338,8 +349,10 @@ async function shareYearSummary() {
   }
   openSharePanel({
     name: `booth-${summaryShareStats.year}`,
-    text: buildSummaryShareText(summaryShareStats),
-    card: buildSummaryShareCard(summaryShareStats),
+    build: (hideNames) => ({
+      text: buildSummaryShareText(summaryShareStats, hideNames),
+      card: buildSummaryShareCard(summaryShareStats, hideNames),
+    }),
   });
 }
 
@@ -364,6 +377,9 @@ shareRatioToggle.addEventListener("click", (event) => {
 });
 
 shareScaleInput.addEventListener("input", () => setShareBackgroundScale(shareScaleInput.value));
+
+// D13 品名・ショップ名を出さない。開いたまま切り替えられるよう、その場で組み直す
+shareHideNames.addEventListener("change", applyShareNameMask);
 
 // C17 背景の作り方のタブ。role=tablist の作法どおり、左右キーでも行き来できるようにする
 // (マウスで押せる操作をキーボードから使えないままにしない)
@@ -813,10 +829,18 @@ function currentResults() {
   return refreshResults();
 }
 
+// 表示用の一覧。D12の絞り込みはここが唯一の入口なので、全ビュー・CSV・共有が
+// 自動で追従する。分けられなかった差額は giftFilterGap に控えて画面へ出す
+function buildResults() {
+  const { rows, gap, gapUnknown } = filterResultsByGift(buildAllResults(), giftFilter);
+  giftFilterGap = { gap, gapUnknown };
+  return rows;
+}
+
 // 索引と収集済みの金額を突き合わせて表示用の一覧にする
 // amount: 数値=収集済み / null=取得失敗 / undefined=未収集
 // items: 配列=商品明細あり / null=明細を読めていない
-function buildResults() {
+function buildAllResults() {
   if (state.index) {
     return targetOrders().map((o) => {
       const entry = state.cache[o.id];
@@ -848,9 +872,11 @@ function buildResults() {
   }));
 }
 
-// ポップアップに見せる要約
+// ポップアップに見せる要約。
+// **D12の絞り込みを掛けない。** ポップアップは現行のまま「全体の合計」を出す約束で、
+// 集計ページで一時的に絞っただけの数字を保存すると、別画面の数字が黙って減る
 function buildSummary(partial) {
-  const results = currentResults();
+  const results = buildAllResults();
   const valid = results.filter((r) => typeof r.amount === "number");
   // 今年の分もポップアップで見せる。フッターの「今年」と同じ数え方にそろえる
   // (収集済みの注文だけ、日付を読めない注文はどの年にも入れない)

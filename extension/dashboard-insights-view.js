@@ -289,7 +289,8 @@ function renderYearSummary(results = currentResults()) {
 
   summarySelectedYear = resolveSummaryYear(years);
   renderYearOptions(summaryYear, years, summarySelectedYear);
-  const stats = buildYearSummary(results, summarySelectedYear);
+  // D12 絞り込み中のまとめを、その年の全体として外へ出さない
+  const stats = { ...buildYearSummary(results, summarySelectedYear), giftFilter };
   // 共有するのは画面に出したものそのもの。共有時に集計し直さない
   summaryShareStats = stats;
 

@@ -20,6 +20,8 @@ function buildRankingShareStats(results, shops, periodLabel = "") {
     pending: results.filter((r) => needsCollect(state.cache[r.id])).length,
     unknown: shops.reduce((sum, row) => sum + row.unknown, 0),
     indexComplete: indexIsComplete(state.index),
+    // D12 絞り込み中のランキングを全期間・全対象のものとして外へ出さない
+    giftFilter,
   };
 }
 
@@ -114,10 +116,13 @@ function trapSharePanelFocus(event) {
   }
 }
 
+// payload は { name, build(hideNames) => { text, card } }。
+// D13 のチェックはパネルを開いたまま切り替えられるので、押した時点の値を
+// 持ち回るのではなく、組み立て方そのものを持たせて何度でも組み直す
 function openSharePanel(payload) {
   shareReturnFocus = document.activeElement;
   sharePayload = payload;
-  shareText.value = payload.text;
+  applyShareNameMask();
   setShareCardStatus("");
   shareOverlay.hidden = false;
   sharePanel.hidden = false;
@@ -132,6 +137,17 @@ function openSharePanel(payload) {
   // パネルを開いている間は、後ろの共有ボタンを押せないようにする
   updateShareButton();
   shareCloseBtn.focus();
+}
+
+// D13 「品名・ショップ名を出さない」の反映。文面とカードを同じ設定で組み直す
+// (片方だけ伏せると、画像に無い名前が文面から出ていく)
+function applyShareNameMask() {
+  if (!sharePayload) return;
+  const built = sharePayload.build(shareHideNames.checked);
+  sharePayload.text = built.text;
+  sharePayload.card = built.card;
+  shareText.value = built.text;
+  drawSharePanelCard();
 }
 
 function closeSharePanel() {

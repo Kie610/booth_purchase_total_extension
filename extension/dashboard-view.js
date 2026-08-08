@@ -81,6 +81,9 @@ const noticeBox = document.getElementById("noticeBox");
 const errorBox = document.getElementById("errorBox");
 const menuBtn = document.getElementById("menuBtn");
 const themeSwitch = document.getElementById("themeSwitch");
+// D12 集計対象(すべて/自分用/ギフト)。全ビューの上に1つだけ置く
+const giftFilterSwitch = document.getElementById("giftFilterSwitch");
+const giftFilterNote = document.getElementById("giftFilterNote");
 const navDrawer = document.getElementById("navDrawer");
 const navOverlay = document.getElementById("navOverlay");
 const firstRunGuide = document.getElementById("firstRunGuide");
@@ -150,6 +153,8 @@ const shareCopyBtn = document.getElementById("shareCopyBtn");
 const shareSaveBtn = document.getElementById("shareSaveBtn");
 const shareOpenBtn = document.getElementById("shareOpenBtn");
 const shareCardStatus = document.getElementById("shareCardStatus");
+// D13 品名・ショップ名を出さずに共有する
+const shareHideNames = document.getElementById("shareHideNames");
 
 // 実行中は押せなくするボタン
 const ACTION_BUTTONS = [
@@ -201,7 +206,11 @@ function renderCurrentView() {
       link.removeAttribute("aria-current");
     }
   });
-  viewTitle.textContent = VIEW_TITLES[current];
+  // 絞り込み中はどの画面の見出しにもその旨を添える(部分集計を全体に見せない)
+  viewTitle.textContent = [VIEW_TITLES[current], giftFilterTitleSuffix()]
+    .filter(Boolean)
+    .join(" ");
+  renderGiftFilter();
   renderPendingBanner(current);
   // 画面を移ると共有ボタンの中身が変わる。ハッシュの変化だけでも呼ばれるので、
   // 全体の描画を待たずにここで合わせる
@@ -294,6 +303,51 @@ function renderThemeSwitch(theme) {
     btn.classList.toggle("current", selected);
     btn.setAttribute("aria-pressed", String(selected));
   }
+}
+
+// ---- D12 集計対象の絞り込み --------------------------------------------
+//
+// 既定は「すべて」。保存しないので、開き直せば必ず全体の集計から始まる。
+// 絞っている間の金額は商品の内訳から出すため、注文単位のお支払金額との差
+// (送料・クーポンなど、対象別に分けられないもの)を注記へ必ず出す。
+
+let giftFilter = "all";
+// buildResults() が描画のたびに書き込む { gap, gapUnknown }
+let giftFilterGap = { gap: 0, gapUnknown: 0 };
+
+function setGiftFilter(value) {
+  const next = normalizeGiftFilter(value);
+  if (next === giftFilter) return;
+  giftFilter = next;
+  render();
+}
+
+// 見出しへ添える印。絞り込み中の画面を全体の集計として読ませない
+function giftFilterTitleSuffix() {
+  return giftFilter === "all" ? "" : `（${GIFT_FILTER_LABELS[giftFilter]}のみ）`;
+}
+
+function renderGiftFilter() {
+  for (const btn of giftFilterSwitch.querySelectorAll("button[data-gift-filter]")) {
+    const selected = btn.dataset.giftFilter === giftFilter;
+    btn.classList.toggle("current", selected);
+    btn.setAttribute("aria-pressed", String(selected));
+  }
+  giftFilterNote.hidden = giftFilter === "all";
+  if (giftFilter === "all") {
+    giftFilterNote.textContent = "";
+    return;
+  }
+  const { gap, gapUnknown } = giftFilterGap;
+  giftFilterNote.textContent =
+    `「${GIFT_FILTER_LABELS[giftFilter]}」だけで集計しています。この画面の数字は全体の合計ではありません。` +
+    "金額は商品の内訳(単価×数量+BOOST)から出しています。" +
+    (gap !== 0
+      ? `送料・クーポンなど対象別に分けられない金額が${formatYen(gap)}あり、上の集計には含めていません。`
+      : "対象別に分けられない金額(送料・クーポンなど)はありませんでした。") +
+    (gapUnknown > 0
+      ? `さらに${gapUnknown}件は差額を計算できていません(金額または明細を読めていません)。`
+      : "");
 }
 
 function setDrawerOpen(open, returnFocus = true) {
@@ -962,6 +1016,14 @@ function renderFooter(results) {
     pendingCount: results.length - valid.length,
     yearPendingCount: inThisYear(results).length - ofThisYear.length,
     indexComplete: indexIsComplete(state.index),
+    // D12 絞り込み中は、共有文面・共有カードにもその旨を出す
+    giftFilter,
+    // D13 伏せ字共有のカードに出す月別棒グラフ(今年の1〜12月)
+    yearMonths: ofThisYear.reduce((months, r) => {
+      const d = parseOrderDate(r.date);
+      if (d) months[d.month - 1] += r.amount;
+      return months;
+    }, Array.from({ length: 12 }, () => 0)),
   };
 }
 

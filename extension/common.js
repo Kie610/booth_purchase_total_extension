@@ -132,6 +132,61 @@ function amountGapOf(entry) {
   return entry.amount - items - shippingAmount(entry);
 }
 
+// ---- D12 集計対象の絞り込み(すべて / 自分用 / ギフト) --------------------
+//
+// 注文単位の「お支払金額」は自分用とギフトへ分けられない(送料やクーポンが
+// 注文に1つしか無く、どちらへ割り振るかを決められない)。そのため絞り込み中の
+// 金額だけは商品の内訳(単価×数量+BOOST)から出す。**残った差額は消さずに
+// 画面へ出す**(黙って落とすと、少ない額を正しい合計に見せることになる)。
+
+const GIFT_FILTERS = ["all", "self", "gift"];
+const GIFT_FILTER_LABELS = { all: "すべて", self: "自分用", gift: "ギフト" };
+// 共有文面・共有カードに出す見出し。部分集計を全体の数字に見せないための印
+const GIFT_FILTER_SHARE_LABELS = { self: "🙋自分用だけ", gift: "🎁贈ったギフトだけ" };
+
+function normalizeGiftFilter(value) {
+  return GIFT_FILTERS.includes(value) ? value : "all";
+}
+
+// 絞り込んだ一覧と、対象別に分けられなかった金額を返す。
+// - 該当する商品が1つも無い注文は対象から外す(0円の注文として件数を膨らませない)
+// - 商品明細を持たない注文は分けようがないので、金額を不明(未収集)に落とす。
+//   除外はしない。除外すると未収集の断り書きから消えてしまう
+function filterResultsByGift(results, filter) {
+  const mode = normalizeGiftFilter(filter);
+  if (mode === "all") return { rows: results, gap: 0, gapUnknown: 0 };
+  const want = mode === "gift";
+  const rows = [];
+  let gap = 0;
+  let gapUnknown = 0;
+  for (const result of results) {
+    if (!Array.isArray(result.items)) {
+      rows.push({ ...result, amount: undefined, gift: undefined, shipping: undefined });
+      gapUnknown++;
+      continue;
+    }
+    const items = result.items.filter((item) => Boolean(item.gift) === want);
+    if (items.length === 0) continue;
+    const whole = sumItemAmounts(result.items);
+    if (typeof result.amount === "number" && whole !== null) {
+      gap += result.amount - whole;
+    } else {
+      // 差額を出せない注文。0として足すと「差は無い」と言い切ることになる
+      gapUnknown++;
+    }
+    const amount = sumItemAmounts(items);
+    rows.push({
+      ...result,
+      items,
+      amount: amount === null ? null : amount,
+      gift: want ? amount : 0,
+      // 送料は注文に1つしか無く、対象別に割り振れない。差額の側で数える
+      shipping: undefined,
+    });
+  }
+  return { rows, gap, gapUnknown };
+}
+
 // まだ取りに行く必要がある注文かどうか。キャッシュに無いもの(未収集)に加え、
 // 取得はできたが金額を読めなかったもの(amount:null)、商品明細を読めなかったもの、
 // 保存する項目が増える前の版で保存されたものも対象にする。
@@ -586,10 +641,14 @@ function buildYearSummary(results, year) {
   }
 
   const months = new Map();
+  // D13 共有カードの月別棒グラフ用。1〜12月の並びで持つ(日付を読めない注文は入らない)
+  const monthlyTotals = Array.from({ length: 12 }, () => 0);
   for (const result of valid) {
     const key = monthKeyOf(result.date);
     if (!key) continue;
     months.set(key, (months.get(key) || 0) + result.amount);
+    const date = parseOrderDate(result.date);
+    if (date) monthlyTotals[date.month - 1] += result.amount;
   }
   let busiestMonth = null;
   for (const [key, total] of months) {
@@ -613,6 +672,7 @@ function buildYearSummary(results, year) {
     newShopCount: newShops.size,
     beforePending,
     busiestMonth,
+    monthlyTotals,
     topShops: aggregateByShop(valid).slice(0, YEAR_SUMMARY_TOP_SHOPS),
   };
 }

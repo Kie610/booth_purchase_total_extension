@@ -15,6 +15,27 @@ const RANKING_SORT_LABELS = { amount: "金額編", count: "購入数編" };
 
 const SHARE_HASHTAG = "#BOOTHお買いものレポート";
 
+// D12 集計対象を絞っているときの見出し。**文面とカードの両方に必ず出す。**
+// 画像だけが転載されることがあるので、片方だけでは部分集計が全体の数字に見える
+function giftFilterShareLabel(stats) {
+  return (stats && GIFT_FILTER_SHARE_LABELS[stats.giftFilter]) || "";
+}
+
+// 絞り込み中の共有文面に足す1行(絞っていなければ何も足さない)
+function giftFilterShareLines(stats) {
+  const label = giftFilterShareLabel(stats);
+  return label ? [`${label}の集計です（送料・クーポンを除く商品の合計）`] : [];
+}
+
+function shareSubtitle(stats) {
+  const label = giftFilterShareLabel(stats);
+  return label ? `BOOTHお買いものレポート・${label}` : "BOOTHお買いものレポート";
+}
+
+// D13 品名・ショップ名を伏せたときに文面へ残す断り。
+// 何も書かずに名前だけ消すと、もともと作者が居なかったように読める
+const HIDE_NAMES_NOTE = "※ショップ名は伏せています";
+
 // 合計以下の項目から最も高いものを選ぶ。マスターは金額の昇順で管理する。
 // 最も安い項目にも届かない額のときは、何を選んでも「買えるくらい」が嘘になるので選ばない
 function purchaseComparison(amount) {
@@ -53,6 +74,7 @@ function buildShareText(stats) {
   const comparison = purchaseComparison(basis);
   return [
     "BOOTHお買いもの振り返り🛍️",
+    ...giftFilterShareLines(stats),
     "",
     ...(full ? [`合計：${formatYen(stats.total)}（${stats.count}件）`] : []),
     `今年：${formatYen(stats.yearTotal)}（${stats.yearCount}件）`,
@@ -80,11 +102,24 @@ function rankingShareValue(row, sort) {
 // (periodLabel を持たない呼び出しは全期間として扱う)
 function rankingShareCaption(stats) {
   const period = stats.periodLabel ? `${stats.periodLabel}・` : "";
-  return `${period}${RANKING_SORT_LABELS[stats.sort]}`;
+  const filter = giftFilterShareLabel(stats);
+  return `${period}${filter ? `${filter}・` : ""}${RANKING_SORT_LABELS[stats.sort]}`;
 }
 
-function buildRankingShareText(stats, hideNumbers) {
+function buildRankingShareText(stats, hideNumbers, hideNames) {
   const label = rankingShareCaption(stats);
+  // D13 ランキングは中身がショップ名そのもの。伏せるなら順位の並びごと落とし、
+  // 名前の出ない数字(ショップ数)だけにする
+  if (hideNames) {
+    return [
+      `BOOTHの推し作者ランキング🛍️（${label}）`,
+      "",
+      `推し作者 ${stats.shopCount}ショップ`,
+      HIDE_NAMES_NOTE,
+      "",
+      SHARE_HASHTAG,
+    ].join("\n");
+  }
   return [
     `BOOTHの推し作者ランキング🛍️（${label}）`,
     "",
@@ -125,9 +160,10 @@ function rankingShareConfirmMessage(stats) {
 
 // ---- 今年のまとめの共有 ------------------------------------------------
 
-function buildSummaryShareText(stats) {
+function buildSummaryShareText(stats, hideNames) {
   const lines = [
     `${stats.year}年のBOOTHお買いもの🛍️`,
+    ...giftFilterShareLines(stats),
     "",
     `合計額 ${formatYen(stats.total)}（${stats.orderCount}件）`,
     `買ったもの ${stats.itemCount}点`,
@@ -136,6 +172,10 @@ function buildSummaryShareText(stats) {
   // はじめて買った作者がいない年に「はじめて 0人」と出すと寂しいだけなので落とす
   if (stats.newShopCount > 0) lines.push(`うちはじめて ${stats.newShopCount}人`);
   if (stats.busiestMonth) lines.push(`いちばん買った月 ${monthLabel(stats.busiestMonth.key)}`);
+  if (hideNames) {
+    lines.push("", HIDE_NAMES_NOTE, "", SHARE_HASHTAG);
+    return lines.join("\n");
+  }
   if (stats.topShops.length > 0) {
     lines.push("", "推し作者");
     stats.topShops.forEach((row, index) => {
@@ -203,16 +243,26 @@ const SHARE_CARD_THEMES = {
 // 文面と同じ集計値から組む。カードのために集計し直すと、投稿の本文と画像で
 // 違う数字を出しかねない。
 
+// bars は D13 用の月別棒グラフ { label, values: [12個] }。無ければ null
 function shareCardBase(title, subtitle) {
-  return { title, subtitle, stats: [], list: [], note: "" };
+  return { title, subtitle, stats: [], list: [], bars: null, note: "" };
 }
 
-function buildTotalShareCard(stats) {
+// 月別の棒グラフを載せてよいか。1件も無い年に平らな棒を並べても意味がない
+function monthlyBars(label, values) {
+  return Array.isArray(values) && values.some((value) => value > 0)
+    ? { label, values }
+    : null;
+}
+
+function buildTotalShareCard(stats, hideNames) {
   const full = canShareTotal(stats);
   const card = shareCardBase(
     full ? "BOOTHお買いもの振り返り" : `${stats.year}年のBOOTHお買いもの`,
-    "BOOTHお買いものレポート"
+    shareSubtitle(stats)
   );
+  // D13 名前を伏せるとカードが数字だけになる。名前を出さずに「いつ買ったか」を見せる
+  if (hideNames) card.bars = monthlyBars(`${stats.year}年の月別`, stats.yearMonths);
   if (full) {
     card.stats.push({ label: "合計額", value: formatYen(stats.total), note: `${stats.count}件` });
   }
@@ -226,11 +276,17 @@ function buildTotalShareCard(stats) {
   return card;
 }
 
-function buildRankingShareCard(stats, hideNumbers) {
+function buildRankingShareCard(stats, hideNumbers, hideNames) {
   const card = shareCardBase(
     `推し作者ランキング（${rankingShareCaption(stats)}）`,
-    "BOOTHお買いものレポート"
+    shareSubtitle(stats)
   );
+  // D13 ショップ名を伏せるなら順位表ごと落とす(名前を消した順位表は空欄の列になる)
+  if (hideNames) {
+    card.stats.push({ label: "推し作者", value: `${stats.shopCount}ショップ`, note: "" });
+    card.note = "ショップ名は伏せています";
+    return card;
+  }
   card.list = stats.rows.map((row, index) => ({
     rank: index + 1,
     name: row.name,
@@ -243,8 +299,8 @@ function buildRankingShareCard(stats, hideNumbers) {
   return card;
 }
 
-function buildSummaryShareCard(stats) {
-  const card = shareCardBase(`${stats.year}年のお買いもの`, "BOOTHお買いものレポート");
+function buildSummaryShareCard(stats, hideNames) {
+  const card = shareCardBase(`${stats.year}年のお買いもの`, shareSubtitle(stats));
   card.stats.push({
     label: "合計額",
     value: formatYen(stats.total),
@@ -256,6 +312,11 @@ function buildSummaryShareCard(stats) {
     value: `${stats.shopCount}人`,
     note: stats.newShopCount > 0 ? `はじめて ${stats.newShopCount}人` : "",
   });
+  if (hideNames) {
+    card.bars = monthlyBars(`${stats.year}年の月別`, stats.monthlyTotals);
+    card.note = "ショップ名は伏せています";
+    return card;
+  }
   card.list = stats.topShops.map((row, index) => ({
     rank: index + 1,
     name: row.name,
@@ -283,6 +344,41 @@ function fitText(ctx, text, maxWidth) {
     cut = cut.slice(0, -1);
   }
   return `${cut}…`;
+}
+
+// D13 月別の棒グラフ。金額の目盛りは出さない(額はカード上部の数字が正)。
+// 買っていない月も棒の場所は空けたまま並べる。詰めると月がずれて読める
+function drawMonthlyBars(ctx, bars, left, right, top, height, theme, layout) {
+  const values = bars.values;
+  const max = Math.max(...values);
+  const labelSize = Math.max(14, Math.round(layout.statNote * 0.8));
+
+  ctx.fillStyle = theme.muted;
+  ctx.font = `${layout.statNote}px ${SHARE_CARD_FONT}`;
+  ctx.fillText(bars.label, left, top);
+
+  const chartTop = top + 14;
+  const chartBottom = top + height - labelSize - 8;
+  const slot = (right - left) / values.length;
+  const barWidth = Math.max(4, slot * 0.56);
+  values.forEach((value, index) => {
+    const x = left + slot * index + (slot - barWidth) / 2;
+    const barHeight = max > 0 ? ((chartBottom - chartTop) * value) / max : 0;
+    ctx.fillStyle = value > 0 ? theme.accent : theme.line;
+    // 0円の月も細い線を残す。何も描かないと、その月が抜けているように見える
+    const drawn = Math.max(2, barHeight);
+    ctx.fillRect(x, chartBottom - drawn, barWidth, drawn);
+  });
+
+  ctx.fillStyle = theme.muted;
+  ctx.font = `${labelSize}px ${SHARE_CARD_FONT}`;
+  ctx.textAlign = "center";
+  // 12個すべて出すと隣とくっつくので1つ飛ばしにする
+  values.forEach((_, index) => {
+    if (index % 2 !== 0) return;
+    ctx.fillText(`${index + 1}`, left + slot * index + slot / 2, chartBottom + labelSize + 6);
+  });
+  ctx.textAlign = "left";
 }
 
 // ---- 背景 --------------------------------------------------------------
@@ -602,8 +698,9 @@ function drawShareCard(ctx, card, background, template, backgroundTransform) {
   const statRows = card.stats.length > 0 ? Math.ceil(card.stats.length / layout.statsPerRow) : 0;
   const needed = statRows * layout.statRow + card.list.length * layout.listStep;
   const gaps = (statRows > 0 ? 1 : 0) + (card.list.length > 0 ? 1 : 0);
+  // 棒グラフは残りの高さいっぱいまで伸ばすので、余りを配ると下へはみ出す
   const spare =
-    layout.spread && gaps > 0
+    layout.spread && gaps > 0 && !card.bars
       ? Math.max(0, (bottom - 56 - y - needed - 140) / gaps)
       : 0;
 
@@ -632,6 +729,17 @@ function drawShareCard(ctx, card, background, template, backgroundTransform) {
       }
     });
     y += layout.statRow * statRows - 12;
+  }
+
+  // 棒グラフは数字の下、順位表の上。下段(断り書きとハッシュタグ)は空けておく
+  if (card.bars) {
+    y += 32;
+    const barsHeight = Math.max(
+      110,
+      Math.min(220, bottom - 56 - y - card.list.length * layout.listStep - 24)
+    );
+    drawMonthlyBars(ctx, card.bars, left, right, y, barsHeight, theme, layout);
+    y += barsHeight + 20;
   }
 
   if (card.list.length > 0) {
