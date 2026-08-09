@@ -708,10 +708,10 @@ function avatarAliasMap() {
   return avatarAliasCache;
 }
 
-// 保存キー → 表示名。名簿に無いキー(未知トークンのバケツ、旧版で保存された割り当て)は
-// キーをそのまま出す。勝手に別のアバターへ寄せない
+// 保存キー → 表示名。名簿 → 素体商品の題名から拾った名前(index) → キーそのもの、の順。
+// どこにも無ければキーをそのまま出す。勝手に別のアバターへ寄せない
 let avatarNameCache = null;
-function avatarDisplayName(key) {
+function avatarDisplayName(key, index = null) {
   if (!avatarNameCache) {
     avatarNameCache = new Map();
     for (const avatar of AVATAR_MASTER) {
@@ -721,7 +721,7 @@ function avatarDisplayName(key) {
       }
     }
   }
-  return avatarNameCache.get(key) || key;
+  return avatarNameCache.get(key) || (index && index.names.get(key)) || key;
 }
 
 // アバター名になりえない形のトークン。語そのものを並べるストップ語と違い、
@@ -781,7 +781,32 @@ function isAvatarLatinToken(token) {
 // バリエーション名へ構造的に誤ヒットした(名簿74体中この1組)。トークン完全一致なら
 // 「凪」と「凪夜」は別トークンなので、この衝突は起きない
 function avatarBucketKey(token, index) {
-  return avatarAliasMap().get(token) || (index && index.buckets.has(token) ? token : "");
+  if (!index) return avatarAliasMap().get(token) || "";
+  return (
+    avatarAliasMap().get(token) ||
+    index.aliases.get(token) ||
+    (index.buckets.has(token) ? token : "")
+  );
+}
+
+// 素体商品(アバターそのもの)の名乗り。実データの表記より
+// (「オリジナル3Dモデル「しなの」」「【オリジナル3Dモデル】狛乃-Komano-」
+//  「慧 -Kei- オリジナル3Dモデル」)
+const AVATAR_SOLO_MARKER =
+  /オリジナル[3３][DdＤｄ]モデル|オリジナル[3３][DdＤｄ]アバター|[3３][DdＤｄ]キャラクターモデル|アバター素体/g;
+
+// 素体商品の題名から、名乗っている名前のトークンを取り出す。素体商品でなければ空。
+//
+// 素体商品は1商品しか買わない(同じ素体を2回買わない)ので、2商品の昇格則には
+// 永久に届かない。あからさまにアバターなのに未分類へ沈むので、この名乗りがある商品だけは
+// 1商品でもバケツにする。
+// 題名は自分の名前を名乗る場所なので、ふつうなら捨てる漢字1文字(「慧」)もここでは残す
+function avatarSoloTokens(name) {
+  const { base } = parseItemName(name);
+  const stripped = base.replace(AVATAR_SOLO_MARKER, " ");
+  if (stripped === base) return [];
+  const alias = avatarAliasMap();
+  return avatarRawTokens(stripped).filter((token) => alias.has(token) || !AVATAR_STOP_SET.has(token));
 }
 
 // 文字列から見つかったバケツのキー(重複なし、現れた順)
@@ -817,6 +842,9 @@ function avatarKeysIn(text, index) {
 function buildAvatarIndex(results) {
   const tokenProducts = new Map();
   const pairProducts = new Map();
+  const buckets = new Set();
+  const aliases = new Map();
+  const names = new Map();
   const add = (map, key, productKey) => {
     if (!map.has(key)) map.set(key, new Set());
     map.get(key).add(productKey);
@@ -825,6 +853,22 @@ function buildAvatarIndex(results) {
   for (const result of results || []) {
     if (!Array.isArray(result.items)) continue;
     for (const item of result.items) {
+      // 素体商品は1商品でも昇格させる。バリエーションの有無に関係なく見る
+      const solo = avatarSoloTokens(item && item.name);
+      if (solo.length === 1) buckets.add(solo[0]);
+      else if (solo.length === 2) {
+        const latin = solo.filter(isAvatarLatinToken);
+        const japanese = solo.filter((token) => !isAvatarLatinToken(token));
+        // 素体商品の題名で「日本語名 ローマ字名」が並ぶのは同じアバターの併記。
+        // ここは複数アバターを列挙する場所ではないので、共起候補にせず統合してよい
+        if (latin.length === 1 && japanese.length === 1) {
+          const key = avatarAliasMap().get(japanese[0]) || avatarAliasMap().get(latin[0]) || latin[0];
+          aliases.set(japanese[0], key);
+          aliases.set(latin[0], key);
+          if (!names.has(key)) names.set(key, japanese[0]);
+        }
+      }
+
       const { variation } = parseItemName(item && item.name);
       if (!variation) continue;
       const tokens = avatarTokens(variation);
@@ -842,12 +886,11 @@ function buildAvatarIndex(results) {
   }
 
   const alias = avatarAliasMap();
-  const buckets = new Set();
   for (const [token, products] of tokenProducts) {
     if (!alias.has(token) && products.size >= 2) buckets.add(token);
   }
 
-  const index = { buckets };
+  const index = { buckets, aliases, names };
   const merges = [];
   for (const [pair, products] of pairProducts) {
     if (products.size < 2) continue;
@@ -943,23 +986,30 @@ function aggregateByAvatar(results, assignments = {}, sortBy = DEFAULT_SHOP_SORT
     if (!Array.isArray(result.items)) continue;
     for (const item of result.items) {
       const verdict = classifyItemAvatar(item, assignments, index);
-      let row;
+      let row = null;
       if (verdict.kind === "multi") row = multi;
-      else if (verdict.kind === "none") row = none;
-      else {
+      else if (verdict.kind === "none") {
+        // D17-b 種別枠(ワールド・ツール等)が受け持つ商品は「未分類」に数えない。
+        // 二重に数えると未分類が膨らみ、アバター名を読み取れなかった買いものの量が
+        // 読めなくなる。手動割り当ての一覧には残すので、特定のアバターへ寄せたい人は
+        // そちらで上書きできる(手動割り当ては種別より優先)
+        if (!classifyItemKind(item && item.name)) row = none;
+      } else {
         if (!rows.has(verdict.key)) {
-          rows.set(verdict.key, emptyAvatarRow(verdict.key, avatarDisplayName(verdict.key)));
+          rows.set(verdict.key, emptyAvatarRow(verdict.key, avatarDisplayName(verdict.key, index)));
         }
         row = rows.get(verdict.key);
       }
 
       const quantity = itemQuantity(item);
       const count = typeof quantity === "number" ? quantity : 0;
-      row.count += count;
-      if (item.name) row.items.add(item.name);
       const amount = itemAmount(item);
-      if (amount === null) row.unknown++;
-      else row.total += amount;
+      if (row) {
+        row.count += count;
+        if (item.name) row.items.add(item.name);
+        if (amount === null) row.unknown++;
+        else row.total += amount;
+      }
 
       // 手動で直せる対象。自動で当たったものまで並べると一覧が長くなりすぎる
       if (verdict.kind !== "none" && !verdict.manual) continue;

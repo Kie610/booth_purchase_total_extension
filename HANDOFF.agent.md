@@ -12,21 +12,22 @@ goal: docs/improvement-plan.md の改善タスクをv1.1.0として統合し、�
 complete:
 - C: v1.0.0を正式リリース済み(GitHub Release公開、`main`を同じSHAへfast-forward同期済み)。
 - C: `1.1.0`へP1〜P9(A1〜A5・B1〜B4・C1〜C18・D1〜D5・D10〜D13・T1)を統合済み。
-  統合内訳・実装詳細・設計判断・過去の検証証跡は docs/handoff-history.md を参照。
+  統合内訳・実装詳細・設計判断・過去の検証証跡は docs/handoff-history.md。
 - C: P10(D14)・P11(D15・D16)・P12(D17-a/b)を検品のうえ`1.1.0`へ統合済み(2026-08-09)。
   P12はD14の固定辞書照合をトークン完全一致クラスタリングへ置き換え、名簿を`{jp, en, alt}`
   (約86体)へ変更した。`en`が`boothAvatarAssign`の保存キーで、P10の旧キーは名簿へ残して互換。
-  公開契約は`boothAvatarAssign`とバックアップの`avatarAssign`のまま変えていない。
-  1.1.0で壊れていたREADMEのFirefox記述(既存テストが期待する文言)もP12で直した。
-  各ブランチの実装詳細は docs/improvement-plan.md の D14〜D17 を参照。
+  公開契約(`boothAvatarAssign`・バックアップの`avatarAssign`)は不変。
+  実装詳細は docs/improvement-plan.md の D14〜D17 を参照。
+- A: D17-c(実環境フィードバック3点)を`claude/p12-feedback`で実装済み(統合は親)。種別ラベルの
+  重なり、種別商品の未分類への二重計上、素体商品が1商品で昇格しない件を修正。公開契約は不変。
 - C: 運用ルール合成(2026-08-08): AGENTS.mdへプロジェクト契約・設計の優先順位・委任と検品を追記。
-- C: VRChatter調査(2026-08-08)より D12〜D14 と P9・P10 を improvement-plan へ起票。
 
 verified:
-- C: 2026-08-09 — evidence: status=PASS; kind=compile+runtime; command=node --check 17ファイル、
-  python -m http.server 8799 + Browserで/test/index.html(統合済み35b6e03を親が検品);
-  counts=compile 17/0、ALL PASS 964 checks(924→964)、実CSV637明細でノイズバケツ0を確認
-- 上記より前の検証証跡(P10=898 checks、P11=924 checks)は docs/handoff-history.md を参照。
+- A: 2026-08-09 — evidence: status=PASS; kind=compile+runtime; command=node --check 17ファイル、
+  python -m http.server 8801 + Browserで/test/index.html(claude/p12-feedback、幅1280px);
+  counts=compile 17/0、ALL PASS 975 checks(964→975。D17-cで11件追加)
+- 上記より前の検証証跡(P10=898、P11=924、P12統合時=964 checks)は docs/handoff-history.md。
+- 注意: 共有カードの幅依存テスト1件は、ブラウザ幅521pxでは落ちる。検証は幅768px以上で行う。
 
 not-run:
 - U: U1 BOOTHログイン済み実ページの通信・ページング・セレクタ確認
@@ -44,7 +45,7 @@ not-run:
 
 ## Next
 
-1. P10〜P12の実環境フィードバックを反映する — blocked-by: ユーザーの確認
+1. `claude/p12-feedback`(D17-c)を検品して`1.1.0`へ統合する — blocked-by: none
 2. 次回の正式リリースでも検証後にバージョンブランチ、`main`、リモートのSHAを一致させる — blocked-by: none
 
 ## Paths

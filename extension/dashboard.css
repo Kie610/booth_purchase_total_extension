@@ -2286,6 +2286,13 @@ tr.shop-row:hover td {
   white-space: nowrap;
 }
 
+/* D17-b 種別枠のラベル。「ワールド用アイテム」「ギミック・ツール」は
+   複数対応・未分類より長く、84px固定だと隣の「〇種類」へ重なる。幅は中身に任せる */
+.avatar-other-row td.avatar-kind-label {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 /* 手動割り当ての選択。素体名が増えても列が広がらないよう上限を決める */
 .avatar-assign-select {
   max-width: 200px;

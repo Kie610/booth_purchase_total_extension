@@ -325,7 +325,8 @@ function renderAvatarKindRows(rows) {
   avatarKindBox.hidden = rows.length === 0;
   for (const row of rows) {
     const tr = el("tr", "avatar-other-row");
-    tr.appendChild(td(row.name, "avatar-other-label"));
+    // 複数対応・未分類より名前が長いので、幅を固定しない専用のclassを使う
+    tr.appendChild(td(row.name, "avatar-kind-label"));
     tr.appendChild(td(`${row.items.length}種類`));
     tr.appendChild(countCell(row.count));
     tr.appendChild(amountCell(row.total));

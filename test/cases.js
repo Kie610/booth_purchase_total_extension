@@ -1295,6 +1295,57 @@ check("種別を読み取れなければ枠を出さない", aggregateByItemKind
   { id: "k2", items: [{ ...item("ふわもこパーカー (マヌカ)", 300),
     name: "ふわもこパーカー (マヌカ)" }] }]), []);
 check("明細の無い注文は種別に数えない", aggregateByItemKind([{ id: "k3", items: null }]), []);
+// ユーザー実環境で当たっていた実データの表記(2026-08-09フィードバック)
+check("実データのツール・ワールド用商品を見分ける",
+  ["【Unityメッシュ編集ツール】EreMorph", "【アバター衣装変換ツール】Alterith",
+   "【VRChatワールド用】望遠鏡 Telescope SZT80-E"].map(classifyItemKind),
+  ["tool", "tool", "world-item"]);
+// 種別枠が受け持つ商品を未分類にも数えると、未分類が膨らんで
+// 「アバター名を読み取れなかった買いもの」の量が読めなくなる
+const kindNoneRows = [{ id: "kn", items: [
+  { ...item("【Unityメッシュ編集ツール】EreMorph", 900),
+    name: "【Unityメッシュ編集ツール】EreMorph" },
+  { ...item("なぞの服 (Lサイズ)", 800), name: "なぞの服 (Lサイズ)" },
+] }];
+const kindNoneAgg = aggregateByAvatar(kindNoneRows, {});
+check("種別に当たった商品は未分類に数えない",
+  [kindNoneAgg.none.count, kindNoneAgg.none.total], [1, 800]);
+// ただし手動割り当ての一覧には残す(手動割り当ては種別より優先)
+check("種別に当たった商品も手で割り当てられる",
+  kindNoneAgg.products.map((p) => p.name).sort(),
+  ["【Unityメッシュ編集ツール】EreMorph", "なぞの服"]);
+check("手動割り当ては種別より優先される",
+  aggregateByAvatar(kindNoneRows, {
+    [itemProductKey({ ...item("【Unityメッシュ編集ツール】EreMorph", 900),
+      name: "【Unityメッシュ編集ツール】EreMorph" })]: "manuka",
+  }).rows.map((r) => [r.key, r.total]), [["manuka", 900]]);
+
+// --- D17-a 素体商品(アバターそのもの)は1商品でも昇格する ---
+// 同じ素体を2回買わないので2商品の昇格則には永久に届かない。あからさまにアバターなのに
+// 未分類へ沈むのは体験が悪い(2026-08-09 ユーザーフィードバック)
+const soloItem = (name, price) => ({ ...item(name, price), name });
+check("素体商品は日英併記を1つのアバターにまとめる",
+  aggregateByAvatar([{ id: "s1", items: [soloItem("慧 -Kei- オリジナル3Dモデル", 5000)] }], {})
+    .rows.map((r) => [r.key, r.name, r.total]), [["kei", "慧", 5000]]);
+check("素体商品の別の書式も拾う",
+  [aggregateByAvatar([{ id: "s2", items: [
+    soloItem("ライカ -Laika-【オリジナル3Dモデル】", 6000)] }], {}).rows[0].key,
+   aggregateByAvatar([{ id: "s3", items: [
+     soloItem("【オリジナル3Dモデル】狛乃-Komano-", 7000)] }], {}).rows[0].key],
+  ["laika", "komano"]);
+// 名簿にある名前は名簿のキーへ吸わせる(表示名も名簿のものを使う)
+check("素体商品でも名簿にある名前は名簿のキーになる",
+  aggregateByAvatar([{ id: "s4", items: [
+    soloItem("オリジナル3Dモデル「しなの」", 8000)] }], {})
+    .rows.map((r) => [r.key, r.name]), [["shinano", "しなの"]]);
+// 素体マーカーが無ければ従来どおり。1商品では昇格しない
+check("素体マーカーが無ければ1商品では昇格しない",
+  aggregateByAvatar([{ id: "s5", items: [soloItem("慧 -Kei- のパーカー", 900)] }], {}).rows, []);
+check("素体商品の名前は他の商品の照合にも効く",
+  aggregateByAvatar([{ id: "s6", items: [
+    soloItem("慧 -Kei- オリジナル3Dモデル", 5000),
+    soloItem("パーカー (Kei)", 1000),
+  ] }], {}).rows.map((r) => [r.key, r.total]), [["kei", 6000]]);
 
 // --- 今年のまとめ ---
 // 「はじめて出会った作者」を出すため、その年より前の注文も見る必要がある
@@ -2973,6 +3024,20 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   check("件数を見出しにも出す",
     [avatarStats.textContent.includes("複数対応: 1点"),
      avatarStats.textContent.includes("未分類: 1点")], [true, true]);
+
+  // 種別枠のラベルは複数対応・未分類より長い。84px固定のclassを流用すると
+  // 「〇種類」のセルへ重なる(2026-08-09 ユーザーフィードバック)
+  renderAvatarKindRows(aggregateByItemKind([{ id: "kd", items: [
+    { ...item("【VRChatワールドギミック】UnyStylus", 800),
+      name: "【VRChatワールドギミック】UnyStylus" },
+  ] }]));
+  const kindLabel = avatarKindBody.querySelector("td");
+  check("種別枠のラベルは専用のclassを使う",
+    [avatarKindBox.hidden, kindLabel.className, kindLabel.textContent],
+    [false, "avatar-kind-label", "ワールド用アイテム"]);
+  // 実CSSで測る。中身がセル幅に収まっていれば隣の列へはみ出さない
+  check("種別枠のラベルが隣の列へはみ出さない",
+    kindLabel.scrollWidth <= kindLabel.clientWidth, true);
 
   // 未分類は手で割り当てられる。選択肢は辞書から作るので、辞書へ足すだけで増える
   const assignSelect = avatarAssignBody.querySelector("select[data-product-key]");
