@@ -3538,8 +3538,16 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
     "BOOTHの沼レポート🛍️（金額編）\n\n最推しアバター：マヌカ\n\n🥇 マヌカ ¥1,500\n🥈 森羅 ¥1,200\n\n" +
     "※金額は商品の合計（送料・クーポンを除く）\n※順位の外: 複数対応 1点 / 未分類 1点\n\n#BOOTHお買いものレポート");
   const avatarCard = buildAvatarShareCard(avatarShareStats);
-  check("共有カードに最推しアバターを出す",
-    [avatarCard.stats[0].label, avatarCard.stats[0].value], ["最推しアバター", "マヌカ"]);
+  // 見出しブロックは順位1位と同じ情報のうえ、16:9では見出し+5行が縦に入らない。
+  // カードは順位表だけにし、最推しは文面の行で伝える
+  check("共有カードは見出しを重ねず順位表で最推しを見せる",
+    [avatarCard.stats.length, avatarCard.list[0].name], [0, "マヌカ"]);
+  // 16:9(1200x675, padding72)では、統計ブロック無しの順位表なら5行入る。
+  // 統計ブロックがある古い組み方(先頭行のy=460)では2行しか入らなかった
+  check("16:9で沼レポートの順位5行が下端に収まる",
+    [shareCardListLimit(288, 603, 60, 5), shareCardListLimit(460, 603, 60, 5)], [5, 2]);
+  check("入りきらない順位表は行を落とし、最低1行は出す",
+    [shareCardListLimit(0, 603, 60, 3), shareCardListLimit(9999, 603, 60, 3)], [3, 1]);
   check("共有カードにも順位の外を断る",
     avatarCard.note.includes("順位の外: 複数対応 1点 / 未分類 1点"), true);
   // 未分類が残っているうちは順位が当てにならない。出す前に断る

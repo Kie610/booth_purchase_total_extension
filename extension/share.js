@@ -240,11 +240,9 @@ function buildAvatarShareCard(stats) {
     `沼レポート（${avatarShareCaption(stats)}）`,
     shareSubtitle(stats)
   );
-  card.stats.push({
-    label: "最推しアバター",
-    value: topAvatarName(stats),
-    note: `${stats.avatarCount}体`,
-  });
+  // 「最推しアバター」の見出しブロックは出さない。順位1位と同じ情報で、
+  // 16:9(高さ675px)では見出し+5行が入らず順位表が下へはみ出す(2026-08-09実測)。
+  // 文面(buildAvatarShareText)の「最推しアバター：〇〇」行はそのまま残している
   card.list = stats.rows.map((row, index) => ({
     rank: index + 1,
     name: row.name,
@@ -765,6 +763,12 @@ const SHARE_CARD_LAYOUTS = {
   "3:4": { statsPerRow: 2, subtitle: 24, title: 48, statLabel: 24, statValues: [50, 42, 36, 30], statNote: 22, statRow: 140, listRank: 32, listName: 34, listValue: 28, listStep: 62, spread: true },
 };
 
+// 順位表が下段の断り書き・ハッシュタグへ食い込まないよう、入りきる行数に丸める。
+// はみ出して描くより、行を落とすほうがまし(1行は必ず出す)
+function shareCardListLimit(firstY, bottom, step, count) {
+  return Math.max(1, Math.min(count, Math.floor((bottom - 56 - firstY) / step) + 1));
+}
+
 function shareCardLayout(width, height) {
   const name = Object.keys(SHARE_RATIOS).find(
     (key) => SHARE_RATIOS[key].width === width && SHARE_RATIOS[key].height === height
@@ -858,7 +862,8 @@ function drawShareCard(ctx, card, background, template, backgroundTransform) {
       ctx.fillRect(left, y + 4, right - left, 1);
     }
     y += (card.stats.length > 0 ? 44 : 88) + spare;
-    for (const row of card.list) {
+    const listLimit = shareCardListLimit(y, bottom, layout.listStep, card.list.length);
+    for (const row of card.list.slice(0, listLimit)) {
       ctx.fillStyle = theme.accent;
       ctx.font = `bold ${layout.listRank}px ${SHARE_CARD_FONT}`;
       ctx.fillText(`${row.rank}`, left, y);
