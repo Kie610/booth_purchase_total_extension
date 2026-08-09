@@ -18,7 +18,7 @@ complete:
   (約86体)へ変更した。`en`が`boothAvatarAssign`の保存キーで、P10の旧キーは名簿へ残して互換。
   公開契約(`boothAvatarAssign`・バックアップの`avatarAssign`)は不変。
   実装詳細は docs/improvement-plan.md の D14〜D17 を参照。
-- A: D17-c(実環境フィードバック3点)を`claude/p12-feedback`で実装済み(統合は親)。種別ラベルの
+- C: D17-c(実環境フィードバック3点)を検品のうえ`1.1.0`へ統合済み(509fc36)。種別ラベルの
   重なり、種別商品の未分類への二重計上、素体商品が1商品で昇格しない件を修正。公開契約は不変。
 - C: 運用ルール合成(2026-08-08): AGENTS.mdへプロジェクト契約・設計の優先順位・委任と検品を追記。
 
@@ -45,7 +45,7 @@ not-run:
 
 ## Next
 
-1. `claude/p12-feedback`(D17-c)を検品して`1.1.0`へ統合する — blocked-by: none
+1. D17-cの実環境再確認とpush判断 — blocked-by: ユーザーの確認
 2. 次回の正式リリースでも検証後にバージョンブランチ、`main`、リモートのSHAを一致させる — blocked-by: none
 
 ## Paths
