@@ -1,11 +1,11 @@
 # Agent handoff v1
 
-updated: 2026-08-09
+updated: 2026-08-10
 repo: https://github.com/Kie610/booth_purchase_total_extension
 work_branch: 1.1.0
 upstream: origin/1.1.0 (2026-08-08にユーザー許可を得てpush・追跡設定済み)
 base: 1.0.0@cc090b9ddbd42753522e4c050f939d43ee0a8713
-goal: docs/improvement-plan.md の改善タスクをv1.1.0として統合し、検証後に正式リリースへ進める。
+goal: v1.1.0を正式リリースする(2026-08-10にユーザー指示で実施)。
 
 ## State
 
@@ -22,10 +22,11 @@ complete:
 - C: 運用ルール合成(2026-08-08): AGENTS.mdへプロジェクト契約・設計の優先順位・委任と検品を追記。
 
 verified:
-- A: 2026-08-09 — evidence: status=PASS; kind=compile+runtime; command=node --check 17ファイル、
-  python -m http.server 8827 + Browserで/test/index.html(1.1.0=D23、幅1280px);
-  counts=compile 17/0、ALL PASS 1055 checks。実CSV検算で点数641・金額¥529,799が全体と一致。
-  D23は16:9カードを実描画しピクセル検査で順位5行と断り書きの非重複を確認
+- A: 2026-08-10 — evidence: status=PASS; kind=compile+runtime+dist; command=node --check 17ファイル、
+  python -m http.server 8841 + Browserで/test/index.html(幅1280px)、tools/release.ps1;
+  counts=compile 17/0、ALL PASS 1055 checks(README/AGENTS/testのv1.1.0正式リリース表記更新後に再実行)。
+  ZIP=booth-purchase-total-extension-v1.1.0.zip(26 entries、manifest 1.1.0、SHA-256一致
+  2d7426ff...c3ddd0)
 - 前の証跡(P10=898、P11=924、P12=964、975、980、989 checks)は docs/handoff-history.md。
 - 注意: 共有カードの幅依存テスト1件は、ブラウザ幅521pxでは落ちる。検証は幅768px以上で行う。
 
@@ -45,8 +46,8 @@ not-run:
 
 ## Next
 
-1. D17-c〜f・D18〜D23の実環境再確認とpush判断 — blocked-by: ユーザーの確認
-2. 次回の正式リリースでも検証後にバージョンブランチ、`main`、リモートのSHAを一致させる — blocked-by: none
+1. v1.1.0正式リリースの完了確認(main同期・タグ・GitHub Release資産の再取得検証) — blocked-by: none
+2. 次版は正式リリース後に同期した`main`から`1.2.0`(または`1.1.1`)ブランチを作る — blocked-by: 次の要件
 
 ## Paths
 

@@ -3955,8 +3955,8 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
 
   // 正式リリース後はセマンティックバージョンを使い、配布対象のversionを固定して検証する
   check("正式リリース版のセマンティックバージョン", /^[1-9]\d*\.\d+\.\d+$/.test(manifest.version), true);
-  // 統合先ブランチ名とversionの一致ルールがあるため、開発中は次版の番号で固定する
-  check("開発中の統合対象バージョン", manifest.version, "1.1.0");
+  // 統合先ブランチ名とversionの一致ルールがあるため、配布対象の番号で固定する
+  check("配布対象バージョン", manifest.version, "1.1.0");
 
   check("manifestのiconsに4サイズを宣言", manifest.icons, expectedIcons);
   check("ツールバー用のdefault_iconも同じ4サイズ", manifest.action.default_icon, expectedIcons);
@@ -3967,10 +3967,10 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   const versioningText = await (await fetch("../docs/versioning.md")).text();
   const agentsText = await (await fetch("../AGENTS.md")).text();
   check("正式リリースと開発版とバージョンブランチ運用を文書化",
-    [readmeText.includes("現在の正式リリースは **v1.0.0**"),
-     readmeText.includes("次のバージョン **v1.1.0** を開発中"),
+    [readmeText.includes("現在の正式リリースは **v1.1.0**"),
+     readmeText.includes("統合ブランチ `1.1.0`"),
      handoffText.includes("[Durable repository instructions](AGENTS.md)"),
-     agentsText.includes("現在の正式リリースは `1.0.0`。開発中の統合・配布ブランチは `1.1.0`"),
+     agentsText.includes("現在の正式リリースは `1.1.0`"),
      agentsText.includes("正式リリースが確定するまでは、`main`へ直接コミット・マージ・pushしない"),
      agentsText.includes("正式リリース時は、検証済みバージョンブランチへ`main`をfast-forward"),
      agentsText.includes("バージョンブランチは削除しない"),
