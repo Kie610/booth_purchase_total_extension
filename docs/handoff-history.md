@@ -1040,3 +1040,12 @@ not-run:
 2. Recheck branch, HEAD, worktree, upstream, remote state, and named tests.
 3. Replace stale `A` and `U` entries only with current evidence.
 ````
+
+## HANDOFF.agent.md から退避した検証証跡(2026-08-09、P11実装時)
+
+4096bytes上限を守るため、HANDOFF.agent.md の verified から次の2件を移した。
+
+- C: 2026-08-07 — evidence: status=PASS; kind=runtime; command=ユーザーが実環境でD10「物理アイテムの
+  ステータスを再取得」を確認したと報告; counts=確認1件, failed=0
+- C: 2026-08-08 — evidence: status=PASS; kind=runtime; command=ユーザー実ブラウザでBOOTH注文詳細20件;
+  scope=nameへのバリエーション名連結・ファイル名行(D14前提); counts=20件, failed=0

@@ -1706,6 +1706,40 @@ check("商品CSV ギフトの印", itemsLines[2].endsWith("髪型B,400,1,0,は�
 check("商品CSV 明細の無い注文も行を残す", itemsLines[3], "a2,2026年5月20日 09:00,支払済み,,,(明細なし),,,,");
 check("CSVのファイル名に書き出した日を入れる", csvFileName("orders", new Date(2026, 6, 5)), "booth-orders-20260705.csv");
 
+// --- D16 CSVへの集計対象(ギフトフィルタ)注記 ---
+const stripBom = (csv) => csv.slice(CSV_BOM.length);
+//
+// 「すべて」のCSVは公開契約なので1バイトも変えない。絞り込み中だけ末尾に列を足す
+check("すべてのCSVは現行と同一(注文)",
+  [buildOrdersCsv(buildResults(), "all"), buildOrdersCsv(buildResults(), undefined), buildOrdersCsv(buildResults(), "unknown")]
+    .every(csv => csv === buildOrdersCsv(buildResults())),
+  true);
+check("すべてのCSVは現行と同一(商品)",
+  buildItemsCsv(buildResults(), "all") === buildItemsCsv(buildResults()), true);
+check("すべてのCSVのファイル名は現行と同一",
+  [csvFileName("orders", new Date(2026, 6, 5), "all"), csvFileName("items", new Date(2026, 6, 5))],
+  ["booth-orders-20260705.csv", "booth-items-20260705.csv"]);
+
+const giftOrdersLines = stripBom(buildOrdersCsv(buildResults(), "gift")).split("\r\n");
+check("絞り込み中の注文CSVは集計対象の列を足す", giftOrdersLines[0],
+  "注文番号,注文日時,ステータス,お支払金額,ギフト額,商品合計,送料,差額,商品点数,集計対象");
+check("絞り込み中の注文CSVは全データ行に集計対象を入れる",
+  giftOrdersLines.slice(1).every(line => line.endsWith(",ギフト")), true);
+check("絞り込み中の注文CSVは行数が変わらない", giftOrdersLines.length, ordersLines.length);
+
+const selfItemsLines = stripBom(buildItemsCsv(buildResults(), "self")).split("\r\n");
+check("絞り込み中の商品CSVは集計対象の列を足す", selfItemsLines[0],
+  "注文番号,注文日時,ステータス,ショップ名,ショップURL,商品名,単価,数量,BOOST,ギフト,集計対象");
+check("絞り込み中の商品CSVは全データ行に集計対象を入れる",
+  selfItemsLines.slice(1).every(line => line.endsWith(",自分用")), true);
+// 明細を取れていない注文の1行にも入れる(部分集計だと分かる印を欠かさない)
+check("明細なしの行にも集計対象を入れる", selfItemsLines[3],
+  "a2,2026年5月20日 09:00,支払済み,,,(明細なし),,,,,自分用");
+
+check("絞り込み中はファイル名にも集計対象を入れる",
+  [csvFileName("orders", new Date(2026, 6, 5), "gift"), csvFileName("items", new Date(2026, 6, 5), "self")],
+  ["booth-orders-gift-20260705.csv", "booth-items-self-20260705.csv"]);
+
 // --- 画面の切り替え ---
 // 別ページにするとJSのコンテキストごと破棄され、数分かかる収集が止まってしまうため、
 // 同じページの中で区画を出し分ける。現在地はハッシュに持たせる
@@ -1793,6 +1827,54 @@ check("金額のずれを知らせる", exportGap.hidden, false);
 check("ずれた件数を出す", exportGap.textContent.includes("説明しきれない注文が1件"), true);
 state.cache.a1 = savedA1;
 render();
+
+// D16 絞り込み中は、書き出すCSVが部分集計であることを画面でも断る
+check("すべてでは注記を出さない", exportFilterNote.hidden, true);
+setGiftFilter("gift");
+check("絞り込み中は部分集計だと断る",
+  [exportFilterNote.hidden, exportFilterNote.textContent],
+  [false, "このCSVは集計対象「ギフト」で絞り込んだ部分集計です。ファイル名と「集計対象」列にも同じ内容が入ります。"]);
+setGiftFilter("all");
+check("すべてに戻すとCSVの注記を畳む", exportFilterNote.hidden, true);
+
+// --- D15 収集健全性の警報(セレクタ漂流の早期警報) ---
+//
+// 注文ごとの「取得失敗」は出ていても、まとめて読めなくなったことには気付けない。
+// 閾値は「3件以上 かつ 試行の30%以上」。1〜2件は個別の事情なので個別表示に任せる
+check("収集していなければ出さない", collectHealthAlert(null), "");
+check("試行0件では出さない", collectHealthAlert({ attempted: 0, unreadable: 0 }), "");
+check("2件までは出さない", collectHealthAlert({ attempted: 4, unreadable: 2 }), "");
+check("割合が30%未満なら出さない", collectHealthAlert({ attempted: 100, unreadable: 3 }), "");
+check("3件かつ30%で出す", collectHealthAlert({ attempted: 10, unreadable: 3 }),
+  "今回の収集では10件中3件で金額や明細を読み取れませんでした。" +
+  "BOOTH側のページ構造が変わった可能性があります。拡張機能の更新情報を確認してください。");
+check("文言に件数が入る", collectHealthAlert({ attempted: 40, unreadable: 25 }).startsWith("今回の収集では40件中25件で"), true);
+
+// 画面への反映。収集はレポート画面で行うので、レポート画面でも出す
+location.hash = "#/report";
+setCollectHealth(4, 1);
+renderCurrentView();
+check("閾値未満なら帯を出さない", collectHealthBanner.hidden, true);
+setCollectHealth(10, 4);
+renderCurrentView();
+check("閾値以上なら帯を出す",
+  [collectHealthBanner.hidden, collectHealthText.textContent.includes("10件中4件")], [false, true]);
+check("レポート画面でも出す", document.getElementById("view-report").hidden, false);
+
+// 閉じられる。次の収集で数え直したら、その結果はまた出す
+collectHealthClose.click();
+check("警報は閉じられる", collectHealthBanner.hidden, true);
+renderCurrentView();
+check("閉じたままにする", collectHealthBanner.hidden, true);
+setCollectHealth(20, 9);
+renderCurrentView();
+check("次の収集の結果は出し直す",
+  [collectHealthBanner.hidden, collectHealthText.textContent.includes("20件中9件")], [false, true]);
+// 次の収集で全部読めたなら、警報は自然に消える(保存していないので閾値は毎回計算し直す)
+setCollectHealth(20, 0);
+renderCurrentView();
+check("読み取れていれば消える", collectHealthBanner.hidden, true);
+setCollectHealth(0, 0);
 
 // --- 未収集の案内(レポート以外の画面) ---
 // 数字だけを見せて黙っていると、実際より少ない額を正しい合計だと思わせてしまう

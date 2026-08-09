@@ -833,6 +833,13 @@ button.share-btn:hover:not(:disabled) {
   font-weight: 700;
 }
 
+/* D15 収集健全性の警報。「読み取れていない」話なので、通常の案内より強く出す */
+.notice.warn {
+  background: var(--error-bg);
+  border-color: var(--error-border);
+  color: var(--error-fg);
+}
+
 /* 閉じるボタンは案内の右上。案内の文章に重ならないよう右に余白を確保する */
 .pending-banner {
   position: relative;

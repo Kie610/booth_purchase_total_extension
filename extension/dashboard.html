@@ -77,6 +77,10 @@
          また出す(閉じた状態は保存しないので、開き直しても再表示される) -->
     <div id="pendingBanner" class="notice pending-banner" role="status" aria-live="polite" hidden><span id="pendingBannerText"></span><a href="#/report">お買いものレポートで収集する</a><button type="button" id="pendingBannerClose" class="icon-btn banner-close" aria-label="この案内を閉じる">×</button></div>
 
+    <!-- D15 収集健全性の警報。まとまった件数で金額・明細を読めなかったときだけ出す。
+         収集はレポート画面で行うので、pendingBanner と違いレポート画面でも出す -->
+    <div id="collectHealthBanner" class="notice warn pending-banner" role="status" aria-live="polite" hidden><span id="collectHealthText"></span><button type="button" id="collectHealthClose" class="icon-btn banner-close" aria-label="この案内を閉じる">×</button></div>
+
     <!-- D12 集計対象の絞り込み。画面の外(すべてのビューの上)に1つだけ置くので、
          レポート・ランキング・まとめ・支出推移・CSV・共有がまとめて追従する。
          選択は保存しない(既定は「すべて」)。絞り込み中は注記を必ず出す -->
@@ -618,6 +622,8 @@
          <div class="index-status">
            <div class="status" id="exportStats"></div>
            <div class="status" id="exportGap" hidden></div>
+           <!-- D16 絞り込み中のCSVは部分集計。ファイル単体では分からないので画面でも断る -->
+           <div class="status warn" id="exportFilterNote" hidden></div>
          </div>
 
          <div class="step-controls">

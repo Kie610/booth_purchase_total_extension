@@ -16,6 +16,7 @@ complete:
 - A: P10(D14沼レポート)を`claude/p10-numa-report`で実装済み(統合は親が行う)。新ビュー`#/avatars`、
   辞書`extension/avatar-master.js`(33体)、公開契約へ`boothAvatarAssign`とバックアップの
   `avatarAssign`を追加(BACKUP_VERSIONは1のまま。旧バックアップも読める)。
+- A: P11(D15収集健全性の警報・D16 CSVの集計対象注記)を`claude/p11-health-csv`で実装済み(統合は親)。
 - C: 運用ルール合成(2026-08-08): AGENTS.mdへプロジェクト契約・設計の優先順位・委任と検品を追記。
 - C: VRChatter調査(2026-08-08)より D12〜D14 と P9・P10 を improvement-plan へ起票。
 
@@ -23,10 +24,9 @@ verified:
 - A: 2026-08-09 — evidence: status=PASS; kind=compile+runtime; command=node --check 17ファイル、
   python -m http.server 8791 + Browserで/test/index.html(P10ブランチ);
   counts=compile 17/0、ALL PASS 898 checks(830→898。P10で68件追加)、console errorなし
-- C: 2026-08-07 — evidence: status=PASS; kind=runtime; command=ユーザーが実環境でD10「物理アイテムの
-  ステータスを再取得」を確認したと報告; counts=確認1件, failed=0
-- C: 2026-08-08 — evidence: status=PASS; kind=runtime; command=ユーザー実ブラウザでBOOTH注文詳細20件;
-  scope=nameへのバリエーション名連結・ファイル名行(D14前提); counts=20件, failed=0
+- A: 2026-08-09 — evidence: status=PASS; kind=compile+runtime; command=node --check 17ファイル、
+  python -m http.server 8797 + Browserで/test/index.html(P11ブランチ);
+  counts=compile 17/0、ALL PASS 924 checks(898→924。P11で26件追加)、console errorなし
 - 上記より前の検証証跡は docs/handoff-history.md を参照。
 
 not-run:

@@ -145,6 +145,8 @@ const GIFT_FILTERS = ["all", "self", "gift"];
 const GIFT_FILTER_LABELS = { all: "すべて", self: "自分用", gift: "ギフト" };
 // 共有文面・共有カードに出す見出し。部分集計を全体の数字に見せないための印
 const GIFT_FILTER_SHARE_LABELS = { self: "🙋自分用だけ", gift: "🎁贈ったギフトだけ" };
+// D16 絞り込み中のCSVにだけ足す列名(「すべて」のCSVは公開契約なので変えない)
+const GIFT_FILTER_CSV_COLUMN = "集計対象";
 
 function normalizeGiftFilter(value) {
   return GIFT_FILTERS.includes(value) ? value : "all";
@@ -200,6 +202,28 @@ function needsCollect(entry) {
     entry.amount === null ||
     !hasItems(entry) ||
     isOutdatedEntry(entry)
+  );
+}
+
+// ---- D15 収集健全性の警報 ----------------------------------------------
+//
+// BOOTH側がHTMLを変えると、注文ごとの「取得失敗」は出るものの、全体として
+// 「セレクタが漂流した」とは気付けない。1回の収集でまとまった件数が読めなかった
+// ときだけ、構造変更の可能性を名指しで知らせる。
+// 1〜2件は個別の事情(削除済み・一時的な不調)なので個別表示に任せる。
+const COLLECT_HEALTH_MIN_UNREADABLE = 3;
+const COLLECT_HEALTH_MIN_RATIO = 0.3;
+
+// 出す文面。閾値に届かなければ空文字を返す(呼び出し側は空なら出さない)
+function collectHealthAlert(health) {
+  if (!health) return "";
+  const attempted = health.attempted;
+  const unreadable = health.unreadable;
+  if (!(attempted > 0) || unreadable < COLLECT_HEALTH_MIN_UNREADABLE) return "";
+  if (unreadable / attempted < COLLECT_HEALTH_MIN_RATIO) return "";
+  return (
+    `今回の収集では${attempted}件中${unreadable}件で金額や明細を読み取れませんでした。` +
+    "BOOTH側のページ構造が変わった可能性があります。拡張機能の更新情報を確認してください。"
   );
 }
 

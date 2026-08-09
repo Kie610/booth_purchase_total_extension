@@ -134,6 +134,12 @@ const rankingSortToggle = document.getElementById("rankingSortToggle");
 const rankingHideNumbers = document.getElementById("rankingHideNumbers");
 const pendingBanner = document.getElementById("pendingBanner");
 const pendingBannerText = document.getElementById("pendingBannerText");
+// D15 収集健全性の警報
+const collectHealthBanner = document.getElementById("collectHealthBanner");
+const collectHealthText = document.getElementById("collectHealthText");
+const collectHealthClose = document.getElementById("collectHealthClose");
+// D16 絞り込み中のCSVが部分集計であることの断り書き
+const exportFilterNote = document.getElementById("exportFilterNote");
 const backupStats = document.getElementById("backupStats");
 const backupCoverage = document.getElementById("backupCoverage");
 const backupSaveBtn = document.getElementById("backupSaveBtn");
@@ -227,6 +233,8 @@ function renderCurrentView() {
     .join(" ");
   renderGiftFilter();
   renderPendingBanner(current);
+  // 収集はレポート画面で行うので、画面を問わず出す
+  renderCollectHealthBanner();
   // 画面を移ると共有ボタンの中身が変わる。ハッシュの変化だけでも呼ばれるので、
   // 全体の描画を待たずにここで合わせる
   updateShareButton();
@@ -283,6 +291,31 @@ function dismissPendingBanner() {
   const { pending, incomplete } = pendingBannerCounts();
   dismissedPendingSignature = pendingBannerSignature(pending, incomplete);
   pendingBanner.hidden = true;
+}
+
+// ---- D15 収集健全性の警報 ----------------------------------------------
+//
+// 直近の1回の収集で数えた { attempted, unreadable }。ストレージへは書かない
+// (閾値も状態も次の収集で数え直す)。収集していない間は null で何も出さない
+let collectHealth = null;
+let collectHealthDismissed = false;
+
+// 収集の終わり(中断・失敗を含む)に dashboard.js から呼ぶ。新しい実行の結果なので、
+// 前の実行で閉じられていても出し直す
+function setCollectHealth(attempted, unreadable) {
+  collectHealth = { attempted, unreadable };
+  collectHealthDismissed = false;
+}
+
+function renderCollectHealthBanner() {
+  const text = collectHealthAlert(collectHealth);
+  collectHealthText.textContent = text;
+  collectHealthBanner.hidden = text === "" || collectHealthDismissed;
+}
+
+function dismissCollectHealthBanner() {
+  collectHealthDismissed = true;
+  collectHealthBanner.hidden = true;
 }
 
 // ---- ナビゲーションの形 ------------------------------------------------
@@ -695,6 +728,14 @@ function dateLabel(d) {
 function renderExportArea(results = currentResults()) {
   const withItems = results.filter((r) => Array.isArray(r.items));
   const itemCount = withItems.reduce((sum, r) => sum + r.items.length, 0);
+
+  // D16 絞り込み中に書き出したCSVは部分集計。ファイル単体では分からないので画面で断る
+  exportFilterNote.hidden = giftFilter === "all";
+  exportFilterNote.textContent =
+    giftFilter === "all"
+      ? ""
+      : `このCSVは集計対象「${GIFT_FILTER_LABELS[giftFilter]}」で絞り込んだ部分集計です。` +
+        "ファイル名と「集計対象」列にも同じ内容が入ります。";
 
   exportEmpty.hidden = results.length > 0;
   exportArea.hidden = results.length === 0;

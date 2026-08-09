@@ -76,6 +76,7 @@ navDrawer.addEventListener("click", (event) => {
 });
 // 未収集の案内は、件数が変わらない間だけ畳める(断り書き自体は消さない)
 pendingBannerClose.addEventListener("click", dismissPendingBanner);
+collectHealthClose.addEventListener("click", dismissCollectHealthBanner);
 
 // 配色テーマの切り替え。押した時点で見た目を変え、保存の完了は待たない
 // (待つと反映が遅れて二度押しを誘う。保存に失敗しても、その画面では選んだ配色のまま)
@@ -155,12 +156,19 @@ window.addEventListener("hashchange", () => {
 // 一瞬だけレポート画面が見えてしまう
 renderCurrentView();
 
+// D16 絞り込み中は、CSVの中身(集計対象の列)にもファイル名にも同じ印を付ける
 exportOrdersBtn.addEventListener("click", () =>
-  downloadCsv(buildOrdersCsv(currentResults()), csvFileName("orders"))
+  downloadCsv(
+    buildOrdersCsv(currentResults(), giftFilter),
+    csvFileName("orders", undefined, giftFilter)
+  )
 );
 
 exportItemsBtn.addEventListener("click", () =>
-  downloadCsv(buildItemsCsv(currentResults()), csvFileName("items"))
+  downloadCsv(
+    buildItemsCsv(currentResults(), giftFilter),
+    csvFileName("items", undefined, giftFilter)
+  )
 );
 
 backupSaveBtn.addEventListener("click", () =>
@@ -1481,44 +1489,60 @@ async function collectAmounts(orders, force, signal) {
 
   let done = 0;
   let failed = 0;
+  // D15 収集健全性。実際に取得を試み切った注文(attempted)のうち、最終的に金額か
+  // 商品明細を読めなかったもの(unreadable)を数える。fetchDocWithRetry が再試行して
+  // 成功したものは success 側なので数に入らない。
+  // 中断・ログイン切れで途中終了しても数えた分は残すため finally で書き出す
+  let attempted = 0;
+  let unreadable = 0;
   const flushEvery = cacheFlushInterval(targets.length);
-  for (const [index, order] of targets.entries()) {
-    // バーの比率はテキストの (n/N件) と同じ1始まりでそろえる。
-    // index / N だと表示と1件ずれ、最終件を収集中でも100%にならない
-    setProgress(
-      `金額を収集中... (${index + 1}/${targets.length}件)`,
-      (index + 1) / targets.length
-    );
-    await publishRunState({
-      phase: "金額の収集",
-      current: index + 1,
-      total: targets.length,
-    });
+  try {
+    for (const [index, order] of targets.entries()) {
+      // バーの比率はテキストの (n/N件) と同じ1始まりでそろえる。
+      // index / N だと表示と1件ずれ、最終件を収集中でも100%にならない
+      setProgress(
+        `金額を収集中... (${index + 1}/${targets.length}件)`,
+        (index + 1) / targets.length
+      );
+      await publishRunState({
+        phase: "金額の収集",
+        current: index + 1,
+        total: targets.length,
+      });
 
-    try {
-      const doc = await fetchDocWithRetry(`${ORDER_DETAIL_URL}${order.id}`, signal);
-      const detail = parseDetailPage(doc);
-      state.cache[order.id] = {
-        v: CACHE_SCHEMA_VERSION,
-        amount: detail.amount,
-        gift: detail.gift,
-        status: order.status,
-        date: order.date,
-        items: detail.items,
-        shipping: detail.shipping,
-      };
-      done++;
-      if (done % flushEvery === 0) await saveCache(state.cache);
-    } catch (err) {
-      // 中断とログイン切れは続けても仕方がないので、そのまま止める
-      if (isFatalFetchError(err)) throw err;
-      // それ以外は、この注文を飛ばして先へ進む。キャッシュに残さないので
-      // 「未収集」のままになり、再実行すれば自動で拾い直せる
-      // (キャッシュへ「取得失敗」として書くと、強制再取得しないと戻せなくなる)
-      failed++;
+      try {
+        const doc = await fetchDocWithRetry(`${ORDER_DETAIL_URL}${order.id}`, signal);
+        const detail = parseDetailPage(doc);
+        state.cache[order.id] = {
+          v: CACHE_SCHEMA_VERSION,
+          amount: detail.amount,
+          gift: detail.gift,
+          status: order.status,
+          date: order.date,
+          items: detail.items,
+          shipping: detail.shipping,
+        };
+        done++;
+        attempted++;
+        // 取得できたのに読み取れていない注文。セレクタ漂流はここに固まって出る
+        if (detail.amount === null || detail.items === null) unreadable++;
+        if (done % flushEvery === 0) await saveCache(state.cache);
+      } catch (err) {
+        // 中断とログイン切れは続けても仕方がないので、そのまま止める
+        // (この注文は最後まで試せていないので attempted に数えない)
+        if (isFatalFetchError(err)) throw err;
+        // それ以外は、この注文を飛ばして先へ進む。キャッシュに残さないので
+        // 「未収集」のままになり、再実行すれば自動で拾い直せる
+        // (キャッシュへ「取得失敗」として書くと、強制再取得しないと戻せなくなる)
+        failed++;
+        attempted++;
+        unreadable++;
+      }
+
+      if (index + 1 < targets.length) await sleep(requestIntervalMs(), signal);
     }
-
-    if (index + 1 < targets.length) await sleep(requestIntervalMs(), signal);
+  } finally {
+    setCollectHealth(attempted, unreadable);
   }
 
   if (failed > 0) {
