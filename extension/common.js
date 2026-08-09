@@ -659,18 +659,32 @@ const AVATAR_TOKEN_LATIN = /^[a-z0-9]+$/;
 // 「向け」の「け」はかななので漢字の区間には入らない。ここで見るのは「向」まで
 const AVATAR_TOKEN_SUFFIX = /(対応|用|向|ちゃん|さん|くん)$/;
 
-// アバター名の手掛かりにならない語。バリエーション名にはこの手の語が必ず混ざるので、
-// 落としておかないと「2商品以上に出た語」の規則がノイズだらけになる
+// アバター名の手掛かりにならない語。実データ637明細でバケツ化してしまったノイズを
+// 元に並べてある(2026-08-09の検品で131個の名簿外バケツを実測)。
+// 書くときは見たままの表記でよい。NFKC・小文字化・カタカナ→ひらがなの正規化は
+// AVATAR_STOP_SET を組むときに通すので、トークン側と必ず同じ形になる
 const AVATAR_STOP_WORDS = Object.freeze([
-  "ver", "version", "full", "pack", "set", "fullset", "size", "type", "color", "colour",
-  "avatar", "avatars", "vrc", "vrchat", "vrm", "unity", "quest", "pc", "dl", "data",
+  "ver", "version", "full", "pack", "fullpack", "set", "fullset", "size", "type",
+  "color", "colour", "custom", "default", "basic", "normal", "simple", "original",
+  "avatar", "avatars", "vrc", "vrchat", "vrm", "vr", "unity", "quest", "pc", "dl", "data",
   "texture", "psd", "fbx", "unitypackage", "edition", "all", "and", "for", "with", "the",
+  "hair", "bob", "twin", "long", "short", "ribbon", "doll", "pose", "vol", "makeup",
+  "eyewear", "horn", "halo", "wing", "wings", "milk", "hug", "bloom", "light", "dark",
+  "angel", "devil", "god", "spring", "summer", "autumn", "winter", "series", "model",
+  "tool", "tools", "system", "font", "shader", "particle", "prefab", "gimmick",
+  "donation", "support", "free", "update", "extension", "world", "nail", "coffee",
   "red", "blue", "green", "black", "white", "pink", "yellow", "purple", "brown",
   "gray", "grey", "navy", "beige", "ivory", "gold", "silver", "orange",
-  "セット", "サイズ", "カラー", "バージョン", "テクスチャ", "アバター", "フルセット",
-  "フルパック", "パック", "タイプ", "ホワイト", "ブラック", "レッド", "ブルー", "グリーン",
+  "セット", "セットアップ", "サイズ", "カラー", "バージョン", "テクスチャ", "アバター",
+  "フルセット", "フルパック", "パック", "タイプ", "モデル", "ヘアモデル", "オリジナル",
+  "ギミック", "ワールド", "ワールドギミック", "アバターギミック", "ツール", "タブレット",
+  "シリーズ", "コーデ", "ネイルチップ", "ヘイロー", "メガネ", "ラビ", "タトゥー",
+  "フォント", "シェーダー", "パーティクル", "アニメーション", "コーヒーをおごる",
+  "カンタン", "オマケ", "ノミ", "ホワイト", "ブラック", "レッド", "ブルー", "グリーン",
   "ピンク", "イエロー", "パープル", "グレー", "ベージュ", "ゴールド", "シルバー", "オレンジ",
-  "版", "本体", "特典", "差分", "単品", "衣装", "素体", "汎用", "対応", "用", "向",
+  "版", "通常版", "無料版", "支援版", "電子版", "本体", "特典", "差分", "単品", "衣装",
+  "素体", "汎用", "対応", "用", "向", "設定済", "自動", "想定", "購入", "販売", "支援",
+  "合計", "中身", "更新", "拡張", "魔法", "天使", "心音", "以上", "数字", "内容",
   "赤", "青", "白", "黒", "桃", "紫", "緑", "黄", "色", "他", "等",
 ]);
 
@@ -708,6 +722,18 @@ function avatarDisplayName(key) {
   return avatarNameCache.get(key) || key;
 }
 
+// アバター名になりえない形のトークン。語そのものを並べるストップ語と違い、
+// 「形」で落とすので実データに出てくる無数の版数・数量表記を1行で片付けられる
+function isAvatarNoiseToken(token) {
+  if (AVATAR_TOKEN_KANJI.test(token)) return false;
+  // 数量・年・版数(「21」「2025」「v1」「ver2」)
+  if (/^\d+$/.test(token) || /^ver?\d+$/.test(token)) return true;
+  // 英字2文字以下は略号("ma" "3d" "vr")。名簿の最短は "zev" "eku" の3文字
+  if (AVATAR_TOKEN_LATIN.test(token)) return token.length < 3;
+  // かなは「しお」「まよ」「えく」があるので2文字まで許す
+  return token.length < 2;
+}
+
 // ストップ語を落とす前のトークン。名簿の展開に使う
 function avatarRawTokens(text) {
   if (!text) return [];
@@ -721,29 +747,29 @@ function avatarRawTokens(text) {
       if (!next || next === token) break;
       token = next;
     }
-    // 1文字の英字・かなは素体名として短すぎて誤爆する。漢字1文字は
-    // 「凪」「萌」「獏」のような実在アバターなので残す
-    if (token.length < 2 && !AVATAR_TOKEN_KANJI.test(token)) continue;
+    if (isAvatarNoiseToken(token)) continue;
     if (!out.includes(token)) out.push(token);
   }
   return out;
 }
 
-// 照合に使うトークン。名簿に載っている語はストップ語判定より優先する
-// (「ライム」「プラム」「ミント」は色名でもあり実在アバターでもある)
+// 照合に使うトークン。名簿に載っている語はストップ語・漢字1文字の判定より優先する
+// (「ライム」「プラム」「ミント」は色名でもあり実在アバターでもあり、
+//  「凪」「萌」「獏」は漢字1文字の実在アバター)
 function avatarTokens(text) {
   const alias = avatarAliasMap();
-  return avatarRawTokens(text).filter((token) => alias.has(token) || !AVATAR_STOP_SET.has(token));
+  return avatarRawTokens(text).filter((token) => {
+    if (alias.has(token)) return true;
+    if (AVATAR_STOP_SET.has(token)) return false;
+    // 名簿に無い漢字1文字は、実データでは「点」「付」「全」「服」「輪」のような
+    // 助数詞・一般語ばかりだった(2026-08-09の検品で実測)。名簿に無い1文字の
+    // アバターは拾えなくなるが、手動割り当てで直せるほうを取る
+    return !(token.length === 1 && AVATAR_TOKEN_KANJI.test(token));
+  });
 }
 
 function isAvatarLatinToken(token) {
   return AVATAR_TOKEN_LATIN.test(token);
-}
-
-// 商品1件が持つ照合対象の文字列。バリエーション名を優先し、無ければ品名本体
-function avatarItemText(item) {
-  const { base, variation } = parseItemName(item && item.name);
-  return variation || base;
 }
 
 // トークンがどのバケツに属するか。名簿にあれば名簿のキー、無ければ
@@ -770,10 +796,17 @@ function avatarKeysIn(text, index) {
 //
 // 採用の規則は2つだけ。
 //   (a) 名簿に載っているトークン …… 1商品しか無くても採用する
-//   (b) 2つ以上の別商品(ショップ+品名本体で判定)に現れたトークン
-// (b) を付けているのは、1商品にしか出ない語(色名・サイズ・造語)をバケツにすると
-// 順位表がノイズで埋まるため。同じアバター向けの商品を2つ以上買っていれば沼なので、
-// この規則で取りこぼす沼は無い。
+//   (b) 2つ以上の別商品(ショップ+品名本体で判定)の**バリエーション名**に現れたトークン
+// (b) に2商品の縛りを付けているのは、1商品にしか出ない語(色名・サイズ・造語)を
+// バケツにすると順位表がノイズで埋まるため。同じアバター向けの商品を2つ以上買っていれば
+// 沼なので、この規則で取りこぼす沼は無い。
+//
+// (b) の採掘元を**バリエーション名だけ**に絞っているのは実測による。品名本体まで
+// 採掘すると、実データ637明細で名簿外のバケツが131個できて大半が一般語だった
+// (hair・bob・pose・ribbon・devil など、そのほとんどが品名本体由来)。
+// バリエーション名は素体名の置き場所なので、ここだけを見ればノイズ源を断てる。
+// 品名本体は、既に決まったバケツ(名簿+昇格済み)の照合には引き続き使う
+// (「森羅用テクスチャ」のように、アバター名が品名にしか出ない商品の補完)。
 //
 // あわせて「日本語表記とローマ字表記の併記」(業界標準の書き方)を共起として数える。
 // 2商品以上で併記されていれば同じアバターの別表記である可能性が高いが、
@@ -790,7 +823,9 @@ function buildAvatarIndex(results) {
   for (const result of results || []) {
     if (!Array.isArray(result.items)) continue;
     for (const item of result.items) {
-      const tokens = avatarTokens(avatarItemText(item));
+      const { variation } = parseItemName(item && item.name);
+      if (!variation) continue;
+      const tokens = avatarTokens(variation);
       if (tokens.length === 0) continue;
       const productKey = itemProductKey(item);
       for (const token of tokens) add(tokenProducts, token, productKey);

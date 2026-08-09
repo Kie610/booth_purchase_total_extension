@@ -26,7 +26,7 @@ complete:
 verified:
 - A: 2026-08-09 — evidence: status=PASS; kind=compile+runtime; command=node --check 17ファイル、
   python -m http.server 8799 + Browserで/test/index.html(P12ブランチ);
-  counts=compile 17/0、ALL PASS 956 checks(924→956。P12で32件追加)、console errorなし
+  counts=compile 17/0、ALL PASS 964 checks(924→964。P12で40件追加)、console errorなし
 - 上記より前の検証証跡(P10=898 checks、P11=924 checks)は docs/handoff-history.md を参照。
 
 not-run:

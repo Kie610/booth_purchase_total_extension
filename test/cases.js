@@ -1042,6 +1042,18 @@ check("末尾の記号は落ちる", [avatarTokens("凪-"), avatarTokens("nagi'"
 check("漢字1文字は残す", [avatarTokens("凪"), avatarTokens("萌"), avatarTokens("獏")],
   [["凪"], ["萌"], ["獏"]]);
 check("1文字の英字・かなは捨てる", [avatarTokens("S"), avatarTokens("の")], [[], []]);
+// 形で落とすもの。実データに出てくる版数・数量表記は語を並べても切りが無い
+check("純数字・短い英字・版数は捨てる",
+  [avatarTokens("21"), avatarTokens("2025"), avatarTokens("ma"), avatarTokens("3D"),
+   avatarTokens("v1"), avatarTokens("ver2")], [[], [], [], [], [], []]);
+// 名簿に無い漢字1文字は助数詞・一般語ばかりだった。名簿にあるものだけ残す
+check("名簿に無い漢字1文字は捨てる",
+  [avatarTokens("点"), avatarTokens("服"), avatarTokens("輪"), avatarTokens("凪")],
+  [[], [], [], ["凪"]]);
+// ストップ語はトークンと同じ正規化(NFKC・小文字・カタカナ→ひらがな)を通して持つ
+check("カタカナのストップ語も落ちる",
+  [avatarTokens("ツール"), avatarTokens("ワールド"), avatarTokens("ギミック"),
+   avatarTokens("オリジナル")], [[], [], [], []]);
 check("絵文字が混じっても名前だけ取れる", avatarTokens("💗マヌカ💗"), ["まぬか"]);
 // カタカナはひらがなへ寄せる。「シナノ」と「しなの」を別のアバターにしない
 check("カタカナとひらがなを同じ語にする",
@@ -1191,6 +1203,44 @@ check("併記された日本語表記とローマ字表記は1つのバケツに
 check("別アバターの併記は複数対応",
   aggregateByAvatar([{ id: "n4", items: [unknownItem("服", "Milfy, Eku", 700)] }], {})
     .multi.count, 1);
+
+// --- D17-a ノイズがバケツにならないこと(2026-08-09の検品で実測した131個への回帰) ---
+// 品名本体まで新規バケツの発生源にすると、実データで hair・bob・pose・devil のような
+// 一般語が大量にバケツ化した。新規バケツはバリエーション名からだけ掘る
+const noiseNames = [
+  "Long Hair for Custom Avatar (通常版)", "Bob Hair 3D model (支援版)",
+  "Angel Halo ribbon (v1)", "Devil horn eyewear (ver2)", "Summer Doll pose vol.2 (無料版)",
+  "ワールドギミック たぶれっと (ぎみっく)", "つーる せっとあっぷ (設定済)",
+  "へあもでる おりじなる (おまけ)", "ねいるちっぷ こーで (2025)",
+  "心音ギミック 電子版 (合計21点)", "まほうの輪 (角・天使・神)",
+  "Milk Bloom makeup (dark)", "こーひーをおごる (支援)", "ぶいあーるつーる (どねーしょん)",
+];
+const noiseRows = [{ id: "noise", items: noiseNames.map((name) => ({ ...item(name, 100), name })) }];
+check("一般語は動的バケツにならない",
+  Array.from(buildAvatarIndex(noiseRows).buckets), []);
+check("一般語だらけの買いものは順位表に出ない",
+  aggregateByAvatar(noiseRows, {}).rows, []);
+// 昇格の正の場合。名簿に無いアバターでも、バリエーション名に2商品出れば拾う
+const risingRows = [{ id: "rise", items: [
+  { ...item("パーカー (るきふ)", 100), name: "パーカー (るきふ)" },
+  { ...item("スカート (Rukifu)", 200), name: "スカート (Rukifu)" },
+  { ...item("くつした (るきふ)", 300), name: "くつした (るきふ)" },
+  { ...item("てぶくろ (Rukifu)", 400), name: "てぶくろ (Rukifu)" },
+] }];
+check("名簿に無いアバターもバリエーションに2商品出れば昇格する",
+  Array.from(buildAvatarIndex(risingRows).buckets).sort(), ["rukifu", "るきふ"]);
+// 品名本体は新規バケツを生まないが、既に決まったバケツの照合には使い続ける
+// (「るきふ用テクスチャ」のようにアバター名が品名にしか出ない商品の補完)
+check("品名本体だけの語は新規バケツにならない",
+  Array.from(buildAvatarIndex([{ id: "b1", items: [
+    { ...item("ひみつ用テクスチャ (差分A)", 100), name: "ひみつ用テクスチャ (差分A)" },
+    { ...item("ひみつ用パーカー (差分B)", 100), name: "ひみつ用パーカー (差分B)" },
+  ] }]).buckets), []);
+check("昇格したバケツは品名本体でも照合する",
+  aggregateByAvatar([...risingRows, { id: "b2", items: [
+    { ...item("るきふ用テクスチャ (差分A)", 500), name: "るきふ用テクスチャ (差分A)" },
+  ] }], {}).rows.map((r) => [r.key, r.total]),
+  [["るきふ", 900], ["rukifu", 600]]);
 
 // --- D17-a 統合候補(自動では統合しない) ---
 // 「日本語表記 ローマ字表記」の併記は業界標準の書き方。2商品以上で共起していれば
