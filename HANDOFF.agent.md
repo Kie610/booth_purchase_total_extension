@@ -20,12 +20,15 @@ complete:
   実装詳細は docs/improvement-plan.md の D14〜D18 を参照。
 - C: D17-e(種別分類の調整5点)を統合済み(61f60eb)。D17-f(2026-08-09)で種別「髪型」を撤回し、
   手動割り当て一覧を「どの分類にも当たらなかった商品+手動済み」だけへ絞った。
+- C: D20(排他分類への再設計)を検品のうえ統合済み(b01dcbd)。1商品=1分類(手動>特定アバター>
+  ワールド関連>ギミック・ツール>複数対応>未分類)で点数・金額が全体と一致。
+  `boothAvatarAssign`へ区分キー`__multi_tool__`/`__world__`/`__world_item__`を追加(追加のみ)。
 - C: 運用ルール合成(2026-08-08): AGENTS.mdへプロジェクト契約・設計の優先順位・委任と検品を追記。
 
 verified:
 - A: 2026-08-09 — evidence: status=PASS; kind=compile+runtime; command=node --check 17ファイル、
-  python -m http.server 8813 + Browserで/test/index.html(1.1.0+D17-f+D19、幅1280px);
-  counts=compile 17/0、ALL PASS 1000 checks
+  python -m http.server 8819 + Browserで/test/index.html(claude/p13-taxonomy=D20);
+  counts=compile 17/0、ALL PASS 1016 checks。実CSV検算で点数641・金額¥529,799が全体と一致
 - 前の証跡(P10=898、P11=924、P12=964、975、980、989 checks)は docs/handoff-history.md。
 - 注意: 共有カードの幅依存テスト1件は、ブラウザ幅521pxでは落ちる。検証は幅768px以上で行う。
 
@@ -45,7 +48,7 @@ not-run:
 
 ## Next
 
-1. D17-c〜f・D18・D19の実環境再確認とpush判断 — blocked-by: ユーザーの確認
+1. D17-c〜f・D18〜D20の実環境再確認とpush判断 — blocked-by: ユーザーの確認
 2. 次回の正式リリースでも検証後にバージョンブランチ、`main`、リモートのSHAを一致させる — blocked-by: none
 
 ## Paths
