@@ -597,7 +597,8 @@ function aggregateByShop(results, sortBy) {
 // **商品ページへは一切アクセスしない。**手元のキャッシュにある items[].name だけで判断する。
 // BOOTHの購入履歴では、バリエーションのある商品の名前が「商品名 (バリエーション名)」の
 // 形で保存されている(2026-08-08にユーザーの実環境で実測)。この末尾の括弧を剥がし、
-// 中身を素体名の辞書(avatar-master.js)と突き合わせてアバター別に集計する。
+// 中身をトークンへ分解して、同じトークンを持つ商品どうしをアバターとしてまとめる
+// (D17-a。名簿 avatar-master.js は表記ゆれの統合と表示名のヒントであって辞書ではない)。
 //
 // **読み取れなかったものを推測で埋めない。**素体名を1つに絞れなければ「複数対応」、
 // 1つも見つからなければ「未分類」として、そのまま画面に出す。直したいときは
@@ -636,26 +637,195 @@ function parseItemName(name) {
   return { base: text, variation: null };
 }
 
-// 英数字だけの別名は語の切れ目で照合する。単純な部分一致にすると
-// "Eku" が "Nekura" に、"Lime" が "Sublime" に当たってしまう。
-// 日本語の別名は語の切れ目が無いので部分一致で見る
-const AVATAR_LATIN_ALIAS = /^[a-z0-9][a-z0-9 &_.'-]*$/i;
+// ---- D17-a 辞書レスのトークン照合 --------------------------------------
+//
+// D14 は固定辞書へ当てにいく方式だったが、アバターは数万体あり毎日増えるので原理的に
+// 網羅できない(実測: 辞書33体で金額の15.5%しか特定できず、辞書に無い「凪」は全滅)。
+// D17 では**買った商品どうしを突き合わせて**アバターのまとまりを見つける。
+// 名簿(avatar-master.js)は表記ゆれの統合と表示名のためのヒントに降格した。
 
-function avatarAliasMatches(text, alias) {
-  if (!alias) return false;
-  if (!AVATAR_LATIN_ALIAS.test(alias)) return text.includes(alias);
-  const escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, "i").test(text);
+// カタカナはひらがなへ寄せる。「シナノ」と「しなの」を別のアバターにしないため
+function kanaToHira(text) {
+  return text.replace(/[ァ-ヶ]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0x60));
 }
 
-// 見つかった素体のkey(辞書の並び順、重複なし)
-function matchAvatarKeys(text) {
-  if (!text) return [];
-  const keys = [];
+// トークンの切れ目。英数字列・かな列・漢字列をそれぞれ1語として取り出す。
+// 記号・絵文字・空白はどの区間にも入らないので、ここで自然に落ちる
+// (末尾の「-」「'」を剥がす処理が要らないのはこのため)
+const AVATAR_TOKEN_RUN = /[a-z0-9]+|[ぁ-ゖゝゞー]+|[一-鿿々]+/g;
+const AVATAR_TOKEN_KANJI = /[一-鿿々]/;
+const AVATAR_TOKEN_LATIN = /^[a-z0-9]+$/;
+// 素体名の飾り。「森羅用」「マヌカ対応」「しおちゃん」を素の名前と同じトークンにする。
+// 「向け」の「け」はかななので漢字の区間には入らない。ここで見るのは「向」まで
+const AVATAR_TOKEN_SUFFIX = /(対応|用|向|ちゃん|さん|くん)$/;
+
+// アバター名の手掛かりにならない語。バリエーション名にはこの手の語が必ず混ざるので、
+// 落としておかないと「2商品以上に出た語」の規則がノイズだらけになる
+const AVATAR_STOP_WORDS = Object.freeze([
+  "ver", "version", "full", "pack", "set", "fullset", "size", "type", "color", "colour",
+  "avatar", "avatars", "vrc", "vrchat", "vrm", "unity", "quest", "pc", "dl", "data",
+  "texture", "psd", "fbx", "unitypackage", "edition", "all", "and", "for", "with", "the",
+  "red", "blue", "green", "black", "white", "pink", "yellow", "purple", "brown",
+  "gray", "grey", "navy", "beige", "ivory", "gold", "silver", "orange",
+  "セット", "サイズ", "カラー", "バージョン", "テクスチャ", "アバター", "フルセット",
+  "フルパック", "パック", "タイプ", "ホワイト", "ブラック", "レッド", "ブルー", "グリーン",
+  "ピンク", "イエロー", "パープル", "グレー", "ベージュ", "ゴールド", "シルバー", "オレンジ",
+  "版", "本体", "特典", "差分", "単品", "衣装", "素体", "汎用", "対応", "用", "向",
+  "赤", "青", "白", "黒", "桃", "紫", "緑", "黄", "色", "他", "等",
+]);
+
+const AVATAR_STOP_SET = new Set(
+  AVATAR_STOP_WORDS.map((word) => kanaToHira(String(word).normalize("NFKC").toLowerCase()))
+);
+
+// 名簿を「トークン → 保存キー」へ展開したもの。popup.html は avatar-master.js を読まないので、
+// 読み込み時ではなく最初に使うときに組む
+let avatarAliasCache = null;
+function avatarAliasMap() {
+  if (avatarAliasCache) return avatarAliasCache;
+  avatarAliasCache = new Map();
   for (const avatar of AVATAR_MASTER) {
-    if (avatar.aliases.some((alias) => avatarAliasMatches(text, alias))) keys.push(avatar.key);
+    for (const label of [avatar.jp, avatar.en, ...(avatar.alt || [])]) {
+      for (const token of avatarRawTokens(label)) avatarAliasCache.set(token, avatar.en);
+    }
+  }
+  return avatarAliasCache;
+}
+
+// 保存キー → 表示名。名簿に無いキー(未知トークンのバケツ、旧版で保存された割り当て)は
+// キーをそのまま出す。勝手に別のアバターへ寄せない
+let avatarNameCache = null;
+function avatarDisplayName(key) {
+  if (!avatarNameCache) {
+    avatarNameCache = new Map();
+    for (const avatar of AVATAR_MASTER) {
+      avatarNameCache.set(avatar.en, avatar.jp);
+      for (const alt of avatar.alt || []) {
+        if (!avatarNameCache.has(alt)) avatarNameCache.set(alt, avatar.jp);
+      }
+    }
+  }
+  return avatarNameCache.get(key) || key;
+}
+
+// ストップ語を落とす前のトークン。名簿の展開に使う
+function avatarRawTokens(text) {
+  if (!text) return [];
+  const normalized = kanaToHira(String(text).normalize("NFKC").toLowerCase());
+  const out = [];
+  for (const run of normalized.match(AVATAR_TOKEN_RUN) || []) {
+    let token = run;
+    for (;;) {
+      const next = token.replace(AVATAR_TOKEN_SUFFIX, "");
+      // 剥がすと何も残らないなら剥がさない(「用」だけの語はストップ語で落ちる)
+      if (!next || next === token) break;
+      token = next;
+    }
+    // 1文字の英字・かなは素体名として短すぎて誤爆する。漢字1文字は
+    // 「凪」「萌」「獏」のような実在アバターなので残す
+    if (token.length < 2 && !AVATAR_TOKEN_KANJI.test(token)) continue;
+    if (!out.includes(token)) out.push(token);
+  }
+  return out;
+}
+
+// 照合に使うトークン。名簿に載っている語はストップ語判定より優先する
+// (「ライム」「プラム」「ミント」は色名でもあり実在アバターでもある)
+function avatarTokens(text) {
+  const alias = avatarAliasMap();
+  return avatarRawTokens(text).filter((token) => alias.has(token) || !AVATAR_STOP_SET.has(token));
+}
+
+function isAvatarLatinToken(token) {
+  return AVATAR_TOKEN_LATIN.test(token);
+}
+
+// 商品1件が持つ照合対象の文字列。バリエーション名を優先し、無ければ品名本体
+function avatarItemText(item) {
+  const { base, variation } = parseItemName(item && item.name);
+  return variation || base;
+}
+
+// トークンがどのバケツに属するか。名簿にあれば名簿のキー、無ければ
+// 「2商品以上に現れた」として採用されたトークン自身。どちらでもなければ空文字。
+//
+// **部分一致(includes)は使わない。**実測で「凪」が実在アバター「凪夜(Nagiya Ruri)」の
+// バリエーション名へ構造的に誤ヒットした(名簿74体中この1組)。トークン完全一致なら
+// 「凪」と「凪夜」は別トークンなので、この衝突は起きない
+function avatarBucketKey(token, index) {
+  return avatarAliasMap().get(token) || (index && index.buckets.has(token) ? token : "");
+}
+
+// 文字列から見つかったバケツのキー(重複なし、現れた順)
+function avatarKeysIn(text, index) {
+  const keys = [];
+  for (const token of avatarTokens(text)) {
+    const key = avatarBucketKey(token, index);
+    if (key && !keys.includes(key)) keys.push(key);
   }
   return keys;
+}
+
+// 買ったものぜんぶを見て、アバターのバケツを決める。
+//
+// 採用の規則は2つだけ。
+//   (a) 名簿に載っているトークン …… 1商品しか無くても採用する
+//   (b) 2つ以上の別商品(ショップ+品名本体で判定)に現れたトークン
+// (b) を付けているのは、1商品にしか出ない語(色名・サイズ・造語)をバケツにすると
+// 順位表がノイズで埋まるため。同じアバター向けの商品を2つ以上買っていれば沼なので、
+// この規則で取りこぼす沼は無い。
+//
+// あわせて「日本語表記とローマ字表記の併記」(業界標準の書き方)を共起として数える。
+// 2商品以上で併記されていれば同じアバターの別表記である可能性が高いが、
+// 「Milfy, Eku」のような**別アバターの併記**と機械的に区別できないので自動では統合せず、
+// 手動割り当てUIへ候補として出すだけにする
+function buildAvatarIndex(results) {
+  const tokenProducts = new Map();
+  const pairProducts = new Map();
+  const add = (map, key, productKey) => {
+    if (!map.has(key)) map.set(key, new Set());
+    map.get(key).add(productKey);
+  };
+
+  for (const result of results || []) {
+    if (!Array.isArray(result.items)) continue;
+    for (const item of result.items) {
+      const tokens = avatarTokens(avatarItemText(item));
+      if (tokens.length === 0) continue;
+      const productKey = itemProductKey(item);
+      for (const token of tokens) add(tokenProducts, token, productKey);
+      // 併記とみなすのは「和文1語＋英字1語」だけ。3語以上並ぶものは
+      // 複数アバター対応の列挙でありうるので、共起として数えない
+      const latin = tokens.filter(isAvatarLatinToken);
+      const japanese = tokens.filter((token) => !isAvatarLatinToken(token));
+      if (latin.length === 1 && japanese.length === 1) {
+        add(pairProducts, `${japanese[0]} ${latin[0]}`, productKey);
+      }
+    }
+  }
+
+  const alias = avatarAliasMap();
+  const buckets = new Set();
+  for (const [token, products] of tokenProducts) {
+    if (!alias.has(token) && products.size >= 2) buckets.add(token);
+  }
+
+  const index = { buckets };
+  const merges = [];
+  for (const [pair, products] of pairProducts) {
+    if (products.size < 2) continue;
+    const [japanese, latin] = pair.split(" ");
+    const left = avatarBucketKey(japanese, index);
+    const right = avatarBucketKey(latin, index);
+    // どちらもバケツでない組は割り当て先が無いので出さない。
+    // 既に同じバケツ(名簿で統合済み)の組も、直すところが無いので出さない
+    if (!left && !right) continue;
+    if (left && right && left === right) continue;
+    merges.push({ japanese, latin, key: left || right, count: products.size });
+  }
+  merges.sort((a, b) => b.count - a.count || (a.japanese < b.japanese ? -1 : 1));
+  index.merges = merges;
+  return index;
 }
 
 // Full Pack のように「複数素体ぶん」を名乗る表記があるか
@@ -663,10 +833,6 @@ function hasAvatarMultiMarker(text) {
   if (!text) return false;
   const lower = String(text).toLowerCase();
   return AVATAR_MULTI_MARKERS.some((marker) => lower.includes(marker.toLowerCase()));
-}
-
-function avatarByKey(key) {
-  return AVATAR_MASTER.find((avatar) => avatar.key === key) || null;
 }
 
 // ショップと商品名のあいだに挟む区切り。**保存キーの一部なので後から変えない**
@@ -689,19 +855,22 @@ function itemProductKey(item) {
 //  3. 商品名の本体(テクスチャ系など、素体名が品名側にしか出ない商品の補完)
 // 2 と 3 のどちらでも、素体名が2つ以上見つかれば「複数対応」にする。
 // 1つも見つからなければ「未分類」。ここで当てずっぽうに1つ選ばない
-function classifyItemAvatar(item, assignments) {
+// index は buildAvatarIndex の結果。省略すると名簿に載っているアバターだけを見る
+// (単票の判定や、集計を通さない呼び出し用)
+function classifyItemAvatar(item, assignments, index = null) {
   const manual = assignments ? assignments[itemProductKey(item)] : undefined;
   if (typeof manual === "string" && manual) {
     if (manual === AVATAR_MULTI_KEY) return { kind: "multi", key: AVATAR_MULTI_KEY, manual: true };
-    // 辞書に無いkey(将来の版で追加された素体のバックアップなど)は名前を出せない。
-    // 保存は消さず、この環境では未分類として扱う
-    if (avatarByKey(manual)) return { kind: "avatar", key: manual, manual: true };
+    // 名簿に無いキー(未知トークンのバケツ、旧版で保存された割り当て)もそのまま通す。
+    // 本人が指定したものを、こちらの都合で未分類へ落とさない。表示名は
+    // avatarDisplayName がキーのまま出す
+    return { kind: "avatar", key: manual, manual: true };
   }
   const { base, variation } = parseItemName(item && item.name);
   for (const text of [variation, base]) {
     if (!text) continue;
     if (hasAvatarMultiMarker(text)) return { kind: "multi", key: AVATAR_MULTI_KEY, manual: false };
-    const keys = matchAvatarKeys(text);
+    const keys = avatarKeysIn(text, index);
     if (keys.length === 1) return { kind: "avatar", key: keys[0], manual: false };
     if (keys.length > 1) return { kind: "multi", key: AVATAR_MULTI_KEY, manual: false };
   }
@@ -730,17 +899,19 @@ function aggregateByAvatar(results, assignments = {}, sortBy = DEFAULT_SHOP_SORT
   const multi = emptyAvatarRow(AVATAR_MULTI_KEY, "複数対応");
   const none = emptyAvatarRow("", "未分類");
   const products = new Map();
+  // バケツは買ったものぜんぶを見ないと決まらないので、1件ずつの判定より先に組む
+  const index = buildAvatarIndex(results);
 
   for (const result of results) {
     if (!Array.isArray(result.items)) continue;
     for (const item of result.items) {
-      const verdict = classifyItemAvatar(item, assignments);
+      const verdict = classifyItemAvatar(item, assignments, index);
       let row;
       if (verdict.kind === "multi") row = multi;
       else if (verdict.kind === "none") row = none;
       else {
         if (!rows.has(verdict.key)) {
-          rows.set(verdict.key, emptyAvatarRow(verdict.key, avatarByKey(verdict.key).name));
+          rows.set(verdict.key, emptyAvatarRow(verdict.key, avatarDisplayName(verdict.key)));
         }
         row = rows.get(verdict.key);
       }
@@ -783,7 +954,68 @@ function aggregateByAvatar(results, assignments = {}, sortBy = DEFAULT_SHOP_SORT
     products: Array.from(products.values()).sort(
       (a, b) => b.total - a.total || a.name.localeCompare(b.name, "ja")
     ),
+    // 「日本語表記とローマ字表記が同じアバターかもしれない」組。自動では統合しない
+    merges: index.merges,
   };
+}
+
+// ---- D17-b 種別枠(ワールド・ワールド用アイテム・ギミック/ツール) ---------
+//
+// アバターの順位表とは別枠。判定に使うのは**品名の本体だけ**で、バリエーション名は見ない
+// (バリエーション名は素体名の置き場所であって、商品の種類を書く場所ではない)。
+// どれにも当たらなければ種別なしにする。無理に3つのどれかへ押し込まない。
+
+// 「ギミック付き」「ギミック搭載」は衣装のおまけの説明。種別の手掛かりにしない
+const ITEM_KIND_IGNORE = /ギミック(付き?|つき|搭載|入り)/g;
+
+const ITEM_KIND_RULES = Object.freeze([
+  { key: "world", name: "ワールド", pattern: /向けワールド|【[^】]{0,8}ワールド】|ワールドアセット/ },
+  { key: "world-item", name: "ワールド用アイテム", pattern: /ワールドギミック|ワールド用|ワールド想定/ },
+  {
+    key: "tool",
+    name: "ギミック・ツール",
+    // 「ギミック」は【】の中に書かれているときだけ種別の名乗りとみなす。
+    // 品名の途中に出るものは「シャンパンギミック」のような商品そのものの名前でありうる。
+    // ponytail: 【】を使わない純粋なギミック商品は取りこぼす。既知の限界として残し、
+    // 誤って衣装をギミックに数えるより取りこぼす側へ倒している
+    pattern:
+      /【[^】]*ギミック[^】]*】|システム|ツール|エディタ|ロコモーション|パーティクル|ポーズ|アニメーション|シェーダー|コンポーネント|\b(?:tools?|toolkit|system|editor|shaders?|particles?|locomotion|compressor|converter|optimizer|generator|prefab|animator)\b/i,
+  },
+]);
+
+// 種別のkey(当たらなければ空文字)
+function classifyItemKind(name) {
+  const { base } = parseItemName(name);
+  const text = base.replace(ITEM_KIND_IGNORE, "");
+  if (!text) return "";
+  const rule = ITEM_KIND_RULES.find((candidate) => candidate.pattern.test(text));
+  return rule ? rule.key : "";
+}
+
+// 種別ごとの金額・点数。当たった種別だけを ITEM_KIND_RULES の並び順で返す
+function aggregateByItemKind(results) {
+  const rows = new Map();
+  for (const result of results || []) {
+    if (!Array.isArray(result.items)) continue;
+    for (const item of result.items) {
+      const key = classifyItemKind(item && item.name);
+      if (!key) continue;
+      if (!rows.has(key)) {
+        const rule = ITEM_KIND_RULES.find((candidate) => candidate.key === key);
+        rows.set(key, emptyAvatarRow(key, rule.name));
+      }
+      const row = rows.get(key);
+      const quantity = itemQuantity(item);
+      row.count += typeof quantity === "number" ? quantity : 0;
+      if (item.name) row.items.add(item.name);
+      const amount = itemAmount(item);
+      if (amount === null) row.unknown++;
+      else row.total += amount;
+    }
+  }
+  return ITEM_KIND_RULES.filter((rule) => rows.has(rule.key)).map((rule) =>
+    finishAvatarRow(rows.get(rule.key))
+  );
 }
 
 // 手動割り当ての保存値。壊れた値や、この版に無いアバターの割り当てが混ざっていても

@@ -1049,3 +1049,23 @@ not-run:
   ステータスを再取得」を確認したと報告; counts=確認1件, failed=0
 - C: 2026-08-08 — evidence: status=PASS; kind=runtime; command=ユーザー実ブラウザでBOOTH注文詳細20件;
   scope=nameへのバリエーション名連結・ファイル名行(D14前提); counts=20件, failed=0
+
+## HANDOFF.agent.md から退避した検証証跡と実装メモ(2026-08-09、P12実装時)
+
+4096bytes上限を守るため、HANDOFF.agent.md の complete / verified から次を移した。
+P10〜P12の実装内容は `docs/improvement-plan.md` の D14・D15・D16・D17 を正とする。
+
+- A: P10(D14沼レポート)を`claude/p10-numa-report`で実装。新ビュー`#/avatars`、
+  辞書`extension/avatar-master.js`(33体)、公開契約へ`boothAvatarAssign`とバックアップの
+  `avatarAssign`を追加(BACKUP_VERSIONは1のまま。旧バックアップも読める)。
+- A: P11(D15収集健全性の警報・D16 CSVの集計対象注記)を`claude/p11-health-csv`で実装。
+- A: P12(D17-a辞書レス照合・D17-b種別枠)を`claude/p12-numa-cluster`で実装。D14の固定辞書照合を
+  トークン完全一致クラスタリングへ置き換え、名簿を`{jp, en, alt}`形式(約86体)へ変更した。
+  `en`が`boothAvatarAssign`の保存キー。P10の旧キー(milfy・maya・rindo・kokoa・chise等)は
+  名簿の`en`/`alt`へ残して互換を保った。1.1.0で壊れていたREADMEのFirefox記述も直した。
+- A: 2026-08-09 — evidence: status=PASS; kind=compile+runtime; command=node --check 17ファイル、
+  python -m http.server 8791 + Browserで/test/index.html(P10ブランチ);
+  counts=compile 17/0、ALL PASS 898 checks(830→898。P10で68件追加)、console errorなし
+- A: 2026-08-09 — evidence: status=PASS; kind=compile+runtime; command=node --check 17ファイル、
+  python -m http.server 8797 + Browserで/test/index.html(P11ブランチ);
+  counts=compile 17/0、ALL PASS 924 checks(898→924。P11で26件追加)、console errorなし

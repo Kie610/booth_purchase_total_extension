@@ -545,9 +545,14 @@
          </div>
        </div>
        <p class="hint">
-         商品名の末尾に付くバリエーション名（「商品名 (エク)」の括弧の中）を素体名と
-         照合し、アバターごとの支出を集計します。素体名を1つに絞れないものは「複数対応」、
-         見つからないものは「未分類」として別に数えます（推測で振り分けません）。
+         商品名の末尾に付くバリエーション名（「商品名 (エク)」の括弧の中）を言葉ごとに分け、
+         同じ言葉を持つ商品どうしをアバターとしてまとめます。アバター名を1つに絞れないものは
+         「複数対応」、見つからないものは「未分類」として別に数えます（推測で振り分けません）。
+       </p>
+       <p class="hint" id="avatarCoverageNote">
+         これは<strong>アバター名を読み取れた買い物だけの集計</strong>で、全支出の内訳ではありません。
+         アバター名を書かない商品（ワールド・ツール・小物など）は「未分類」に入り、
+         順位表の合計には出てきません。
        </p>
 
        <div id="avatarEmpty" class="empty-note">
@@ -586,12 +591,28 @@
            <tbody id="avatarOtherBody"></tbody>
          </table>
 
+         <!-- D17-b 種別枠。アバター名ではなく品名本体の言葉づかいから読み取るので、
+              アバターの順位表とは混ぜずに別枠で出す -->
+         <div id="avatarKindBox" hidden>
+           <h3 class="export-preview-title">ワールド・ギミック（種別）</h3>
+           <p class="hint">
+             アバター向けではない買いもののうち、品名から種別を読み取れたものを数えます。
+             読み取れなかったものは無理に分類せず、ここには出しません。
+           </p>
+           <table class="data-table ranking-table">
+             <tbody id="avatarKindBody"></tbody>
+           </table>
+         </div>
+
          <details class="accordion" id="avatarAssignBox">
            <summary><h3>未分類の商品を手で割り当てる<span class="accordion-count" id="avatarAssignCount"></span></h3></summary>
            <p class="hint">
              選んだ内容はブラウザに保存され、バックアップ（データの引っ越し）にも含まれます。
              「未分類のまま」を選べば取り消せます。
            </p>
+           <!-- 併記(「ミルフィ - Milfy」)から見つけた統合候補。別アバターの併記
+                (「Milfy, Eku」)と機械的に区別できないので、自動では統合しない -->
+           <p class="hint" id="avatarMergeHint" hidden></p>
            <div class="table-scroll">
              <table class="data-table">
                <thead>

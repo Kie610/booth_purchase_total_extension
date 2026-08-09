@@ -1030,22 +1030,56 @@ check("名前がまるごと括弧なら剥がさない",
   parseItemName("(Milfy)"), { base: "(Milfy)", variation: null });
 check("空の名前でも落ちない", parseItemName(undefined), { base: "", variation: null });
 
-// --- D14 素体名辞書との照合 ---
-check("日本語表記で当たる", matchAvatarKeys("マヌカ"), ["manuka"]);
-check("ローマ字表記でも当たる", matchAvatarKeys("for Manuka"), ["manuka"]);
-check("ローマ字の大文字小文字は問わない", matchAvatarKeys("MANUKA/SHINRA"), ["manuka", "shinra"]);
-// 部分一致にすると "Eku" が "Nekura" に、"Lime" が "Sublime" に当たってしまう
-check("英字は語の切れ目で照合する",
-  [matchAvatarKeys("Nekura"), matchAvatarKeys("Sublime"), matchAvatarKeys("Eku ver")],
+// --- D17-a トークン化 ---
+// 素体名の飾り(対応・用・ちゃん)を剥がして、素の名前と同じトークンにする
+check("末尾の飾りを剥がす",
+  [avatarTokens("森羅用"), avatarTokens("マヌカ対応"), avatarTokens("しおちゃん"),
+   avatarTokens("凪向け")],
+  [["森羅"], ["まぬか"], ["しお"], ["凪"]]);
+// 記号はどのトークン区間にも入らないので、剥がす処理を書かなくても落ちる
+check("末尾の記号は落ちる", [avatarTokens("凪-"), avatarTokens("nagi'")], [["凪"], ["nagi"]]);
+// 1文字の英字・かなは短すぎて誤爆する。漢字1文字は実在アバターなので残す
+check("漢字1文字は残す", [avatarTokens("凪"), avatarTokens("萌"), avatarTokens("獏")],
+  [["凪"], ["萌"], ["獏"]]);
+check("1文字の英字・かなは捨てる", [avatarTokens("S"), avatarTokens("の")], [[], []]);
+check("絵文字が混じっても名前だけ取れる", avatarTokens("💗マヌカ💗"), ["まぬか"]);
+// カタカナはひらがなへ寄せる。「シナノ」と「しなの」を別のアバターにしない
+check("カタカナとひらがなを同じ語にする",
+  [avatarTokens("シナノ"), avatarTokens("しなの")], [["しなの"], ["しなの"]]);
+check("全角英字は半角にそろえる", avatarTokens("Ｍｉｌｆｙ"), ["milfy"]);
+check("色名やサイズは手掛かりにしない",
+  [avatarTokens("Lサイズ"), avatarTokens("ホワイト"), avatarTokens("full pack ver")],
+  [[], [], []]);
+// 名簿にある名前は色名と同じつづりでも残す(ライム・プラム・ミントは実在アバター)
+check("名簿の名前は色名でも残す", avatarTokens("ライム"), ["らいむ"]);
+
+// --- D17-a 名簿(表記ゆれの統合ヒント) ---
+check("日本語表記で当たる", avatarKeysIn("マヌカ"), ["manuka"]);
+check("ローマ字表記でも当たる", avatarKeysIn("for Manuka"), ["manuka"]);
+check("ローマ字の大文字小文字は問わない", avatarKeysIn("MANUKA/SHINRA"), ["manuka", "shinra"]);
+// 完全一致なので、部分一致で起きていた誤ヒットが構造的に起きない
+check("語の一部には当たらない",
+  [avatarKeysIn("Nekura"), avatarKeysIn("Sublime"), avatarKeysIn("Eku ver")],
   [[], [], ["eku"]]);
-check("辞書に無ければ空", matchAvatarKeys("しらないそたい"), []);
+// 実測で唯一の衝突。部分一致だと「凪」が実在アバター「凪夜」へ当たってしまう
+check("凪・凪夜・泣夜を取り違えない",
+  [avatarKeysIn("凪"), avatarKeysIn("凪夜"), avatarKeysIn("泣夜")],
+  [["nagi"], ["nagiya"], ["nakiya"]]);
+check("名簿に無ければ空", avatarKeysIn("しらないそたい"), []);
+check("略記の別名も同じキーになる", avatarKeysIn("ミルフ用パーカー"), ["milfy"]);
+check("後ろに語が続いても同じキーになる", avatarKeysIn("ミルティナFC"), ["milltina"]);
 check("Full Packの印を見分ける",
   [hasAvatarMultiMarker("【Full Pack】"), hasAvatarMultiMarker("フルパック"),
    hasAvatarMultiMarker("マヌカ")], [true, true, false]);
-check("辞書は日本語とローマ字の両方を持つ",
-  AVATAR_MASTER.every((a) => a.aliases.length >= 2 && a.key && a.name), true);
-check("辞書のkeyは重複しない",
-  new Set(AVATAR_MASTER.map((a) => a.key)).size, AVATAR_MASTER.length);
+check("名簿は日本語とローマ字の両方を持つ",
+  AVATAR_MASTER.every((a) => a.jp && a.en && /^[a-z0-9]+$/.test(a.en)), true);
+check("名簿のenは重複しない",
+  new Set(AVATAR_MASTER.map((a) => a.en)).size, AVATAR_MASTER.length);
+// P10(D14)で保存された割り当てのキーは、そのまま名前付きで読めること
+check("旧版の保存キーが今も名前を持つ",
+  ["milfy", "manuka", "shinra", "maya", "rindo", "kokoa", "chise"].map(avatarDisplayName),
+  ["ミルフィ", "マヌカ", "森羅", "舞夜", "竜胆", "ここあ", "チセ"]);
+check("名簿に無いキーはそのまま出す", avatarDisplayName("さくら"), "さくら");
 
 // --- D14 商品1件の振り分け ---
 const avatarItem = (name, price) => ({ ...item(name, price), name });
@@ -1080,9 +1114,11 @@ check("手動割り当てが自動判定より優先される",
   { kind: "avatar", key: "shinra", manual: true });
 check("手動で複数対応にもできる",
   classifyItemAvatar(assignTarget, { [assignKey]: AVATAR_MULTI_KEY }).kind, "multi");
-// 辞書に無いkey(将来の版のバックアップなど)は名前を出せない。推測で別の素体へ寄せない
-check("辞書に無いkeyは未分類として扱う",
-  classifyItemAvatar(assignTarget, { [assignKey]: "unknown-avatar" }).kind, "none");
+// 名簿に無いkey(未知トークンのバケツ、将来の版のバックアップ)も本人の指定として通す。
+// 表示名はキーのまま。こちらの都合で未分類へ落とさない
+check("名簿に無いkeyでも本人の指定として通す",
+  classifyItemAvatar(assignTarget, { [assignKey]: "unknown-avatar" }),
+  { kind: "avatar", key: "unknown-avatar", manual: true });
 check("壊れた保存値は整えて読む",
   normalizeAvatarAssign({ ok: "manuka", "": "x", bad: 5, empty: "" }), { ok: "manuka" });
 check("保存が無ければ空", normalizeAvatarAssign(undefined), {});
@@ -1125,6 +1161,90 @@ check("金額を読めない商品は合計に足さない",
     { ...avatarItem("服 (マヌカ)", 100) }, { ...avatarItem("靴 (マヌカ)", 0), price: null },
   ] }], {}).rows[0], { key: "manuka", name: "マヌカ", count: 2, total: 100, unknown: 1,
     items: ["靴 (マヌカ)", "服 (マヌカ)"] });
+
+// --- D17-a 名簿に無いアバターを買ったものから見つける ---
+// 名簿を網羅できない以上、当てにいく方式では取りこぼす。同じ言葉を持つ商品が
+// 2つ以上あれば、それはアバターとして扱ってよい
+const unknownItem = (base, variation, price) => ({
+  ...item(`${base} (${variation})`, price), name: `${base} (${variation})`,
+});
+const unknownRows = [{ id: "n1", date: "2026年3月1日 10:00", amount: 3000, items: [
+  unknownItem("パーカー", "さくら", 1000),
+  unknownItem("スカート", "さくら", 1200),
+  unknownItem("くつした", "ひとつだけの造語", 300),
+] }];
+const unknownAgg = aggregateByAvatar(unknownRows, {});
+check("2商品に出た未知の言葉はアバターとして採用する",
+  unknownAgg.rows.map((r) => [r.key, r.name, r.total]), [["さくら", "さくら", 2200]]);
+// 1商品にしか出ない言葉(色名・造語)まで採用すると順位表がノイズで埋まる
+check("1商品にしか出ない言葉は採用しない",
+  [unknownAgg.rows.length, unknownAgg.none.count], [1, 1]);
+// 名簿にあるものは1商品でも採用する(2商品の縛りは未知の言葉にだけ効く)
+check("名簿にある名前は1商品でも採用する",
+  aggregateByAvatar([{ id: "n2", items: [unknownItem("パーカー", "凪", 500)] }], {})
+    .rows.map((r) => [r.key, r.total]), [["nagi", 500]]);
+// 表記ゆれは名簿で統合する。「ミルフィ - Milfy」の併記は1つのバケツになる
+check("併記された日本語表記とローマ字表記は1つのバケツになる",
+  aggregateByAvatar([{ id: "n3", items: [unknownItem("服", "ミルフィ - Milfy", 700)] }], {})
+    .rows.map((r) => [r.key, r.total]), [["milfy", 700]]);
+// 別アバターの併記は「複数対応」。1体へ寄せると支出が偏る
+check("別アバターの併記は複数対応",
+  aggregateByAvatar([{ id: "n4", items: [unknownItem("服", "Milfy, Eku", 700)] }], {})
+    .multi.count, 1);
+
+// --- D17-a 統合候補(自動では統合しない) ---
+// 「日本語表記 ローマ字表記」の併記は業界標準の書き方。2商品以上で共起していれば
+// 同じアバターかもしれないが、別アバターの併記と機械的に区別できないので候補止まり
+const mergeRows = [{ id: "m1", items: [
+  unknownItem("パーカー", "さくら Sakura", 100),
+  unknownItem("スカート", "さくら Sakura", 100),
+] }];
+check("併記が2商品あれば統合候補に出す",
+  aggregateByAvatar(mergeRows, {}).merges.map((m) => [m.japanese, m.latin, m.count]),
+  [["さくら", "sakura", 2]]);
+check("名簿で統合済みの組は候補に出さない",
+  aggregateByAvatar([{ id: "m2", items: [
+    unknownItem("パーカー", "ミルフィ Milfy", 100),
+    unknownItem("スカート", "ミルフィ Milfy", 100),
+  ] }], {}).merges, []);
+check("1商品しかない併記は候補に出さない",
+  aggregateByAvatar([{ id: "m3", items: [unknownItem("服", "さくら Sakura", 100)] }], {})
+    .merges, []);
+
+// --- D17-b 種別枠(品名本体だけを見る) ---
+// 実測した商品名での必須ケース
+check("ワールドを見分ける",
+  [classifyItemKind("【VRC向けワールド】BREEZE【Unity】"),
+   classifyItemKind("ワールドアセット・砂浜")], ["world", "world"]);
+check("ワールド用アイテムを見分ける",
+  classifyItemKind("【VRChatワールドギミック】UnyStylus"), "world-item");
+check("ギミック・ツールを見分ける",
+  [classifyItemKind("VRC Parameter Compressor"), classifyItemKind("【ギミック】お茶会セット")],
+  ["tool", "tool"]);
+// 衣装のおまけの「ギミック付き」を種別と読み違えない
+check("衣装のギミック付きは種別なし",
+  classifyItemKind("【57Avatar対応】ルミナスブライド (フルセット浮遊ギミック付き)"), "");
+check("品名の途中のギミックは種別なし",
+  classifyItemKind("💗お給仕メイド＆オリジナルシャンパンギミック💗"), "");
+check("どれにも当たらなければ種別なし",
+  [classifyItemKind("ふわもこパーカー (マヌカ)"), classifyItemKind("")], ["", ""]);
+check("種別はワールドを先に見る",
+  classifyItemKind("【VRC向けワールド】ギミックシステム入りの部屋"), "world");
+const kindRows = [{ id: "k1", items: [
+  { ...item("【VRC向けワールド】BREEZE【Unity】", 2000),
+    name: "【VRC向けワールド】BREEZE【Unity】" },
+  { ...item("【VRChatワールドギミック】UnyStylus", 800),
+    name: "【VRChatワールドギミック】UnyStylus" },
+  { ...item("VRC Parameter Compressor", 500), name: "VRC Parameter Compressor" },
+  { ...item("ふわもこパーカー (マヌカ)", 300), name: "ふわもこパーカー (マヌカ)" },
+] }];
+check("種別ごとに金額と点数を出す",
+  aggregateByItemKind(kindRows).map((r) => [r.name, r.count, r.total]),
+  [["ワールド", 1, 2000], ["ワールド用アイテム", 1, 800], ["ギミック・ツール", 1, 500]]);
+check("種別を読み取れなければ枠を出さない", aggregateByItemKind([
+  { id: "k2", items: [{ ...item("ふわもこパーカー (マヌカ)", 300),
+    name: "ふわもこパーカー (マヌカ)" }] }]), []);
+check("明細の無い注文は種別に数えない", aggregateByItemKind([{ id: "k3", items: null }]), []);
 
 // --- 今年のまとめ ---
 // 「はじめて出会った作者」を出すため、その年より前の注文も見る必要がある

@@ -274,26 +274,66 @@ function avatarPeriodLabel() {
   return avatarSelectedYear === RANKING_ALL_PERIOD ? "" : `${avatarSelectedYear}年`;
 }
 
-// 割り当ての選択肢。辞書(avatar-master.js)へ足せば、コードを触らずここにも増える
-function avatarAssignSelect(product) {
-  const select = el("select", "avatar-assign-select");
-  select.dataset.productKey = product.key;
-  select.setAttribute("aria-label", `${product.name}の割り当て`);
+// 割り当ての選択肢。買ったものから自動で見つかったアバター(D17-a のバケツ)を先に並べ、
+// そのあとに名簿(avatar-master.js)の残りを続ける。名簿に無いアバターへも割り当てられる
+function avatarAssignOptions(rows) {
   const options = [
     ["", "未分類のまま"],
     [AVATAR_MULTI_KEY, "複数対応"],
-    ...AVATAR_MASTER.map((avatar) => [avatar.key, avatar.name]),
   ];
+  const seen = new Set(["", AVATAR_MULTI_KEY]);
+  for (const row of rows) {
+    if (seen.has(row.key)) continue;
+    seen.add(row.key);
+    options.push([row.key, row.name]);
+  }
+  for (const avatar of AVATAR_MASTER) {
+    if (seen.has(avatar.en)) continue;
+    seen.add(avatar.en);
+    options.push([avatar.en, avatar.jp]);
+  }
+  return options;
+}
+
+function avatarAssignSelect(product, options) {
+  const select = el("select", "avatar-assign-select");
+  select.dataset.productKey = product.key;
+  select.setAttribute("aria-label", `${product.name}の割り当て`);
   for (const [value, label] of options) {
     select.appendChild(el("option", "", label)).value = value;
   }
-  // 辞書に無いkeyが保存されていると select は空選択になる。無い素体を勝手に
-  // 別の素体へ寄せないよう、選択肢を足さずそのままにする(保存値は消さない)
+  // 選択肢に無いkeyが保存されていると select は空選択になる。勝手に別のアバターへ
+  // 寄せないよう、選択肢を足さずそのままにする(保存値は消さない)
   select.value = product.assigned;
   return select;
 }
 
-function renderAvatarAssignRows(products) {
+// 「日本語表記とローマ字表記が同じアバターかもしれない」組。自動で統合すると
+// 「Milfy, Eku」のような別アバターの併記まで1体にまとめてしまうので、候補として出すだけ
+function renderAvatarMergeHint(merges) {
+  const shown = merges.slice(0, 5);
+  avatarMergeHint.hidden = shown.length === 0;
+  if (shown.length === 0) return;
+  const list = shown.map((m) => `「${m.japanese}」と「${m.latin}」（${m.count}商品）`).join("、");
+  avatarMergeHint.textContent =
+    `同じ商品名の中で並べて書かれていた組があります: ${list}。` +
+    `同じアバターの日本語表記とローマ字表記かもしれません（別のアバターを並べただけのこともあるため、自動ではまとめていません）。`;
+}
+
+function renderAvatarKindRows(rows) {
+  avatarKindBody.innerHTML = "";
+  avatarKindBox.hidden = rows.length === 0;
+  for (const row of rows) {
+    const tr = el("tr", "avatar-other-row");
+    tr.appendChild(td(row.name, "avatar-other-label"));
+    tr.appendChild(td(`${row.items.length}種類`));
+    tr.appendChild(countCell(row.count));
+    tr.appendChild(amountCell(row.total));
+    avatarKindBody.appendChild(tr);
+  }
+}
+
+function renderAvatarAssignRows(products, options) {
   avatarAssignBody.innerHTML = "";
   avatarAssignCount.textContent = `${products.length}件`;
   avatarAssignBox.hidden = products.length === 0;
@@ -304,7 +344,7 @@ function renderAvatarAssignRows(products) {
     tr.appendChild(td(`${product.count}点`, "num"));
     tr.appendChild(td(formatYen(product.total), "num"));
     const cell = td("");
-    cell.appendChild(avatarAssignSelect(product));
+    cell.appendChild(avatarAssignSelect(product, options));
     tr.appendChild(cell);
     avatarAssignBody.appendChild(tr);
   }
@@ -358,6 +398,9 @@ function renderAvatarArea(results = currentResults()) {
     avatarTableBody.innerHTML = "";
     avatarOtherBody.innerHTML = "";
     avatarAssignBody.innerHTML = "";
+    avatarKindBody.innerHTML = "";
+    avatarKindBox.hidden = true;
+    avatarMergeHint.hidden = true;
     avatarEmpty.textContent =
       avatarSelectedYear === RANKING_ALL_PERIOD
         ? "まだ商品の明細がありません。「お買いものレポート」で金額を収集してください。"
@@ -384,7 +427,9 @@ function renderAvatarArea(results = currentResults()) {
 
   renderShopRows(avatarTableBody, shown, RANKING_BOLD);
   renderAvatarOtherRows(stats);
-  renderAvatarAssignRows(stats.products);
+  renderAvatarKindRows(aggregateByItemKind(scoped));
+  renderAvatarMergeHint(stats.merges);
+  renderAvatarAssignRows(stats.products, avatarAssignOptions(stats.rows));
 }
 
 // ---- 今年のまとめ ------------------------------------------------------
