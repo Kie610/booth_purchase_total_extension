@@ -123,6 +123,7 @@ const AVATAR_MULTI_MARKERS = Object.freeze([
   "フルセット",
   "全対応",
   "全アバター",
+  "複数アバター",
   "多対応",
   "複数対応",
 ]);

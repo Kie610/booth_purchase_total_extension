@@ -13,20 +13,20 @@ complete:
 - C: v1.0.0を正式リリース済み(GitHub Release公開、`main`を同じSHAへfast-forward同期済み)。
 - C: `1.1.0`へP1〜P9(A1〜A5・B1〜B4・C1〜C18・D1〜D5・D10〜D13・T1)を統合済み。
   統合内訳・実装詳細・設計判断・過去の検証証跡は docs/handoff-history.md。
-- C: P10(D14)・P11(D15・D16)・P12(D17-a/b/c)を検品のうえ`1.1.0`へ統合済み(2026-08-09)。
+- C: P10(D14)・P11(D15・D16)・P12(D17-a/b/c)・D18を検品のうえ`1.1.0`へ統合済み(2026-08-09)。
   P12はD14の固定辞書照合をトークン完全一致クラスタリングへ置き換え、名簿を`{jp, en, alt}`
   (約86体)へ変更した。`en`が`boothAvatarAssign`の保存キーで、P10の旧キーは名簿へ残して互換。
   公開契約(`boothAvatarAssign`・バックアップの`avatarAssign`)は不変。
   実装詳細は docs/improvement-plan.md の D14〜D18 を参照。
-- C: D18(沼レポートの再集計ボタン)を検品のうえ`1.1.0`へ統合済み(cfe2ce3)。BOOTHへは
-  通信せず、保存済みの索引・キャッシュ・割り当てを読み直して描画し直すだけ。公開契約は不変。
+- A: D17-d(実環境フィードバック2点)を`claude/p12-feedback2`で実装済み(統合は親)。
+  「ラビ先輩」が「先輩」になる件と、「95アバター対応」が未分類へ落ちる件を修正。
 - C: 運用ルール合成(2026-08-08): AGENTS.mdへプロジェクト契約・設計の優先順位・委任と検品を追記。
 
 verified:
 - A: 2026-08-09 — evidence: status=PASS; kind=compile+runtime; command=node --check 17ファイル、
-  python -m http.server 8803 + Browserで/test/index.html(claude/p12-recount、幅1280px);
-  counts=compile 17/0、ALL PASS 980 checks(975→980。D18で5件追加)
-- 前の証跡(P10=898、P11=924、P12統合時=964、D17-c=975 checks)は docs/handoff-history.md。
+  python -m http.server 8805 + Browserで/test/index.html(claude/p12-feedback2、幅1280px);
+  counts=compile 17/0、ALL PASS 989 checks(980→989。D17-dで9件追加)
+- 前の証跡(P10=898、P11=924、P12=964、D17-c=975、D18=980 checks)は docs/handoff-history.md。
 - 注意: 共有カードの幅依存テスト1件は、ブラウザ幅521pxでは落ちる。検証は幅768px以上で行う。
 
 not-run:
@@ -45,7 +45,7 @@ not-run:
 
 ## Next
 
-1. D17-c・D18の実環境再確認とpush判断 — blocked-by: ユーザーの確認
+1. `claude/p12-feedback2`(D17-d)を検品・統合し実環境で再確認 — blocked-by: ユーザーの確認
 2. 次回の正式リリースでも検証後にバージョンブランチ、`main`、リモートのSHAを一致させる — blocked-by: none
 
 ## Paths

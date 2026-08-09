@@ -1083,6 +1083,15 @@ check("後ろに語が続いても同じキーになる", avatarKeysIn("ミル�
 check("Full Packの印を見分ける",
   [hasAvatarMultiMarker("【Full Pack】"), hasAvatarMultiMarker("フルパック"),
    hasAvatarMultiMarker("マヌカ")], [true, true, false]);
+// 「25アバター対応」のように体数を名乗るものも複数対応。体数の書き方は幅がある
+check("対応する体数を名乗る表記も複数対応の印",
+  ["Halo Ring Hair 95アバター対応", "〈19アバター対応〉", "22 Avatars", "10 avatars",
+   "30体のアバター対応", "50+α アバター対応", "複数アバター対応", "全アバター対応",
+   "２５アバター対応"].map(hasAvatarMultiMarker),
+  [true, true, true, true, true, true, true, true, true]);
+check("数字が付いていても素体名は複数対応にしない",
+  [hasAvatarMultiMarker("マヌカ 3点セット"), hasAvatarMultiMarker("2025年版パーカー")],
+  [false, false]);
 check("名簿は日本語とローマ字の両方を持つ",
   AVATAR_MASTER.every((a) => a.jp && a.en && /^[a-z0-9]+$/.test(a.en)), true);
 check("名簿のenは重複しない",
@@ -1102,6 +1111,12 @@ check("複数名が並べば複数対応",
   classifyItemAvatar(avatarItem("パーカー (Milfy&Eku)", 100), {}).kind, "multi");
 check("Full Packは複数対応",
   classifyItemAvatar(avatarItem("パーカー (【Full Pack】)", 100), {}).kind, "multi");
+check("体数を名乗る商品は複数対応",
+  classifyItemAvatar(avatarItem("Halo Ring Hair 95アバター対応", 100), {}).kind, "multi");
+// バリエーション名で1体に決まるなら、本体の「25アバター対応」で上書きしない
+check("バリエーションで1体に決まれば本体の体数表記に負けない",
+  classifyItemAvatar(avatarItem("【25アバター対応】ドレス (Milfy)", 100), {}),
+  { kind: "avatar", key: "milfy", manual: false });
 // 素体名が品名側にしか出ない商品(テクスチャ系)の補完。バリエーションより後に見る
 check("バリエーションで当たらなければ品名本体で見る",
   classifyItemAvatar(avatarItem("森羅用テクスチャ (差分A)", 100), {}),
@@ -1341,6 +1356,31 @@ check("素体商品でも名簿にある名前は名簿のキーになる",
 // 素体マーカーが無ければ従来どおり。1商品では昇格しない
 check("素体マーカーが無ければ1商品では昇格しない",
   aggregateByAvatar([{ id: "s5", items: [soloItem("慧 -Kei- のパーカー", 900)] }], {}).rows, []);
+// 日本語だけで何語かに割れる名前は、割らずに題名まるごとを1つのバケツにする。
+// 語ごとに分けると「ラビ先輩」が「先輩」になってしまう
+check("日本語だけの素体商品は名前を割らない",
+  aggregateByAvatar([{ id: "s7", items: [
+    soloItem("【オリジナル3Dモデル】ラビ先輩", 9000)] }], {})
+    .rows.map((r) => [r.key, r.name, r.total]), [["ラビ先輩", "ラビ先輩", 9000]]);
+check("助詞の入った長い名前もそのまま1つになる",
+  aggregateByAvatar([{ id: "s8", items: [
+    soloItem("オリジナル3Dモデル 幽狐族のお姉様", 9000)] }], {})
+    .rows.map((r) => r.name), ["幽狐族のお姉様"]);
+// 先頭の語を手掛かりにするので、名前が語として切り出せる関連商品は同じバケツへ寄る
+check("素体商品の名前の先頭語で関連商品も寄る",
+  aggregateByAvatar([{ id: "s9", items: [
+    soloItem("【オリジナル3Dモデル】ラビ先輩", 9000),
+    soloItem("RabbiBody（ラビボディ）── ラビ先輩用追加素体", 1000),
+  ] }], {}).rows.map((r) => [r.name, r.total]), [["ラビ先輩", 10000]]);
+// 逆に「ラビポニー」はカタカナが続くので1語(らびぽにー)になり、切り出せない。
+// ここで前方一致を使うと「凪」が「凪夜」に当たる問題が戻るので、寄せないままにする
+check("カタカナが続く名前は語に切れないので寄らない",
+  aggregateByAvatar([{ id: "s10", items: [
+    soloItem("【オリジナル3Dモデル】ラビ先輩", 9000),
+    soloItem("ラビポニー", 1000),
+  ] }], {}).none.count, 1);
+// 「ラビ」は実在アバターの名前。ノイズ語として落としてはいけない
+check("ラビはストップ語ではない", avatarTokens("ラビ"), ["らび"]);
 check("素体商品の名前は他の商品の照合にも効く",
   aggregateByAvatar([{ id: "s6", items: [
     soloItem("慧 -Kei- オリジナル3Dモデル", 5000),

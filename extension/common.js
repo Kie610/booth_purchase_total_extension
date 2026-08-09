@@ -678,7 +678,8 @@ const AVATAR_STOP_WORDS = Object.freeze([
   "セット", "セットアップ", "サイズ", "カラー", "バージョン", "テクスチャ", "アバター",
   "フルセット", "フルパック", "パック", "タイプ", "モデル", "ヘアモデル", "オリジナル",
   "ギミック", "ワールド", "ワールドギミック", "アバターギミック", "ツール", "タブレット",
-  "シリーズ", "コーデ", "ネイルチップ", "ヘイロー", "メガネ", "ラビ", "タトゥー",
+  // 「ラビ」はここに入れない。実在アバター「ラビ先輩」の名前で、落とすと名前が壊れる
+  "シリーズ", "コーデ", "ネイルチップ", "ヘイロー", "メガネ", "タトゥー",
   "フォント", "シェーダー", "パーティクル", "アニメーション", "コーヒーをおごる",
   "カンタン", "オマケ", "ノミ", "ホワイト", "ブラック", "レッド", "ブルー", "グリーン",
   "ピンク", "イエロー", "パープル", "グレー", "ベージュ", "ゴールド", "シルバー", "オレンジ",
@@ -809,6 +810,21 @@ function avatarSoloTokens(name) {
   return avatarRawTokens(stripped).filter((token) => alias.has(token) || !AVATAR_STOP_SET.has(token));
 }
 
+// 素体商品の題名から飾りを落とした名前そのもの。素体商品でなければ空。
+// 「ラビ先輩」のように語へ割ると壊れる名前を、割らずに1つのバケツ名として使う
+const AVATAR_SOLO_DECORATION = /[【】「」『』（）()［］\[\]〈〉《》〔〕｛｝{}\-–—_|/\\・,、。!！?？"'”’’]+/g;
+
+function avatarSoloName(name) {
+  const { base } = parseItemName(name);
+  const stripped = base.replace(AVATAR_SOLO_MARKER, " ");
+  if (stripped === base) return "";
+  return stripped
+    .normalize("NFKC")
+    .replace(AVATAR_SOLO_DECORATION, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 // 文字列から見つかったバケツのキー(重複なし、現れた順)
 function avatarKeysIn(text, index) {
   const keys = [];
@@ -856,7 +872,7 @@ function buildAvatarIndex(results) {
       // 素体商品は1商品でも昇格させる。バリエーションの有無に関係なく見る
       const solo = avatarSoloTokens(item && item.name);
       if (solo.length === 1) buckets.add(solo[0]);
-      else if (solo.length === 2) {
+      else if (solo.length >= 2) {
         const latin = solo.filter(isAvatarLatinToken);
         const japanese = solo.filter((token) => !isAvatarLatinToken(token));
         // 素体商品の題名で「日本語名 ローマ字名」が並ぶのは同じアバターの併記。
@@ -866,7 +882,17 @@ function buildAvatarIndex(results) {
           aliases.set(japanese[0], key);
           aliases.set(latin[0], key);
           if (!names.has(key)) names.set(key, japanese[0]);
+        } else if (latin.length === 0) {
+          // 「ラビ先輩」「幽狐族のお姉様」のように日本語だけで何語かに割れる名前。
+          // 語ごとに分けると「先輩」だけが残って名前が壊れるので、飾りを落とした
+          // 題名まるごとを1つのバケツにする。
+          // ponytail: 見つける手掛かりは先頭の語だけに絞っている(「ラビ」で
+          // 「ラビポニー」も寄る)。「先輩」のような後ろの語まで手掛かりにすると、
+          // 無関係な商品まで引き込む。取りこぼしは手動割り当てで直せる
+          const full = avatarSoloName(item && item.name);
+          if (full) aliases.set(japanese[0], full);
         }
+        // 英字を含んだまま3語以上に割れるものは決めない(従来どおり)
       }
 
       const { variation } = parseItemName(item && item.name);
@@ -909,9 +935,15 @@ function buildAvatarIndex(results) {
 }
 
 // Full Pack のように「複数素体ぶん」を名乗る表記があるか
+// 「25アバター対応」「95アバター対応」「22 Avatars」のように、対応する体数を名乗る表記。
+// 体数を書ける形は幅があるので、語を並べるのではなく形で見る
+const AVATAR_MULTI_COUNT = /\d+\s*(?:\+?\s*α)?\s*[体人]?\s*(?:の)?\s*(?:アバター|avatars?)/i;
+
 function hasAvatarMultiMarker(text) {
   if (!text) return false;
-  const lower = String(text).toLowerCase();
+  // 全角数字・全角英字でも同じように読めるようそろえてから見る
+  const lower = String(text).normalize("NFKC").toLowerCase();
+  if (AVATAR_MULTI_COUNT.test(lower)) return true;
   return AVATAR_MULTI_MARKERS.some((marker) => lower.includes(marker.toLowerCase()));
 }
 
