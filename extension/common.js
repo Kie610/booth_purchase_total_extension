@@ -799,7 +799,7 @@ function buildAvatarIndex(results) {
       const latin = tokens.filter(isAvatarLatinToken);
       const japanese = tokens.filter((token) => !isAvatarLatinToken(token));
       if (latin.length === 1 && japanese.length === 1) {
-        add(pairProducts, `${japanese[0]} ${latin[0]}`, productKey);
+        add(pairProducts, `${japanese[0]}\u0000${latin[0]}`, productKey);
       }
     }
   }
@@ -814,7 +814,7 @@ function buildAvatarIndex(results) {
   const merges = [];
   for (const [pair, products] of pairProducts) {
     if (products.size < 2) continue;
-    const [japanese, latin] = pair.split(" ");
+    const [japanese, latin] = pair.split("\u0000");
     const left = avatarBucketKey(japanese, index);
     const right = avatarBucketKey(latin, index);
     // どちらもバケツでない組は割り当て先が無いので出さない。
