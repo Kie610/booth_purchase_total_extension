@@ -1309,17 +1309,22 @@ check("MA式のギミックはアバター用",
 check("MA対応でもギミック付きの衣装は種別なし",
   [classifyItemKind("ふわふわドレス 浮遊ギミック付き【MA対応】"),
    classifyItemKind("ふわふわドレス【MA対応】")], ["", ""]);
-// D17-e 調整3 髪型の種別。ヘアピン・ヘアクリップ等の小物は髪型ではない
-check("髪型を見分ける",
+// 髪型は種別にしない(2026-08-09 ユーザーフィードバック)。アバターに着せる買いもの
+// なので、複数対応マーカーがあれば複数対応、無ければ未分類として扱う
+check("髪型は種別にしない",
   ["♡⑅ Divine Hair ⑅♡", "【VRC Hair】♥ Custom Bob ♥", "ふんわりツインテール",
-   "三つ編みおさげ"].map(classifyItemKind),
-  ["hair", "hair", "hair", "hair"]);
-check("髪の小物は髪型にしない",
-  ["オーディオヘアクリップ【VRChat用】", "きらきらヘアピン", "ヘアゴムセット",
-   "ロングコート", "ショートパンツ"].map(classifyItemKind),
-  ["", "", "", "", ""]);
-// 「ワールド用」を含むので、ヘアクリップでもワールド用が先に当たる例と区別する
-check("髪型よりワールドを先に見る",
+   "きらきらヘアピン"].map(classifyItemKind),
+  ["", "", "", ""]);
+check("複数対応マーカー付きの髪型は複数対応に入る", (() => {
+  const agg = aggregateByAvatar([{ id: "hm", items: [
+    { ...item("〈17アバター対応〉 ✦｡💫Astroid｡✦", 700),
+      name: "〈17アバター対応〉 ✦｡💫Astroid｡✦" },
+    { ...item("♡⑅ Divine Hair ⑅♡", 500), name: "♡⑅ Divine Hair ⑅♡" },
+  ] }], {});
+  return [agg.multi.total, agg.none.total];
+})(), [700, 500]);
+// 「ワールド用」を含めば髪の商品でもワールド用が先に当たる
+check("髪の商品でもワールド用は種別に入る",
   classifyItemKind("【VRChatワールド用】髪の毛オブジェクト"), "world-item");
 // D17-e 調整5 エディタ拡張がツールに当たること
 check("エディタ拡張はツール",
@@ -1355,10 +1360,10 @@ const kindNoneRows = [{ id: "kn", items: [
 const kindNoneAgg = aggregateByAvatar(kindNoneRows, {});
 check("種別に当たった商品は未分類に数えない",
   [kindNoneAgg.none.count, kindNoneAgg.none.total], [1, 800]);
-// ただし手動割り当ての一覧には残す(手動割り当ては種別より優先)
-check("種別に当たった商品も手で割り当てられる",
-  kindNoneAgg.products.map((p) => p.name).sort(),
-  ["【Unityメッシュ編集ツール】EreMorph", "なぞの服"]);
+// 種別に当たった商品は手動割り当ての一覧にも出さない(2026-08-09 ユーザーフィードバック)。
+// 一覧は「どの分類にも当たらなかったもの」だけに絞る
+check("種別に当たった商品は手動割り当ての一覧に出さない",
+  kindNoneAgg.products.map((p) => p.name), ["なぞの服"]);
 check("手動割り当ては種別より優先される",
   aggregateByAvatar(kindNoneRows, {
     [itemProductKey({ ...item("【Unityメッシュ編集ツール】EreMorph", 900),

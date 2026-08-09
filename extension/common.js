@@ -1029,13 +1029,14 @@ function aggregateByAvatar(results, assignments = {}, sortBy = DEFAULT_SHOP_SORT
     for (const item of result.items) {
       const verdict = classifyItemAvatar(item, assignments, index);
       let row = null;
+      let kindKey = "";
       if (verdict.kind === "multi") row = multi;
       else if (verdict.kind === "none") {
         // D17-b 種別枠(ワールド・ツール等)が受け持つ商品は「未分類」に数えない。
         // 二重に数えると未分類が膨らみ、アバター名を読み取れなかった買いものの量が
-        // 読めなくなる。手動割り当ての一覧には残すので、特定のアバターへ寄せたい人は
-        // そちらで上書きできる(手動割り当ては種別より優先)
-        if (!classifyItemKind(item && item.name)) row = none;
+        // 読めなくなる。手動割り当て済みの保存値は種別より優先して尊重する
+        kindKey = classifyItemKind(item && item.name);
+        if (!kindKey) row = none;
       } else {
         if (!rows.has(verdict.key)) {
           rows.set(verdict.key, emptyAvatarRow(verdict.key, avatarDisplayName(verdict.key, index)));
@@ -1053,8 +1054,10 @@ function aggregateByAvatar(results, assignments = {}, sortBy = DEFAULT_SHOP_SORT
         else row.total += amount;
       }
 
-      // 手動で直せる対象。自動で当たったものまで並べると一覧が長くなりすぎる
-      if (verdict.kind !== "none" && !verdict.manual) continue;
+      // 手動で直せる対象は「どの分類にも当たらなかったもの」と「手動割り当て済みのもの」
+      // だけ。アバター・複数対応・種別のどれかに自動で当たったものまで並べると
+      // 一覧が長くなりすぎる(2026-08-09 ユーザーフィードバック)
+      if (!verdict.manual && (verdict.kind !== "none" || kindKey)) continue;
       const productKey = itemProductKey(item);
       if (!products.has(productKey)) {
         products.set(productKey, {
@@ -1112,14 +1115,8 @@ const ITEM_KIND_RULES = Object.freeze([
     // これを名乗るギミックはアバター用ではなくワールド用
     pattern: /ワールドギミック|ワールド用|ワールド想定|\budon|\bu#/i,
   },
-  {
-    key: "hair",
-    name: "髪型",
-    // ヘアピン・ヘアクリップ・ヘアアクセ・ヘアゴムは髪型ではなく小物なので外す。
-    // 「ショートパンツ」「ロングコート」「ロングスカート」も衣装であって髪型ではない
-    pattern:
-      /hair\b|ヘア(?!ピン|クリップ|アクセ|ゴム)|髪型|髪|ボブ|\bbob\b|ツインテ|ポニーテール|ポニテ|ハイポニー|ウルフ|三つ編み|\bbraid|twin\s*tail|twintail|ponytail|お団子|おだんご|ショート(?!パンツ)|ロング(?!コート|スカート)/i,
-  },
+  // 髪型は種別にしない(2026-08-09 ユーザーフィードバック)。髪型はアバターに着せる
+  // 買いものなので、複数対応マーカーがあれば複数対応、無ければ未分類として扱う
   {
     key: "tool",
     name: "アバター用ギミック・ツール",
@@ -1139,10 +1136,9 @@ function classifyItemKind(name) {
   if (!text) return "";
   const rule = ITEM_KIND_RULES.find((candidate) => candidate.pattern.test(text));
   const key = rule ? rule.key : "";
-  // MA式のギミックはアバター用と分かっているので、種別なしと髪型より優先して拾う
-  // (「MA式ヘアギミック」は髪の見た目ではなく仕掛け)。ワールド判定が先に当たって
-  // いれば、そちらの方が確かなので触らない
-  if ((key === "" || key === "hair") && ITEM_KIND_MA_GIMMICK.test(text)) return "tool";
+  // MA式のギミックはアバター用と分かっているので、種別なしより優先して拾う。
+  // ワールド判定が先に当たっていれば、そちらの方が確かなので触らない
+  if (key === "" && ITEM_KIND_MA_GIMMICK.test(text)) return "tool";
   return key;
 }
 
