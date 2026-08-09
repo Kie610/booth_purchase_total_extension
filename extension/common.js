@@ -672,7 +672,7 @@ const AVATAR_STOP_WORDS = Object.freeze([
   "eyewear", "horn", "halo", "wing", "wings", "milk", "hug", "bloom", "light", "dark",
   "angel", "devil", "god", "spring", "summer", "autumn", "winter", "series", "model",
   "tool", "tools", "system", "font", "shader", "particle", "prefab", "gimmick",
-  "donation", "support", "free", "update", "extension", "world", "nail", "coffee",
+  "donation", "support", "free", "update", "extension", "world", "nail", "coffee", "dlc",
   "red", "blue", "green", "black", "white", "pink", "yellow", "purple", "brown",
   "gray", "grey", "navy", "beige", "ivory", "gold", "silver", "orange",
   "セット", "セットアップ", "サイズ", "カラー", "バージョン", "テクスチャ", "アバター",
@@ -685,6 +685,8 @@ const AVATAR_STOP_WORDS = Object.freeze([
   "版", "通常版", "無料版", "支援版", "電子版", "本体", "特典", "差分", "単品", "衣装",
   "素体", "汎用", "対応", "用", "向", "設定済", "自動", "想定", "購入", "販売", "支援",
   "合計", "中身", "更新", "拡張", "魔法", "天使", "心音", "以上", "数字", "内容",
+  // 「同じです」は「同」(名簿に無い漢字1文字)が落ちて「じです」だけ残る。断片ごと止める
+  "じです",
   "赤", "青", "白", "黒", "桃", "紫", "緑", "黄", "色", "他", "等",
 ]);
 
