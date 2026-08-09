@@ -18,7 +18,7 @@ complete:
   (約86体)へ変更した。`en`が`boothAvatarAssign`の保存キーで、P10の旧キーは名簿へ残して互換。
   公開契約(`boothAvatarAssign`・バックアップの`avatarAssign`)は不変。
   実装詳細は docs/improvement-plan.md の D14〜D18 を参照。
-- A: D18(沼レポートの再集計ボタン)を`claude/p12-recount`で実装済み(統合は親)。BOOTHへは
+- C: D18(沼レポートの再集計ボタン)を検品のうえ`1.1.0`へ統合済み(cfe2ce3)。BOOTHへは
   通信せず、保存済みの索引・キャッシュ・割り当てを読み直して描画し直すだけ。公開契約は不変。
 - C: 運用ルール合成(2026-08-08): AGENTS.mdへプロジェクト契約・設計の優先順位・委任と検品を追記。
 
@@ -45,7 +45,7 @@ not-run:
 
 ## Next
 
-1. `claude/p12-recount`(D18)を検品・統合し実環境で再確認 — blocked-by: ユーザーの確認
+1. D17-c・D18の実環境再確認とpush判断 — blocked-by: ユーザーの確認
 2. 次回の正式リリースでも検証後にバージョンブランチ、`main`、リモートのSHAを一致させる — blocked-by: none
 
 ## Paths
