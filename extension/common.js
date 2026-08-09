@@ -827,8 +827,8 @@ const AVATAR_SOLO_MARKER =
   /オリジナル[3３][DdＤｄ]モデル|オリジナル[3３][DdＤｄ]アバター|オリジナルアバター|[3３][DdＤｄ]キャラクターモデル|アバター素体|#\S{1,15}[3３][DdＤｄ]\b|^アバター(?![用向対])(?=[ぁ-んァ-ヶ一-龠a-zA-Z])/g;
 
 // ハッシュタグは名前の一部ではない。「#パグ3D」「#arupaka_VRC」のような検索用の札で、
-// 残しておくと名前として拾ってしまう
-const AVATAR_HASHTAG = /#\S+/g;
+// 残しておくと名前として拾ってしまう。全角の「＃ぴちかーとの」も実データにある
+const AVATAR_HASHTAG = /[#＃]\S+/g;
 
 // 素体商品の題名から名乗りとハッシュタグを取り除いた残り。素体商品でなければ null
 function avatarSoloResidue(name) {
@@ -871,7 +871,9 @@ function avatarSoloName(name) {
 // 1語どうしの部分一致で起きた「凪 ⊂ 凪夜」の取り違えはここでは起きない
 function avatarPhraseKeys(text, index) {
   if (!text || !index || !index.phrases || index.phrases.length === 0) return [];
-  const haystack = String(text).normalize("NFKC").toLowerCase();
+  // フレーズ側(avatarSoloName)は連続空白を1つへ潰しているので、照合相手も潰す
+  // (実データ「【オリジナル3Dモデル】New  NecoMaid」は空白2連)
+  const haystack = String(text).normalize("NFKC").toLowerCase().replace(/\s+/g, " ");
   return index.phrases
     .filter((phrase) => haystack.includes(phrase.text))
     .map((phrase) => phrase.key);

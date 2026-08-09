@@ -1602,6 +1602,13 @@ check("英字のフレーズは部分一致で関連商品を寄せる",
     soloItem("【オリジナル3Dモデル】New NecoMaid", 9000),
     soloItem("NecoBody【New NecoMaid用素体】", 1000),
   ] }], {}).rows.map((r) => [r.name, r.count, r.total]), [["New NecoMaid", 2, 10000]]);
+// 実データは「New  NecoMaid」と空白が2連で入っている。フレーズ照合の両側で
+// 連続空白を1つへ潰さないと、本体商品が自分のバケツに入らない
+check("連続空白があってもフレーズで寄る",
+  aggregateByAvatar([{ id: "d22b3", items: [
+    soloItem("【オリジナル3Dモデル】New  NecoMaid", 9000),
+    soloItem("NecoBody【New NecoMaid用素体】", 1000),
+  ] }], {}).rows.map((r) => [r.count, r.total]), [[2, 10000]]);
 // 1語の名前は従来どおりトークン一致のまま(部分一致にしない)
 check("1語の素体名は部分一致で寄せない",
   aggregateByAvatar([{ id: "d22b2", items: [
@@ -1628,6 +1635,11 @@ check("「アバター」で始まる品名も素体商品として昇格する"
   aggregateByAvatar([{ id: "d22e", items: [
     soloItem("アバターかわうそ (VRChatかわうそ)", 5000)] }], {})
     .rows.map((r) => [r.key, r.name, r.total]), [["かわうそ", "かわうそ", 5000]]);
+// 全角「＃」のハッシュタグも名前から取り除く(実データ「にぃな　＃ぴちかーとの」)
+check("全角ハッシュタグも名前に残さない",
+  aggregateByAvatar([{ id: "d22e3", items: [
+    soloItem("【オリジナル３Dモデル】にぃな　＃ぴちかーとの (「猫缶」VRCセットアップ+おまけ)", 800)] }], {})
+    .rows.map((r) => [r.name, r.total]), [["にぃな", 800]]);
 // 「アバター用」「アバター向」「アバター対応」は他のアバター向けの断り書きで名前ではない
 check("アバター用・アバター対応は素体の名乗りにしない",
   aggregateByAvatar([{ id: "d22e2", items: [
