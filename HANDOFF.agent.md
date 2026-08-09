@@ -18,7 +18,7 @@ complete:
   (約86体)へ変更した。`en`が`boothAvatarAssign`の保存キーで、P10の旧キーは名簿へ残して互換。
   公開契約(`boothAvatarAssign`・バックアップの`avatarAssign`)は不変。
   実装詳細は docs/improvement-plan.md の D14〜D18 を参照。
-- A: D17-d(実環境フィードバック2点)を`claude/p12-feedback2`で実装済み(統合は親)。
+- C: D17-d(実環境フィードバック2点)を検品のうえ`1.1.0`へ統合済み(73232eb)。
   「ラビ先輩」が「先輩」になる件と、「95アバター対応」が未分類へ落ちる件を修正。
 - C: 運用ルール合成(2026-08-08): AGENTS.mdへプロジェクト契約・設計の優先順位・委任と検品を追記。
 
@@ -45,7 +45,7 @@ not-run:
 
 ## Next
 
-1. `claude/p12-feedback2`(D17-d)を検品・統合し実環境で再確認 — blocked-by: ユーザーの確認
+1. D17-c/d・D18の実環境再確認とpush判断 — blocked-by: ユーザーの確認
 2. 次回の正式リリースでも検証後にバージョンブランチ、`main`、リモートのSHAを一致させる — blocked-by: none
 
 ## Paths
