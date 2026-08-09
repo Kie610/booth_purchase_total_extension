@@ -13,8 +13,7 @@ complete:
 - C: v1.0.0を正式リリース済み(GitHub Release公開、`main`を同じSHAへfast-forward同期済み)。
 - C: `1.1.0`へP1〜P9(A1〜A5・B1〜B4・C1〜C18・D1〜D5・D10〜D13・T1)を統合済み。
   統合内訳・実装詳細・設計判断・過去の検証証跡は docs/handoff-history.md を参照。
-- A: 未統合のブランチ(統合は親が行う): `claude/p10-numa-report`(D14沼レポート)、
-  `claude/p11-health-csv`(D15・D16)、`claude/p12-numa-cluster`(D17-a・D17-b)。
+- C: P10(D14)・P11(D15・D16)・P12(D17-a/b)を検品のうえ`1.1.0`へ統合済み(2026-08-09)。
   P12はD14の固定辞書照合をトークン完全一致クラスタリングへ置き換え、名簿を`{jp, en, alt}`
   (約86体)へ変更した。`en`が`boothAvatarAssign`の保存キーで、P10の旧キーは名簿へ残して互換。
   公開契約は`boothAvatarAssign`とバックアップの`avatarAssign`のまま変えていない。
@@ -24,9 +23,9 @@ complete:
 - C: VRChatter調査(2026-08-08)より D12〜D14 と P9・P10 を improvement-plan へ起票。
 
 verified:
-- A: 2026-08-09 — evidence: status=PASS; kind=compile+runtime; command=node --check 17ファイル、
-  python -m http.server 8799 + Browserで/test/index.html(P12ブランチ);
-  counts=compile 17/0、ALL PASS 964 checks(924→964。P12で40件追加)、console errorなし
+- C: 2026-08-09 — evidence: status=PASS; kind=compile+runtime; command=node --check 17ファイル、
+  python -m http.server 8799 + Browserで/test/index.html(統合済み35b6e03を親が検品);
+  counts=compile 17/0、ALL PASS 964 checks(924→964)、実CSV637明細でノイズバケツ0を確認
 - 上記より前の検証証跡(P10=898 checks、P11=924 checks)は docs/handoff-history.md を参照。
 
 not-run:
@@ -45,8 +44,8 @@ not-run:
 
 ## Next
 
-1. P10(沼レポート)・P11(警報+CSV注記)の実環境フィードバックを反映する — blocked-by: ユーザーの確認
-3. 次回の正式リリースでも検証後にバージョンブランチ、`main`、リモートのSHAを一致させる — blocked-by: none
+1. P10〜P12の実環境フィードバックを反映する — blocked-by: ユーザーの確認
+2. 次回の正式リリースでも検証後にバージョンブランチ、`main`、リモートのSHAを一致させる — blocked-by: none
 
 ## Paths
 
