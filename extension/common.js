@@ -819,8 +819,12 @@ function avatarBucketKey(token, index) {
 // 素体商品(アバターそのもの)の名乗り。実データの表記より
 // (「オリジナル3Dモデル「しなの」」「【オリジナル3Dモデル】狛乃-Komano-」
 //  「慧 -Kei- オリジナル3Dモデル」「胴長パグ #パグ3D」「無料オリジナルアバター『ふうみ』」)
+//
+// D22 最後の「^アバター」は「アバターかわうそ (VRChatかわうそ)」のように、品名本体が
+// 「アバター」で始まってそのまま名前が続く形。「アバター用」「アバター向」「アバター対応」は
+// 名前ではなく他のアバター向けの商品の断り書きなので除く
 const AVATAR_SOLO_MARKER =
-  /オリジナル[3３][DdＤｄ]モデル|オリジナル[3３][DdＤｄ]アバター|オリジナルアバター|[3３][DdＤｄ]キャラクターモデル|アバター素体|#\S{1,15}[3３][DdＤｄ]\b/g;
+  /オリジナル[3３][DdＤｄ]モデル|オリジナル[3３][DdＤｄ]アバター|オリジナルアバター|[3３][DdＤｄ]キャラクターモデル|アバター素体|#\S{1,15}[3３][DdＤｄ]\b|^アバター(?![用向対])(?=[ぁ-んァ-ヶ一-龠a-zA-Z])/g;
 
 // ハッシュタグは名前の一部ではない。「#パグ3D」「#arupaka_VRC」のような検索用の札で、
 // 残しておくと名前として拾ってしまう
@@ -861,9 +865,24 @@ function avatarSoloName(name) {
     .trim();
 }
 
+// D22 素体昇格でできた「複数語のフレーズ」のバケツ(「New NecoMaid」)。
+// 語に割ると "new" のような一般語になってしまうので、トークンではなく
+// 正規化した文字列への部分一致で照合する。フレーズは2語以上あって長いので、
+// 1語どうしの部分一致で起きた「凪 ⊂ 凪夜」の取り違えはここでは起きない
+function avatarPhraseKeys(text, index) {
+  if (!text || !index || !index.phrases || index.phrases.length === 0) return [];
+  const haystack = String(text).normalize("NFKC").toLowerCase();
+  return index.phrases
+    .filter((phrase) => haystack.includes(phrase.text))
+    .map((phrase) => phrase.key);
+}
+
 // 文字列から見つかったバケツのキー(重複なし、現れた順)
 function avatarKeysIn(text, index) {
   const keys = [];
+  for (const key of avatarPhraseKeys(text, index)) {
+    if (!keys.includes(key)) keys.push(key);
+  }
   for (const token of avatarTokens(text)) {
     const key = avatarBucketKey(token, index);
     if (key && !keys.includes(key)) keys.push(key);
@@ -897,6 +916,8 @@ function buildAvatarIndex(results) {
   const buckets = new Set();
   const aliases = new Map();
   const names = new Map();
+  // D22 複数語のフレーズで1つのバケツになる素体名(avatarPhraseKeys が使う)
+  const phrases = [];
   const add = (map, key, productKey) => {
     if (!map.has(key)) map.set(key, new Set());
     map.get(key).add(productKey);
@@ -927,8 +948,19 @@ function buildAvatarIndex(results) {
           // 無関係な商品まで引き込む。取りこぼしは手動割り当てで直せる
           const full = avatarSoloName(item && item.name);
           if (full) aliases.set(japanese[0], full);
+        } else if (japanese.length === 0) {
+          // D22 「New NecoMaid」のように英字だけで何語かに割れる名前。日本語だけの
+          // 名前と同じく、割らずに題名まるごとを1つのバケツにする。ただし英字は
+          // "new" のような一般語に割れてしまうので、先頭語を手掛かりにはせず
+          // フレーズの部分一致(avatarPhraseKeys)で関連商品を寄せる
+          const full = avatarSoloName(item && item.name);
+          const text = full.normalize("NFKC").toLowerCase();
+          if (text && !phrases.some((phrase) => phrase.text === text)) {
+            phrases.push({ text, key: text });
+            if (!names.has(text)) names.set(text, full);
+          }
         }
-        // 英字を含んだまま3語以上に割れるものは決めない(従来どおり)
+        // 英字と日本語が混ざったまま3語以上に割れるものは決めない(従来どおり)
       }
 
       const { variation } = parseItemName(item && item.name);
@@ -952,7 +984,7 @@ function buildAvatarIndex(results) {
     if (!alias.has(token) && products.size >= 2) buckets.add(token);
   }
 
-  const index = { buckets, aliases, names };
+  const index = { buckets, aliases, names, phrases };
   const merges = [];
   for (const [pair, products] of pairProducts) {
     if (products.size < 2) continue;
@@ -1229,6 +1261,9 @@ const ITEM_VOCAB_RULES = Object.freeze([
   // ワールド商品の名乗り。「(家具付)」を含むワールドもあるので家具より先に見る
   { pattern: /ワールド販売|【ワールド本体】/, key: AVATAR_WORLD_KEY },
   { pattern: /家具/, key: AVATAR_WORLD_ITEM_KEY },
+  // D22 「珍飯亭共通素体『レザージャケット』」のように、ショップ独自の共通素体へ
+  // 向けた商品。1体のアバターではないので複数対応(アバター用アイテム)へ入れる
+  { pattern: /共通素体/, key: AVATAR_MULTI_KEY },
   // 「ギミック付き」の類は ITEM_KIND_IGNORE で先に消えているので、ここに残る
   // 「ギミック」は商品そのものの名乗り。【】の中に限る制約はこの段では外す
   { pattern: /ギミック/, key: AVATAR_MULTI_TOOL_KEY },
@@ -1241,7 +1276,9 @@ const ITEM_VOCAB_RULES = Object.freeze([
   // 髪型。「ヘアピン」などの小物は髪そのものではないので外す(下の装身具で拾う)
   {
     pattern:
-      /hair|ヘア(?!ピン|クリップ|アクセ|ゴム)|髪|ボブ|\bbob\b|ツイン|ポニー|ポニテ|\bpony|三つ編み|みつあみ|braid|おさげ|お団子|シニヨン|ウルフ|twin\s*tails?|twintails?/,
+      // D22 \blong\b は「LongCoat」「Long Skirt」のような衣類で誤爆するので、
+      // 続く語を否定先読みで除く(日本語の「ロングコート」は語彙に無いので当たらない)
+      /hair|ヘア(?!ピン|クリップ|アクセ|ゴム)|髪|ボブ|\bbob\b|ツイン|ポニー|ポニテ|\bpony|三つ編み|みつあみ|braid|おさげ|お団子|シニヨン|ウルフ|twin\s*tails?|twintails?|\btwin\b|\bstraight\b|\bmituami\b|\bosage\b|\blong\b(?!\s*(?:coat|skirt|glove))/,
     key: AVATAR_MULTI_KEY,
   },
   // 装身具・衣装
@@ -1258,11 +1295,32 @@ const ITEM_VOCAB_RULES = Object.freeze([
   },
 ]);
 
+// D22 camelCase の切れ目に空白を入れた形。「NecoLong」「DarkieBob」「mituamiOsage」の
+// ように語をつなげた品名は、そのままでは \blong\b や \bbob\b の語境界に当たらない。
+// 元の形と**両方**を並べて見るので、「AudioLink」のようにつなげた形で書いてある
+// 既存の語彙を落とすことはない
+function splitCamelCase(text) {
+  return text.replace(/([a-z])([A-Z])/g, "$1 $2");
+}
+
+// D22 既知商品の辞書(avatar-master.js の ITEM_MASTER)。語彙判定より先に見る。
+// 語彙では読み取れない固有名(「もちふぃった」「BoneSync」)を名指しで拾うためのもの
+function itemMasterSlot(text) {
+  const entry = ITEM_MASTER.find((candidate) => text.includes(candidate.match));
+  return entry ? entry.key : "";
+}
+
 // 語彙から読み取った行き先(読み取れなければ空文字=未分類のまま)
 function avatarVocabSlot(name) {
   const { base } = parseItemName(name);
-  const text = base.normalize("NFKC").toLowerCase().replace(ITEM_KIND_IGNORE, " ");
-  if (!text || ITEM_VOCAB_GUARD.test(text)) return "";
+  const normalized = base.normalize("NFKC");
+  const text = `${normalized} ${splitCamelCase(normalized)}`
+    .toLowerCase()
+    .replace(ITEM_KIND_IGNORE, " ");
+  if (!text.trim()) return "";
+  const known = itemMasterSlot(text);
+  if (known) return known;
+  if (ITEM_VOCAB_GUARD.test(text)) return "";
   const rule = ITEM_VOCAB_RULES.find((candidate) => candidate.pattern.test(text));
   return rule ? rule.key : "";
 }

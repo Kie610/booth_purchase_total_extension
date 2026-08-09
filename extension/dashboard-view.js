@@ -133,6 +133,7 @@ const avatarNoneBody = document.getElementById("avatarNoneBody");
 const avatarAssignBody = document.getElementById("avatarAssignBody");
 const avatarAssignBox = document.getElementById("avatarAssignBox");
 const avatarAssignCount = document.getElementById("avatarAssignCount");
+const avatarAssignList = document.getElementById("avatarAssignList");
 const avatarMergeHint = document.getElementById("avatarMergeHint");
 const avatarYear = document.getElementById("avatarYear");
 const avatarSortToggle = document.getElementById("avatarSortToggle");

@@ -97,6 +97,7 @@ const AVATAR_MASTER = Object.freeze([
   { jp: "ここあ", en: "cocoa", alt: ["kokoa"] },
   { jp: "森羅", en: "shinra" },
   { jp: "MUMUS", en: "mumus" },
+  { jp: "すやすやうさぎ", en: "suyasuyausagi" },
   // ここから下は D14(P10)の辞書にあった素体。当時の保存キーをそのまま en に残し、
   // 旧版で手動割り当てしたデータが名前付きのまま読めるようにしている
   { jp: "チセ", en: "chise" },
@@ -126,4 +127,25 @@ const AVATAR_MULTI_MARKERS = Object.freeze([
   "複数アバター",
   "多対応",
   "複数対応",
+]);
+
+// D22 既知商品の辞書。品名の語彙だけでは行き先を決められない固有名を名指しで拾う。
+//
+// **ここもデータだけ。**照合は common.js の itemMasterSlot が行い、
+// NFKC正規化+小文字化した品名本体への部分一致で当てる(語彙判定より先に見る)。
+//
+// match … 品名本体に含まれていれば当たる文字列。小文字で書く
+//         (「もちふぃった」のように表記ゆれがある商品は、共通する部分だけを書く)
+// key … 行き先。common.js の予約キーと同じ文字列。**保存キーなので後から変えない**
+//       ("__multi__" / "__multi_tool__" / "__world__" / "__world_item__")
+//
+// 数百件へ増やす前提の並び。索引は作らず、上から順に見るだけにしてある
+// (数百件×数百明細でも一瞬で終わる。遅くなってから索引を考える)
+const ITEM_MASTER = Object.freeze([
+  { match: "もちふぃった", key: "__multi_tool__" },
+  { match: "bonesync", key: "__multi_tool__" },
+  { match: "weightsync", key: "__multi_tool__" },
+  { match: "meshsync", key: "__multi_tool__" },
+  // 「polka」単独では音楽やポルカドット柄の商品に当たるので、商品名まで書く
+  { match: "portable light kit", key: "__multi_tool__" },
 ]);

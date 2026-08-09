@@ -653,13 +653,30 @@ avatarSortToggle.addEventListener("click", (event) => {
 
 // D14 未分類の手動割り当て。保存を待たずに描き直す(待つと選んでから
 // 反映まで間が空き、効かなかったように見える)。保存に失敗してもその場の表示は残る
+// D22 区分(select)と特定アバター(datalist付きの入力欄)のどちらからでも決められる。
+// 片方を決めたらもう片方は空へ戻す。両方に値が残ると、どちらが効いているのか
+// 画面から読めなくなる(保存できるのは商品ごとに1つだけ)
 avatarAssignBody.addEventListener("change", (event) => {
-  const select = event.target.closest("select[data-product-key]");
-  if (!select) return;
-  const key = select.dataset.productKey;
+  const control = event.target.closest("[data-product-key]");
+  if (!control) return;
+  const row = control.closest("tr");
+  const kind = row.querySelector("select[data-product-key]");
+  const avatar = row.querySelector("input[data-product-key]");
+  let value;
+  if (control === kind) {
+    value = kind.value;
+    avatar.value = "";
+  } else {
+    value = avatarAssignKeyOf(avatar.value);
+    // 候補に無い文字列のままなら、まだ選び終えていない。勝手に近いアバターへ
+    // 寄せず、保存もしない(入力はそのまま残す)
+    if (!value) return;
+    kind.value = "";
+  }
+  const key = control.dataset.productKey;
   // 「未分類のまま」は指定を持たない状態そのもの。空文字を保存すると
   // 「未分類だと明示した」という別の状態が増えてしまうので、項目ごと消す
-  if (select.value) state.avatarAssign[key] = select.value;
+  if (value) state.avatarAssign[key] = value;
   else delete state.avatarAssign[key];
   render();
   saveAvatarAssign(state.avatarAssign);

@@ -1577,6 +1577,76 @@ check("オリジナルアバターの名乗りでも素体商品として昇格�
     soloItem("無料オリジナルアバター「ふうみ」", 3000)] }], {})
     .rows.map((r) => [r.key, r.name, r.total]), [["ふうみ", "ふうみ", 3000]]);
 
+// --- D22 ユーザー実データにもとづく個別修正(品名はすべて実在の表記) ---
+// (a) 英字だけで何語かに割れる素体名は、日本語だけの名前(「ラビ先輩」)と同じく
+//     割らずに1つのバケツにする。割ると "new" のような一般語になってしまう
+check("英字だけの素体商品は名前を割らない",
+  aggregateByAvatar([{ id: "d22a", items: [
+    soloItem("【オリジナル3Dモデル】New NecoMaid", 9000)] }], {})
+    .rows.map((r) => [r.key, r.name, r.total]),
+  [["new necomaid", "New NecoMaid", 9000]]);
+// (b) 複数語のフレーズは長いので、品名本体への部分一致で寄せても
+//     1語どうしで起きた「凪 ⊂ 凪夜」の取り違えは起きない
+check("英字のフレーズは部分一致で関連商品を寄せる",
+  aggregateByAvatar([{ id: "d22b", items: [
+    soloItem("【オリジナル3Dモデル】New NecoMaid", 9000),
+    soloItem("NecoBody【New NecoMaid用素体】", 1000),
+  ] }], {}).rows.map((r) => [r.name, r.count, r.total]), [["New NecoMaid", 2, 10000]]);
+// 1語の名前は従来どおりトークン一致のまま(部分一致にしない)
+check("1語の素体名は部分一致で寄せない",
+  aggregateByAvatar([{ id: "d22b2", items: [
+    soloItem("【オリジナル3Dモデル】凪", 9000),
+    soloItem("ドレス (凪夜)", 1000),
+  ] }], {}).rows.map((r) => [r.key, r.count]), [["nagi", 1], ["nagiya", 1]]);
+// (c) camelCase の切れ目に空白を入れてから語彙を見る。語をつなげた品名は
+//     そのままでは \blong\b や \bbob\b の語境界に当たらない
+check("camelCaseの髪型もアバター用アイテムへ",
+  ["DarkieBob【FakeShadow対応】", "NecoLong", "hunwariLongStraight", "slim twin",
+   "mituamiOsage"].map(vocabSlot),
+  [AVATAR_MULTI_KEY, AVATAR_MULTI_KEY, AVATAR_MULTI_KEY, AVATAR_MULTI_KEY,
+   AVATAR_MULTI_KEY]);
+// 「long」は衣類でも使われる。否定先読みで髪型に落ちないようにする
+check("Longで始まる衣類は髪型にしない",
+  ["LongCoat", "Long Skirt", "LongGloves"].map(vocabSlot), ["", "", ""]);
+// 日本語の「ロング」は髪型の語彙に無いので従来どおり衣装として拾う
+check("ロングコートは衣装のまま", vocabSlot("ロングコート"), AVATAR_MULTI_KEY);
+// (d) ショップ独自の共通素体向けの商品。1体のアバターではないので複数対応へ
+check("共通素体の商品は複数対応アイテムへ",
+  vocabSlot("珍飯亭共通素体『レザージャケット』"), AVATAR_MULTI_KEY);
+// (e) 品名本体が「アバター」で始まり、そのまま名前が続く形も素体商品の名乗り
+check("「アバター」で始まる品名も素体商品として昇格する",
+  aggregateByAvatar([{ id: "d22e", items: [
+    soloItem("アバターかわうそ (VRChatかわうそ)", 5000)] }], {})
+    .rows.map((r) => [r.key, r.name, r.total]), [["かわうそ", "かわうそ", 5000]]);
+// 「アバター用」「アバター向」「アバター対応」は他のアバター向けの断り書きで名前ではない
+check("アバター用・アバター対応は素体の名乗りにしない",
+  aggregateByAvatar([{ id: "d22e2", items: [
+    soloItem("アバター用アクセサリー", 500),
+    soloItem("アバター対応チェッカー", 500),
+  ] }], {}).rows, []);
+// (f) 名簿に足した名前は品名本体の照合で当たる
+check("名簿に足したアバターは品名本体の照合で当たる",
+  aggregateByAvatar([{ id: "d22f", items: [
+    soloItem("【すやすやうさぎ対応】ねぶくろ【MA設定済み】", 1500)] }], {})
+    .rows.map((r) => [r.key, r.name, r.total]), [["suyasuyausagi", "すやすやうさぎ", 1500]]);
+
+// --- D22 既知商品の辞書(語彙では読み取れない固有名を名指しで拾う) ---
+// 語彙判定より先に見るので、「衣装」を含む品名でも辞書の行き先が勝つ
+check("既知商品の辞書はツールへ入れる",
+  ["【もちふぃった】お着替え衣装フィッター", "BoneSync", "WeightSync for VRChat",
+   "MeshSync", "Polka: Portable Light Kit"].map(vocabSlot),
+  [AVATAR_MULTI_TOOL_KEY, AVATAR_MULTI_TOOL_KEY, AVATAR_MULTI_TOOL_KEY,
+   AVATAR_MULTI_TOOL_KEY, AVATAR_MULTI_TOOL_KEY]);
+// 「polka」だけで拾うと柄の名前に当たるので、商品名まで一致させてある
+check("ポルカドット柄は既知商品に当たらない",
+  vocabSlot("ポルカドット柄ワンピース") === AVATAR_MULTI_TOOL_KEY, false);
+// 後から数百件へ増やせるよう、辞書はデータだけの配列にしてある
+check("既知商品の辞書はデータだけの配列",
+  [Array.isArray(ITEM_MASTER),
+   ITEM_MASTER.every((entry) =>
+     typeof entry.match === "string" && typeof entry.key === "string")],
+  [true, true]);
+
 // --- 今年のまとめ ---
 // 「はじめて出会った作者」を出すため、その年より前の注文も見る必要がある
 const summaryRows = [
@@ -3280,29 +3350,35 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   check("枠のラベルが隣の列へはみ出さない",
     kindLabel.scrollWidth <= kindLabel.clientWidth, true);
 
-  // 未分類は手で割り当てられる。選択肢は辞書から作るので、辞書へ足すだけで増える
-  const assignSelect = avatarAssignBody.querySelector("select[data-product-key]");
+  // D22 手数を減らすため、割り当ては「区分」(5択)と「特定アバター」(候補を
+  // 絞り込める入力欄)の2つに分けた。アバターは数百体になりうるので、
+  // 1つの select に全部並べると目当ての1体まで延々とスクロールすることになる
+  const assignKind = avatarAssignBody.querySelector("select[data-product-key]");
+  const assignAvatar = avatarAssignBody.querySelector("input[data-product-key]");
   check("未分類の商品を手で割り当てられる",
     [avatarAssignBody.querySelectorAll("tr").length,
-     assignSelect.options.length, assignSelect.value],
-    [1, AVATAR_MASTER.length + 5, ""]);
+     assignKind.value, assignAvatar.value],
+    [1, "", ""]);
   // D21 未分類の枠は品名単位の「◯種類」、この一覧はショップ+品名単位の「◯商品」。
   // 単位を書かないと数が合わないように見える
   check("手動割り当ての件数は商品単位と分かる形で出す",
     avatarAssignCount.textContent, "1商品");
-  // 大分類(アバター関連/ワールド関連)から選べるよう optgroup で束ねる
-  check("割り当ての選択肢を大分類でまとめる",
-    [...assignSelect.querySelectorAll("optgroup")].map((group) => group.label),
-    ["アバター関連", "ワールド関連"]);
-  check("割り当ての選択肢に区分キーがある",
-    [...assignSelect.options].map((o) => o.value).slice(0, 3),
-    ["", AVATAR_MULTI_KEY, AVATAR_MULTI_TOOL_KEY]);
-  check("割り当ての選択肢にワールド関連がある",
-    [...assignSelect.options].map((o) => o.value).slice(-2),
-    [AVATAR_WORLD_KEY, AVATAR_WORLD_ITEM_KEY]);
+  check("区分は5つの行き先を直接選べる",
+    [...assignKind.options].map((o) => o.value),
+    ["", AVATAR_MULTI_KEY, AVATAR_MULTI_TOOL_KEY, AVATAR_WORLD_KEY, AVATAR_WORLD_ITEM_KEY]);
+  // 候補は名簿と、買ったものから見つかったバケツから作る。行ごとに作らず1つを共有する
+  check("特定アバターは候補を絞り込める入力欄で選ぶ",
+    [assignAvatar.getAttribute("list"), assignAvatar.type,
+     avatarAssignList.options.length,
+     [...avatarAssignList.options].some((o) => o.value === "森羅")],
+    ["avatarAssignList", "text", AVATAR_MASTER.length, true]);
+  // キーボードだけで操作できるよう、どちらにも読み上げ用の名前を付ける
+  check("割り当ての操作部品に読み上げ用の名前がある",
+    [assignKind.getAttribute("aria-label"), assignAvatar.getAttribute("aria-label")],
+    ["なぞのふくの区分", "なぞのふくの特定アバター"]);
 
-  assignSelect.value = "shinra";
-  assignSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  assignAvatar.value = "森羅";
+  assignAvatar.dispatchEvent(new Event("change", { bubbles: true }));
   check("割り当てが集計に効く",
     [...avatarTableBody.querySelectorAll("tr.shop-row")].map((tr) => tr.cells[1].textContent),
     ["森羅", "マヌカ"]);
@@ -3311,6 +3387,27 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   // 保存から読み戻せること(引っ越し・開き直しで消えない)
   check("保存した割り当てを読み戻せる", await loadAvatarAssign(),
     { "https://sourflavor.booth.pm/ / なぞのふく": "shinra" });
+  // 保存済みの割り当ては入力欄に表示名で出る(区分は「未分類のまま」の見た目に戻る)
+  check("保存済みの割り当てを新しいUIで表示する",
+    [avatarAssignBody.querySelector("select[data-product-key]").value,
+     avatarAssignBody.querySelector("input[data-product-key]").value],
+    ["", "森羅"]);
+
+  // 候補に無い文字列のままなら保存しない。勝手に近いアバターへ寄せない
+  const strayAvatar = avatarAssignBody.querySelector("input[data-product-key]");
+  strayAvatar.value = "しんら";
+  strayAvatar.dispatchEvent(new Event("change", { bubbles: true }));
+  check("候補に一致しない入力は保存しない", await readStored(AVATAR_ASSIGN_KEY, null),
+    { "https://sourflavor.booth.pm/ / なぞのふく": "shinra" });
+
+  // 片方を決めたらもう片方は空へ戻す。両方に値が残るとどちらが効いているのか読めない
+  const swapKind = avatarAssignBody.querySelector("select[data-product-key]");
+  swapKind.value = AVATAR_MULTI_TOOL_KEY;
+  swapKind.dispatchEvent(new Event("change", { bubbles: true }));
+  check("区分を選ぶとアバターの指定を置き換える",
+    [await readStored(AVATAR_ASSIGN_KEY, null),
+     avatarAssignBody.querySelector("input[data-product-key]").value],
+    [{ "https://sourflavor.booth.pm/ / なぞのふく": AVATAR_MULTI_TOOL_KEY }, ""]);
 
   // 「未分類のまま」は指定を持たない状態そのもの。項目ごと消して元へ戻す
   const undoSelect = avatarAssignBody.querySelector("select[data-product-key]");

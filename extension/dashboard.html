@@ -631,17 +631,23 @@
            <summary><h3>未分類の商品を手で割り当てる<span class="accordion-count" id="avatarAssignCount"></span></h3></summary>
            <p class="hint">
              どの分類にも当たらなかった「未分類」の商品だけを並べます。
-             まず「アバター関連」か「ワールド関連」かを選び、その中から行き先を選びます。
+             行き先は「区分」か「特定アバター」のどちらかで決めます。
+             「区分」は複数対応アイテム・アバター用ギミック・ツール・ワールド・ワールド用アイテムから選び、
+             特定のアバターへ入れたいときは隣の入力欄にアバター名を打って候補から選びます。
+             片方を決めるともう片方は空に戻ります。
              選んだ内容はブラウザに保存され、バックアップ（データの引っ越し）にも含まれます。
              「未分類のまま」を選べば取り消せます。
            </p>
            <!-- 併記(「ミルフィ - Milfy」)から見つけた統合候補。別アバターの併記
                 (「Milfy, Eku」)と機械的に区別できないので、自動では統合しない -->
            <p class="hint" id="avatarMergeHint" hidden></p>
+           <!-- 特定アバターの候補。行ごとに作ると数百体×商品数の option ができるので、
+                1つを全行で共有する -->
+           <datalist id="avatarAssignList"></datalist>
            <div class="table-scroll">
              <table class="data-table">
                <thead>
-                 <tr><th>商品名</th><th>ショップ</th><th class="num">点数</th><th class="num">合計額</th><th>割り当て</th></tr>
+                 <tr><th>商品名</th><th>ショップ</th><th class="num">点数</th><th class="num">合計額</th><th>区分</th><th>特定アバター</th></tr>
                </thead>
                <tbody id="avatarAssignBody"></tbody>
              </table>

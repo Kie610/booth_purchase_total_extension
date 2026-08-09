@@ -2296,6 +2296,13 @@ tr.shop-row:hover td {
   max-width: 200px;
 }
 
+/* D22 特定アバターの入力欄(datalist で候補を絞り込む)。
+   区分の select と同じ幅にそろえ、2つの列が同じ重さに見えるようにする */
+.avatar-assign-avatar {
+  width: 100%;
+  max-width: 200px;
+}
+
 /* ---- データ出力 ---- */
 
 .export-preview-title {

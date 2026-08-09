@@ -274,55 +274,95 @@ function avatarPeriodLabel() {
   return avatarSelectedYear === RANKING_ALL_PERIOD ? "" : `${avatarSelectedYear}年`;
 }
 
-// 割り当ての選択肢。まず「アバター関連かワールド関連か」の大分類を選べるよう、
-// 見出し付きのまとまり(optgroup)で返す。アバターの並びは、買ったものから自動で
-// 見つかったもの(D17-a のバケツ)が先で、そのあとに名簿(avatar-master.js)の残りを続ける。
-// 名簿に無いアバターへも割り当てられる
-function avatarAssignOptions(rows) {
-  const avatars = [
-    [AVATAR_MULTI_KEY, "複数対応（アバター用アイテム）"],
-    [AVATAR_MULTI_TOOL_KEY, "アバター用ギミック・ツール"],
-  ];
-  const seen = new Set(["", AVATAR_MULTI_KEY, AVATAR_MULTI_TOOL_KEY]);
+// D22 割り当てUIは「区分」と「特定アバター」の2つに分ける。
+// アバターは数百体になりうるので、1つの select に全部並べると目当ての1体まで
+// 延々とスクロールすることになる。区分(5択)は select、アバターは datalist 付きの
+// 入力欄にして、名前を打てば絞り込めるようにする(2026-08-09 ユーザー要望)。
+// 保存形式(`boothAvatarAssign`)は変えない。どちらも保存するのは同じキー。
+
+// 区分のドロップダウンの中身。値はそのまま保存キー
+const AVATAR_ASSIGN_KINDS = Object.freeze([
+  ["", "未分類のまま"],
+  [AVATAR_MULTI_KEY, "複数対応アイテム"],
+  [AVATAR_MULTI_TOOL_KEY, "アバター用ギミック・ツール"],
+  [AVATAR_WORLD_KEY, "ワールド"],
+  [AVATAR_WORLD_ITEM_KEY, "ワールド用アイテム"],
+]);
+
+// 入力欄に打たれた表示名 → 保存キー。描画のたびに作り直す
+let avatarAssignKeyByLabel = new Map();
+let avatarAssignLabelByKey = new Map();
+
+// アバターの候補。買ったものから自動で見つかったもの(D17-a のバケツ)が先で、
+// そのあとに名簿(avatar-master.js)の残り、最後に保存済みだが今回の集計には
+// 現れなかったキー(旧版の割り当てなど)を続ける。
+// 同じ表示名が2つのキーに付いたときは、選び分けられるようキーを併記する
+function avatarAssignCandidates(rows, products) {
+  const nameByKey = new Map();
   for (const row of rows) {
-    if (seen.has(row.key)) continue;
-    seen.add(row.key);
-    avatars.push([row.key, row.name]);
+    if (row.key && !isAvatarBucketKey(row.key)) nameByKey.set(row.key, row.name);
   }
   for (const avatar of AVATAR_MASTER) {
-    if (seen.has(avatar.en)) continue;
-    seen.add(avatar.en);
-    avatars.push([avatar.en, avatar.jp]);
+    if (!nameByKey.has(avatar.en)) nameByKey.set(avatar.en, avatar.jp);
   }
-  return [
-    // 見出しの無いまとまり。「未分類のまま」はどの大分類にも属さない
-    ["", [["", "未分類のまま"]]],
-    ["アバター関連", avatars],
-    [
-      "ワールド関連",
-      [
-        [AVATAR_WORLD_KEY, "ワールド"],
-        [AVATAR_WORLD_ITEM_KEY, "ワールド用アイテム"],
-      ],
-    ],
-  ];
-}
-
-function avatarAssignSelect(product, groups) {
-  const select = el("select", "avatar-assign-select");
-  select.dataset.productKey = product.key;
-  select.setAttribute("aria-label", `${product.name}の割り当て`);
-  for (const [label, options] of groups) {
-    const parent = label ? select.appendChild(el("optgroup")) : select;
-    if (label) parent.label = label;
-    for (const [value, text] of options) {
-      parent.appendChild(el("option", "", text)).value = value;
+  for (const product of products) {
+    const key = product.assigned;
+    if (key && !isAvatarBucketKey(key) && !nameByKey.has(key)) {
+      nameByKey.set(key, avatarDisplayName(key));
     }
   }
-  // 選択肢に無いkeyが保存されていると select は空選択になる。勝手に別のアバターへ
-  // 寄せないよう、選択肢を足さずそのままにする(保存値は消さない)
-  select.value = product.assigned;
+  const duplicated = new Set();
+  const seenNames = new Set();
+  for (const name of nameByKey.values()) {
+    if (seenNames.has(name)) duplicated.add(name);
+    seenNames.add(name);
+  }
+  return Array.from(nameByKey, ([key, name]) => [
+    duplicated.has(name) ? `${name}（${key}）` : name,
+    key,
+  ]);
+}
+
+// 候補を datalist へ流し込み、表示名とキーの対応表を作り直す
+function renderAvatarAssignCandidates(candidates) {
+  avatarAssignKeyByLabel = new Map(candidates.map(([label, key]) => [label, key]));
+  avatarAssignLabelByKey = new Map(candidates.map(([label, key]) => [key, label]));
+  avatarAssignList.innerHTML = "";
+  for (const [label] of candidates) {
+    avatarAssignList.appendChild(el("option")).value = label;
+  }
+}
+
+// 入力欄の文字列に対応する保存キー。候補に無ければ空文字(=まだ選び終えていない)
+function avatarAssignKeyOf(label) {
+  return avatarAssignKeyByLabel.get(String(label).trim()) || "";
+}
+
+function avatarAssignKindSelect(product) {
+  const select = el("select", "avatar-assign-select");
+  select.dataset.productKey = product.key;
+  select.setAttribute("aria-label", `${product.name}の区分`);
+  for (const [value, text] of AVATAR_ASSIGN_KINDS) {
+    select.appendChild(el("option", "", text)).value = value;
+  }
+  // 特定アバターへ割り当て済みの商品と、選択肢に無いキーが保存されている商品は
+  // 「未分類のまま」の見た目に戻す(隣のアバター欄が本当の割り当てを出す)
+  select.value = isAvatarBucketKey(product.assigned) ? product.assigned : "";
   return select;
+}
+
+function avatarAssignAvatarInput(product) {
+  const input = el("input", "avatar-assign-avatar");
+  input.type = "text";
+  input.dataset.productKey = product.key;
+  input.setAttribute("list", avatarAssignList.id);
+  input.setAttribute("aria-label", `${product.name}の特定アバター`);
+  input.placeholder = "アバター名で検索";
+  // 保存済みのキーが候補に無ければキーをそのまま出す(勝手に別のアバターへ寄せない)
+  input.value = isAvatarBucketKey(product.assigned)
+    ? ""
+    : avatarAssignLabelByKey.get(product.assigned) || product.assigned;
+  return input;
 }
 
 // 「日本語表記とローマ字表記が同じアバターかもしれない」組。自動で統合すると
@@ -337,7 +377,8 @@ function renderAvatarMergeHint(merges) {
     `同じアバターの日本語表記とローマ字表記かもしれません（別のアバターを並べただけのこともあるため、自動ではまとめていません）。`;
 }
 
-function renderAvatarAssignRows(products, options) {
+function renderAvatarAssignRows(products, candidates) {
+  renderAvatarAssignCandidates(candidates);
   avatarAssignBody.innerHTML = "";
   // 「◯商品」はショップ+品名でまとめた数。未分類の枠の「◯種類」(品名の数)とは
   // 単位が違うので、数が合わなくても取り違えないよう単位を書く
@@ -349,9 +390,12 @@ function renderAvatarAssignRows(products, options) {
     tr.appendChild(td(product.shop));
     tr.appendChild(td(`${product.count}点`, "num"));
     tr.appendChild(td(formatYen(product.total), "num"));
-    const cell = td("");
-    cell.appendChild(avatarAssignSelect(product, options));
-    tr.appendChild(cell);
+    const kindCell = td("");
+    kindCell.appendChild(avatarAssignKindSelect(product));
+    tr.appendChild(kindCell);
+    const avatarCell = td("");
+    avatarCell.appendChild(avatarAssignAvatarInput(product));
+    tr.appendChild(avatarCell);
     avatarAssignBody.appendChild(tr);
   }
 }
@@ -448,7 +492,10 @@ function renderAvatarArea(results = currentResults()) {
   renderAvatarGroup(avatarWorldBox, avatarWorldBody, [stats.world, stats.worldItem]);
   renderAvatarGroup(avatarNoneBox, avatarNoneBody, [stats.none]);
   renderAvatarMergeHint(stats.merges);
-  renderAvatarAssignRows(stats.products, avatarAssignOptions(stats.rows));
+  renderAvatarAssignRows(
+    stats.products,
+    avatarAssignCandidates(stats.rows, stats.products)
+  );
 }
 
 // ---- 今年のまとめ ------------------------------------------------------
