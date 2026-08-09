@@ -189,6 +189,7 @@ function topAvatarName(stats) {
 function avatarShareOtherLine(stats) {
   const parts = [];
   if (stats.multiCount > 0) parts.push(`複数対応 ${stats.multiCount}点`);
+  if (stats.worldCount > 0) parts.push(`ワールド関連 ${stats.worldCount}点`);
   if (stats.unclassifiedCount > 0) parts.push(`未分類 ${stats.unclassifiedCount}点`);
   return parts.length > 0 ? `※順位の外: ${parts.join(" / ")}` : "";
 }

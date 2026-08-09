@@ -274,33 +274,50 @@ function avatarPeriodLabel() {
   return avatarSelectedYear === RANKING_ALL_PERIOD ? "" : `${avatarSelectedYear}年`;
 }
 
-// 割り当ての選択肢。買ったものから自動で見つかったアバター(D17-a のバケツ)を先に並べ、
-// そのあとに名簿(avatar-master.js)の残りを続ける。名簿に無いアバターへも割り当てられる
+// 割り当ての選択肢。まず「アバター関連かワールド関連か」の大分類を選べるよう、
+// 見出し付きのまとまり(optgroup)で返す。アバターの並びは、買ったものから自動で
+// 見つかったもの(D17-a のバケツ)が先で、そのあとに名簿(avatar-master.js)の残りを続ける。
+// 名簿に無いアバターへも割り当てられる
 function avatarAssignOptions(rows) {
-  const options = [
-    ["", "未分類のまま"],
-    [AVATAR_MULTI_KEY, "複数対応"],
+  const avatars = [
+    [AVATAR_MULTI_KEY, "複数対応（アバター用アイテム）"],
+    [AVATAR_MULTI_TOOL_KEY, "アバター用ギミック・ツール"],
   ];
-  const seen = new Set(["", AVATAR_MULTI_KEY]);
+  const seen = new Set(["", AVATAR_MULTI_KEY, AVATAR_MULTI_TOOL_KEY]);
   for (const row of rows) {
     if (seen.has(row.key)) continue;
     seen.add(row.key);
-    options.push([row.key, row.name]);
+    avatars.push([row.key, row.name]);
   }
   for (const avatar of AVATAR_MASTER) {
     if (seen.has(avatar.en)) continue;
     seen.add(avatar.en);
-    options.push([avatar.en, avatar.jp]);
+    avatars.push([avatar.en, avatar.jp]);
   }
-  return options;
+  return [
+    // 見出しの無いまとまり。「未分類のまま」はどの大分類にも属さない
+    ["", [["", "未分類のまま"]]],
+    ["アバター関連", avatars],
+    [
+      "ワールド関連",
+      [
+        [AVATAR_WORLD_KEY, "ワールド"],
+        [AVATAR_WORLD_ITEM_KEY, "ワールド用アイテム"],
+      ],
+    ],
+  ];
 }
 
-function avatarAssignSelect(product, options) {
+function avatarAssignSelect(product, groups) {
   const select = el("select", "avatar-assign-select");
   select.dataset.productKey = product.key;
   select.setAttribute("aria-label", `${product.name}の割り当て`);
-  for (const [value, label] of options) {
-    select.appendChild(el("option", "", label)).value = value;
+  for (const [label, options] of groups) {
+    const parent = label ? select.appendChild(el("optgroup")) : select;
+    if (label) parent.label = label;
+    for (const [value, text] of options) {
+      parent.appendChild(el("option", "", text)).value = value;
+    }
   }
   // 選択肢に無いkeyが保存されていると select は空選択になる。勝手に別のアバターへ
   // 寄せないよう、選択肢を足さずそのままにする(保存値は消さない)
@@ -320,20 +337,6 @@ function renderAvatarMergeHint(merges) {
     `同じアバターの日本語表記とローマ字表記かもしれません（別のアバターを並べただけのこともあるため、自動ではまとめていません）。`;
 }
 
-function renderAvatarKindRows(rows) {
-  avatarKindBody.innerHTML = "";
-  avatarKindBox.hidden = rows.length === 0;
-  for (const row of rows) {
-    const tr = el("tr", "avatar-other-row");
-    // 複数対応・未分類より名前が長いので、幅を固定しない専用のclassを使う
-    tr.appendChild(td(row.name, "avatar-kind-label"));
-    tr.appendChild(td(`${row.items.length}種類`));
-    tr.appendChild(countCell(row.count));
-    tr.appendChild(amountCell(row.total));
-    avatarKindBody.appendChild(tr);
-  }
-}
-
 function renderAvatarAssignRows(products, options) {
   avatarAssignBody.innerHTML = "";
   avatarAssignCount.textContent = `${products.length}件`;
@@ -351,18 +354,21 @@ function renderAvatarAssignRows(products, options) {
   }
 }
 
-// 複数対応・未分類は順位に混ぜない。混ぜると「Full Packが1位」のような、
-// アバター別の内訳として意味の無い順位になる
-function renderAvatarOtherRows(result) {
-  avatarOtherBody.innerHTML = "";
-  for (const row of [result.multi, result.none]) {
+// 順位表に混ぜない枠(複数対応・ワールド関連・未分類)。混ぜると
+// 「Full Packが1位」のような、アバター別の内訳として意味の無い順位になる。
+// 0点の行と、行が1つも残らない枠は出さない
+function renderAvatarGroup(box, body, rows) {
+  const shown = rows.filter((row) => row.count > 0);
+  body.innerHTML = "";
+  box.hidden = shown.length === 0;
+  for (const row of shown) {
     // .shop-row を付けない。押しても開かない行に押せる見た目を付けない
     const tr = el("tr", "avatar-other-row");
-    tr.appendChild(td(row.name, "avatar-other-label"));
+    tr.appendChild(td(row.name, "avatar-kind-label"));
     tr.appendChild(td(`${row.items.length}種類`));
     tr.appendChild(countCell(row.count));
     tr.appendChild(amountCell(row.total));
-    avatarOtherBody.appendChild(tr);
+    body.appendChild(tr);
   }
 }
 
@@ -389,18 +395,24 @@ function renderAvatarArea(results = currentResults()) {
   const stats = aggregateByAvatar(scoped, state.avatarAssign, avatarSort);
   renderAvatarSortToggle();
 
-  // 素体を特定できた商品が1つも無ければ、順位表を出しても空欄が並ぶだけ。
-  // ただし未分類が残っているなら、手で割り当てられるよう画面は出す
-  const hasAny = stats.rows.length > 0 || stats.multi.count > 0 || stats.none.count > 0;
+  const allRows = avatarAllRows(stats);
+  const totalCount = allRows.reduce((sum, row) => sum + row.count, 0);
+  // 数えられる商品が1つも無ければ、順位表を出しても空欄が並ぶだけ
+  const hasAny = totalCount > 0;
   avatarEmpty.hidden = hasAny;
   avatarArea.hidden = !hasAny;
   avatarShareStats = buildAvatarShareStats(scoped, stats, avatarPeriodLabel());
   if (!hasAny) {
     avatarTableBody.innerHTML = "";
-    avatarOtherBody.innerHTML = "";
     avatarAssignBody.innerHTML = "";
-    avatarKindBody.innerHTML = "";
-    avatarKindBox.hidden = true;
+    for (const [box, body] of [
+      [avatarMultiBox, avatarMultiBody],
+      [avatarWorldBox, avatarWorldBody],
+      [avatarNoneBox, avatarNoneBody],
+    ]) {
+      body.innerHTML = "";
+      box.hidden = true;
+    }
     avatarMergeHint.hidden = true;
     avatarEmpty.textContent =
       avatarSelectedYear === RANKING_ALL_PERIOD
@@ -410,16 +422,19 @@ function renderAvatarArea(results = currentResults()) {
   }
 
   const shown = stats.rows.slice(0, RANKING_LIMIT);
+  // D20 分類は排他なので、4つの点数を足すと全商品の点数になる。
+  // 数が合うことをその場で確かめられるよう、内訳と全体を同じ行に出す
+  const avatarCount = stats.rows.reduce((sum, row) => sum + row.count, 0);
+  const multiCount = stats.multiItem.count + stats.multiTool.count;
+  const worldCount = stats.world.count + stats.worldItem.count;
   avatarStats.textContent =
     `対象の期間: ${avatarPeriodLabel() || "全期間"} / アバター: ${stats.rows.length}体` +
     (stats.rows.length > shown.length ? ` (上位${shown.length}体を表示)` : "") +
-    ` / 複数対応: ${stats.multi.count}点 / 未分類: ${stats.none.count}点`;
+    ` / 特定${avatarCount}点 / 複数対応${multiCount}点 / ワールド関連${worldCount}点` +
+    ` / 未分類${stats.none.count}点(全${totalCount}点)`;
 
   // 金額を読めなかった商品を0として足すと、少ない額を正しい合計に見せてしまう
-  const unknown = [...stats.rows, stats.multi, stats.none].reduce(
-    (sum, row) => sum + row.unknown,
-    0
-  );
+  const unknown = allRows.reduce((sum, row) => sum + row.unknown, 0);
   avatarUnknown.hidden = unknown === 0;
   if (unknown > 0) {
     avatarUnknown.textContent =
@@ -427,8 +442,9 @@ function renderAvatarArea(results = currentResults()) {
   }
 
   renderShopRows(avatarTableBody, shown, RANKING_BOLD);
-  renderAvatarOtherRows(stats);
-  renderAvatarKindRows(aggregateByItemKind(scoped));
+  renderAvatarGroup(avatarMultiBox, avatarMultiBody, [stats.multiItem, stats.multiTool]);
+  renderAvatarGroup(avatarWorldBox, avatarWorldBody, [stats.world, stats.worldItem]);
+  renderAvatarGroup(avatarNoneBox, avatarNoneBody, [stats.none]);
   renderAvatarMergeHint(stats.merges);
   renderAvatarAssignRows(stats.products, avatarAssignOptions(stats.rows));
 }

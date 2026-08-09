@@ -34,10 +34,11 @@ function buildAvatarShareStats(results, stats, periodLabel = "") {
     avatarCount: stats.rows.length,
     // 別枠のぶんも共有側で断る。順位表だけを見せると、Full Packや未分類が
     // 消えた分の金額まで順位に入っているように読めてしまう
-    multiCount: stats.multi.count,
+    multiCount: stats.multiItem.count + stats.multiTool.count,
+    worldCount: stats.world.count + stats.worldItem.count,
     unclassifiedCount: stats.none.count,
     pending: results.filter((r) => needsCollect(state.cache[r.id])).length,
-    unknown: [...stats.rows, stats.multi, stats.none].reduce((sum, row) => sum + row.unknown, 0),
+    unknown: avatarAllRows(stats).reduce((sum, row) => sum + row.unknown, 0),
     indexComplete: indexIsComplete(state.index),
     giftFilter,
   };

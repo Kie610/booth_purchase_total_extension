@@ -1140,7 +1140,8 @@ check("手動割り当てが自動判定より優先される",
     { [itemProductKey(avatarItem("パーカー (Milfy)", 100))]: "shinra" }),
   { kind: "avatar", key: "shinra", manual: true });
 check("手動で複数対応にもできる",
-  classifyItemAvatar(assignTarget, { [assignKey]: AVATAR_MULTI_KEY }).kind, "multi");
+  classifyItemAvatar(assignTarget, { [assignKey]: AVATAR_MULTI_KEY }),
+  { kind: "bucket", key: AVATAR_MULTI_KEY, manual: true });
 // 名簿に無いkey(未知トークンのバケツ、将来の版のバックアップ)も本人の指定として通す。
 // 表示名はキーのまま。こちらの都合で未分類へ落とさない
 check("名簿に無いkeyでも本人の指定として通す",
@@ -1164,7 +1165,8 @@ const avatarRows = [
 const avatarAgg = aggregateByAvatar(avatarRows, {});
 check("アバター別は金額の多い順", avatarAgg.rows.map((r) => [r.name, r.count, r.total]),
   [["マヌカ", 2, 1500], ["森羅", 1, 1200]]);
-check("Full Packは複数対応の枠へ", [avatarAgg.multi.count, avatarAgg.multi.total], [1, 300]);
+check("Full Packは複数対応(アバター用アイテム)の枠へ",
+  [avatarAgg.multiItem.count, avatarAgg.multiItem.total], [1, 300]);
 check("素体名の無い商品は未分類の枠へ", [avatarAgg.none.count, avatarAgg.none.total], [1, 800]);
 check("順位に複数対応・未分類を混ぜない",
   avatarAgg.rows.some((r) => r.key === AVATAR_MULTI_KEY || r.key === ""), false);
@@ -1217,7 +1219,7 @@ check("併記された日本語表記とローマ字表記は1つのバケツに
 // 別アバターの併記は「複数対応」。1体へ寄せると支出が偏る
 check("別アバターの併記は複数対応",
   aggregateByAvatar([{ id: "n4", items: [unknownItem("服", "Milfy, Eku", 700)] }], {})
-    .multi.count, 1);
+    .multiItem.count, 1);
 
 // --- D17-a ノイズがバケツにならないこと(2026-08-09の検品で実測した131個への回帰) ---
 // 品名本体まで新規バケツの発生源にすると、実データで hair・bob・pose・devil のような
@@ -1321,7 +1323,7 @@ check("複数対応マーカー付きの髪型は複数対応に入る", (() => 
       name: "〈17アバター対応〉 ✦｡💫Astroid｡✦" },
     { ...item("♡⑅ Divine Hair ⑅♡", 500), name: "♡⑅ Divine Hair ⑅♡" },
   ] }], {});
-  return [agg.multi.total, agg.none.total];
+  return [agg.multiItem.total, agg.none.total];
 })(), [700, 500]);
 // 「ワールド用」を含めば髪の商品でもワールド用が先に当たる
 check("髪の商品でもワールド用は種別に入る",
@@ -1337,14 +1339,22 @@ const kindRows = [{ id: "k1", items: [
   { ...item("VRC Parameter Compressor", 500), name: "VRC Parameter Compressor" },
   { ...item("ふわもこパーカー (マヌカ)", 300), name: "ふわもこパーカー (マヌカ)" },
 ] }];
+// D20 種別は排他分類の一段。ワールド・ワールド用アイテム・アバター用ギミック/ツールの
+// 行へそれぞれ入り、どれにも当たらない商品(マヌカのパーカー)は順位表へ行く
+const kindAgg = aggregateByAvatar(kindRows, {});
 check("種別ごとに金額と点数を出す",
-  aggregateByItemKind(kindRows).map((r) => [r.name, r.count, r.total]),
+  [kindAgg.world, kindAgg.worldItem, kindAgg.multiTool].map((r) => [r.name, r.count, r.total]),
   [["ワールド", 1, 2000], ["ワールド用アイテム", 1, 800],
    ["アバター用ギミック・ツール", 1, 500]]);
-check("種別を読み取れなければ枠を出さない", aggregateByItemKind([
-  { id: "k2", items: [{ ...item("ふわもこパーカー (マヌカ)", 300),
-    name: "ふわもこパーカー (マヌカ)" }] }]), []);
-check("明細の無い注文は種別に数えない", aggregateByItemKind([{ id: "k3", items: null }]), []);
+check("種別を読み取れなければ種別の行は0点", (() => {
+  const agg = aggregateByAvatar([{ id: "k2", items: [
+    { ...item("ふわもこパーカー (マヌカ)", 300), name: "ふわもこパーカー (マヌカ)" }] }], {});
+  return [agg.world.count, agg.worldItem.count, agg.multiTool.count];
+})(), [0, 0, 0]);
+check("明細の無い注文は種別に数えない", (() => {
+  const agg = aggregateByAvatar([{ id: "k3", items: null }], {});
+  return avatarAllRows(agg).reduce((sum, row) => sum + row.count, 0);
+})(), 0);
 // ユーザー実環境で当たっていた実データの表記(2026-08-09フィードバック)
 check("実データのツール・ワールド用商品を見分ける",
   ["【Unityメッシュ編集ツール】EreMorph", "【アバター衣装変換ツール】Alterith",
@@ -1359,7 +1369,7 @@ const kindNoneRows = [{ id: "kn", items: [
 ] }];
 const kindNoneAgg = aggregateByAvatar(kindNoneRows, {});
 check("種別に当たった商品は未分類に数えない",
-  [kindNoneAgg.none.count, kindNoneAgg.none.total], [1, 800]);
+  [kindNoneAgg.none.count, kindNoneAgg.none.total, kindNoneAgg.multiTool.count], [1, 800, 1]);
 // 種別に当たった商品は手動割り当ての一覧にも出さない(2026-08-09 ユーザーフィードバック)。
 // 一覧は「どの分類にも当たらなかったもの」だけに絞る
 check("種別に当たった商品は手動割り当ての一覧に出さない",
@@ -1369,6 +1379,79 @@ check("手動割り当ては種別より優先される",
     [itemProductKey({ ...item("【Unityメッシュ編集ツール】EreMorph", 900),
       name: "【Unityメッシュ編集ツール】EreMorph" })]: "manuka",
   }).rows.map((r) => [r.key, r.total]), [["manuka", 900]]);
+
+// --- D20 排他分類(1商品はちょうど1つの分類にだけ入る) ---
+// 優先順は 手動 > 特定アバター > ワールド関連 > アバター用ギミック・ツール >
+// 複数対応マーカー > 未分類。各分類の点数を足すと全商品の点数になる
+const taxonItem = (name, price) => ({ ...item(name, price), name });
+const taxonRows = [{ id: "t1", items: [
+  taxonItem("【25アバター対応】ドレス (Milfy)", 1000),
+  taxonItem("【Udonギミック】水面", 800),
+  taxonItem("【アバター衣装変換ツール】Alterith", 700),
+  taxonItem("Halo Ring 95アバター対応", 600),
+  taxonItem("なぞの服 (Lサイズ)", 500),
+  taxonItem("【VRC向けワールド】BREEZE", 400),
+] }];
+const taxonAgg = aggregateByAvatar(taxonRows, {});
+check("優先順どおりにちょうど1つの分類へ入る",
+  [taxonAgg.rows.map((r) => [r.key, r.total]),
+   [taxonAgg.multiItem.total, taxonAgg.multiTool.total,
+    taxonAgg.world.total, taxonAgg.worldItem.total, taxonAgg.none.total]],
+  [[["milfy", 1000]], [600, 700, 400, 800, 500]]);
+check("分類の点数を足すと全商品の点数になる",
+  avatarAllRows(taxonAgg).reduce((sum, row) => sum + row.count, 0), 6);
+check("分類の金額を足すと全商品の金額になる",
+  avatarAllRows(taxonAgg).reduce((sum, row) => sum + row.total, 0), 4000);
+// 同じ商品が2つの分類に現れない(枠どうしで品名が重ならないこと)
+check("同じ商品名が2つの分類に出ない", (() => {
+  const names = avatarAllRows(taxonAgg).flatMap((row) => row.items);
+  return [names.length, new Set(names).size];
+})(), [6, 6]);
+// 特定アバターに決まるものは種別・複数対応より先に確定する
+check("特定アバターは種別より優先される",
+  aggregateByAvatar([{ id: "t5", items: [taxonItem("森羅用ワールドギミック 髪飾り", 900)] }], {})
+    .rows.map((r) => [r.key, r.total]), [["shinra", 900]]);
+check("種別は複数対応マーカーより優先される",
+  aggregateByAvatar([{ id: "t6", items: [taxonItem("【25アバター対応】お着替えツール", 300)] }], {})
+    .multiTool.total, 300);
+// ワールド用ギミックは「ワールド用アイテム」に含める(枠を増やさない)
+check("ワールド用ギミックはワールド用アイテムに入る",
+  aggregateByAvatar([{ id: "t7", items: [
+    taxonItem("【VRChatワールドギミック】UnyStylus", 800)] }], {}).worldItem.count, 1);
+
+// --- D20 手動割り当ての区分キー(公開契約への追加。既存キーの意味は変えない) ---
+const taxonAssignItems = ["服A", "服B", "服C", "服D"].map((name, index) =>
+  taxonItem(`${name} (Lサイズ)`, 100 * (index + 1)));
+const taxonAssigned = aggregateByAvatar([{ id: "t3", items: taxonAssignItems }], {
+  [itemProductKey(taxonAssignItems[0])]: AVATAR_MULTI_KEY,
+  [itemProductKey(taxonAssignItems[1])]: AVATAR_MULTI_TOOL_KEY,
+  [itemProductKey(taxonAssignItems[2])]: AVATAR_WORLD_KEY,
+  [itemProductKey(taxonAssignItems[3])]: AVATAR_WORLD_ITEM_KEY,
+});
+check("手動割り当ての区分キー4種がそれぞれの行へ入る",
+  [taxonAssigned.multiItem.total, taxonAssigned.multiTool.total,
+   taxonAssigned.world.total, taxonAssigned.worldItem.total,
+   taxonAssigned.none.count, taxonAssigned.rows.length],
+  [100, 200, 300, 400, 0, 0]);
+// 区分キーは分類そのものの指定。アバターのkeyと混ぜない
+check("区分キーの手動割り当てはbucketとして返る",
+  AVATAR_BUCKETS.map((bucket) =>
+    classifyItemAvatar(taxonAssignItems[0],
+      { [itemProductKey(taxonAssignItems[0])]: bucket.key }).kind),
+  ["bucket", "bucket", "bucket", "bucket"]);
+const taxonSolo = taxonItem("なぞのなにか (Lサイズ)", 500);
+check("区分キーを保存すると未分類から消える", (() => {
+  const before = aggregateByAvatar([{ id: "t4", items: [taxonSolo] }], {});
+  const after = aggregateByAvatar([{ id: "t4", items: [taxonSolo] }],
+    { [itemProductKey(taxonSolo)]: AVATAR_MULTI_TOOL_KEY });
+  return [before.none.count, after.none.count, after.multiTool.count,
+    after.products.map((product) => product.assigned)];
+})(), [1, 0, 1, [AVATAR_MULTI_TOOL_KEY]]);
+// 知らないキーを消さない方針は区分キーを足しても変わらない
+check("区分キーは保存形式としてそのまま残る",
+  normalizeAvatarAssign({ a: AVATAR_MULTI_TOOL_KEY, b: AVATAR_WORLD_KEY,
+    c: AVATAR_WORLD_ITEM_KEY }),
+  { a: "__multi_tool__", b: "__world__", c: "__world_item__" });
 
 // --- D17-a 素体商品(アバターそのもの)は1商品でも昇格する ---
 // 同じ素体を2回買わないので2商品の昇格則には永久に届かない。あからさまにアバターなのに
@@ -3104,26 +3187,37 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
       [tr.cells[1].textContent, tr.cells[2].textContent, tr.cells[3].textContent]),
     [["マヌカ", "2点", "¥1,500"], ["森羅", "1点", "¥1,200"]]);
   // 複数対応・未分類は順位に混ぜず、別枠で必ず見せる(隠すと支出が消えたように見える)
-  check("複数対応と未分類を別枠で出す",
-    [...avatarOtherBody.querySelectorAll("tr")].map((tr) =>
+  // D20 複数対応・ワールド関連・未分類はそれぞれの枠で数える。0件の枠は出さない
+  check("複数対応の枠を出す",
+    [...avatarMultiBody.querySelectorAll("tr")].map((tr) =>
       [tr.cells[0].textContent, tr.cells[2].textContent, tr.cells[3].textContent]),
-    [["複数対応", "1点", "¥300"], ["未分類", "1点", "¥800"]]);
-  check("件数を見出しにも出す",
-    [avatarStats.textContent.includes("複数対応: 1点"),
-     avatarStats.textContent.includes("未分類: 1点")], [true, true]);
+    [["アバター用アイテム", "1点", "¥300"]]);
+  check("未分類の枠を出す",
+    [...avatarNoneBody.querySelectorAll("tr")].map((tr) =>
+      [tr.cells[0].textContent, tr.cells[2].textContent, tr.cells[3].textContent]),
+    [["未分類", "1点", "¥800"]]);
+  check("0件の枠は隠す", [avatarWorldBox.hidden, avatarMultiBox.hidden], [true, false]);
+  // 未分類は一番下(ワールド関連より後ろ)に置く
+  check("未分類の枠は一番下に置く",
+    Boolean(avatarWorldBox.compareDocumentPosition(avatarNoneBox) &
+      Node.DOCUMENT_POSITION_FOLLOWING), true);
+  // 検算。足すと全商品の点数になることが読み取れる形で出す
+  check("分類の内訳と全体を見出しに出す",
+    ["特定3点", "複数対応1点", "ワールド関連0点", "未分類1点(全5点)"].map((part) =>
+      avatarStats.textContent.includes(part)), [true, true, true, true]);
 
-  // 種別枠のラベルは複数対応・未分類より長い。84px固定のclassを流用すると
+  // 枠のラベルは「複数対応」「未分類」より長い。幅を固定すると
   // 「〇種類」のセルへ重なる(2026-08-09 ユーザーフィードバック)
-  renderAvatarKindRows(aggregateByItemKind([{ id: "kd", items: [
-    { ...item("【VRChatワールドギミック】UnyStylus", 800),
-      name: "【VRChatワールドギミック】UnyStylus" },
-  ] }]));
-  const kindLabel = avatarKindBody.querySelector("td");
-  check("種別枠のラベルは専用のclassを使う",
-    [avatarKindBox.hidden, kindLabel.className, kindLabel.textContent],
+  renderAvatarGroup(avatarWorldBox, avatarWorldBody, [
+    { key: AVATAR_WORLD_ITEM_KEY, name: "ワールド用アイテム", count: 1, total: 800,
+      unknown: 0, items: ["【VRChatワールドギミック】UnyStylus"] },
+  ]);
+  const kindLabel = avatarWorldBody.querySelector("td");
+  check("枠のラベルは幅を固定しないclassを使う",
+    [avatarWorldBox.hidden, kindLabel.className, kindLabel.textContent],
     [false, "avatar-kind-label", "ワールド用アイテム"]);
   // 実CSSで測る。中身がセル幅に収まっていれば隣の列へはみ出さない
-  check("種別枠のラベルが隣の列へはみ出さない",
+  check("枠のラベルが隣の列へはみ出さない",
     kindLabel.scrollWidth <= kindLabel.clientWidth, true);
 
   // 未分類は手で割り当てられる。選択肢は辞書から作るので、辞書へ足すだけで増える
@@ -3131,9 +3225,17 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   check("未分類の商品を手で割り当てられる",
     [avatarAssignBody.querySelectorAll("tr").length,
      assignSelect.options.length, assignSelect.value],
-    [1, AVATAR_MASTER.length + 2, ""]);
-  check("割り当ての選択肢に複数対応がある",
-    [...assignSelect.options].map((o) => o.value).slice(0, 2), ["", AVATAR_MULTI_KEY]);
+    [1, AVATAR_MASTER.length + 5, ""]);
+  // 大分類(アバター関連/ワールド関連)から選べるよう optgroup で束ねる
+  check("割り当ての選択肢を大分類でまとめる",
+    [...assignSelect.querySelectorAll("optgroup")].map((group) => group.label),
+    ["アバター関連", "ワールド関連"]);
+  check("割り当ての選択肢に区分キーがある",
+    [...assignSelect.options].map((o) => o.value).slice(0, 3),
+    ["", AVATAR_MULTI_KEY, AVATAR_MULTI_TOOL_KEY]);
+  check("割り当ての選択肢にワールド関連がある",
+    [...assignSelect.options].map((o) => o.value).slice(-2),
+    [AVATAR_WORLD_KEY, AVATAR_WORLD_ITEM_KEY]);
 
   assignSelect.value = "shinra";
   assignSelect.dispatchEvent(new Event("change", { bubbles: true }));
@@ -3195,7 +3297,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   setAvatarYear("2025");
   check("期間を絞ると対象が変わる",
     [avatarTableBody.querySelectorAll("tr.shop-row").length,
-     avatarOtherBody.querySelectorAll("tr")[1].cells[2].textContent], [0, "1点"]);
+     avatarNoneBody.querySelectorAll("tr")[0].cells[2].textContent], [0, "1点"]);
   setAvatarYear("all");
 
   // 共有(画面に出している順位そのものを出す。順位の外の件数も必ず添える)

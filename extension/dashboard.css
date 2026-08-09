@@ -2282,16 +2282,10 @@ tr.shop-row:hover td {
 
 /* ---- D14 沼レポート(アバター別支出内訳) ---- */
 
-/* 「複数対応」「未分類」は順位に混ぜない別枠。順位の列と同じ幅にそろえつつ、
-   押しても開かないので押せる見た目(順位行の cursor: pointer)は付けない */
-.avatar-other-row td.avatar-other-label {
-  width: 84px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-/* D17-b 種別枠のラベル。「ワールド用アイテム」「ギミック・ツール」は
-   複数対応・未分類より長く、84px固定だと隣の「〇種類」へ重なる。幅は中身に任せる */
+/* 順位に混ぜない枠(複数対応・ワールド関連・未分類)のラベル。
+   押しても開かないので押せる見た目(順位行の cursor: pointer)は付けない。
+   「ワールド用アイテム」「アバター用ギミック・ツール」は長いので、幅を固定すると
+   隣の「〇種類」へ重なる。幅は中身に任せる */
 .avatar-other-row td.avatar-kind-label {
   font-weight: 700;
   white-space: nowrap;

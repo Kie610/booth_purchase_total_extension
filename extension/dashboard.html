@@ -590,33 +590,47 @@
            <tbody id="avatarTableBody"></tbody>
          </table>
 
-         <h3 class="export-preview-title">複数対応・未分類</h3>
-         <p class="hint">
-           順位には入れずに別枠で数えています。「複数対応」はFull Packなど複数の素体に
-           対応する商品、「未分類」は素体名を読み取れなかった商品です。
-         </p>
-         <table class="data-table ranking-table">
-           <tbody id="avatarOtherBody"></tbody>
-         </table>
-
-         <!-- D17-b 種別枠。アバター名ではなく品名本体の言葉づかいから読み取るので、
-              アバターの順位表とは混ぜずに別枠で出す -->
-         <div id="avatarKindBox" hidden>
-           <h3 class="export-preview-title">種別（ワールド・ギミック・ツール）</h3>
+         <!-- D20 排他分類。1商品はちょうど1つの枠にだけ入るので、
+              順位表とここの点数を足すと商品の総点数になる -->
+         <div id="avatarMultiBox" hidden>
+           <h3 class="export-preview-title">複数対応（アバター用）</h3>
            <p class="hint">
-             アバターを特定できない買いもののうち、品名から種別を読み取れたものを数えます。
-             <strong>ここに出た商品は「未分類」には数えません。</strong>
-             読み取れなかったものは無理に分類せず、ここには出しません。
+             アバターを1体に絞れない、アバター向けの買いものです。「Full Pack」や
+             「25アバター対応」のように複数の素体へ対応する商品と、品名から
+             アバター用のギミック・ツールと読み取れた商品を分けて数えます。
            </p>
            <table class="data-table ranking-table">
-             <tbody id="avatarKindBody"></tbody>
+             <tbody id="avatarMultiBody"></tbody>
+           </table>
+         </div>
+
+         <div id="avatarWorldBox" hidden>
+           <h3 class="export-preview-title">ワールド関連</h3>
+           <p class="hint">
+             品名からワールド向けと読み取れた買いものです。
+             <strong>ワールド用ギミックは「ワールド用アイテム」に含みます。</strong>
+           </p>
+           <table class="data-table ranking-table">
+             <tbody id="avatarWorldBody"></tbody>
+           </table>
+         </div>
+
+         <div id="avatarNoneBox" hidden>
+           <h3 class="export-preview-title">未分類</h3>
+           <p class="hint">
+             上のどれにも当たらなかった商品です。<strong>推測で振り分けません。</strong>
+             下の「未分類の商品を手で割り当てる」から商品単位で直せます。
+           </p>
+           <table class="data-table ranking-table">
+             <tbody id="avatarNoneBody"></tbody>
            </table>
          </div>
 
          <details class="accordion" id="avatarAssignBox">
            <summary><h3>未分類の商品を手で割り当てる<span class="accordion-count" id="avatarAssignCount"></span></h3></summary>
            <p class="hint">
-             アバター・複数対応・種別のどれにも当たらなかった商品だけを並べます。
+             どの分類にも当たらなかった「未分類」の商品だけを並べます。
+             まず「アバター関連」か「ワールド関連」かを選び、その中から行き先を選びます。
              選んだ内容はブラウザに保存され、バックアップ（データの引っ越し）にも含まれます。
              「未分類のまま」を選べば取り消せます。
            </p>

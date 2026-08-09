@@ -604,8 +604,33 @@ function aggregateByShop(results, sortBy) {
 // 1つも見つからなければ「未分類」として、そのまま画面に出す。直したいときは
 // 商品単位の手動割り当てで上書きしてもらう。
 
-// 「複数対応」を表す予約キー。辞書の key とぶつからないよう記号で囲む
+// ---- D20 排他分類の予約キー --------------------------------------------
+//
+// 沼レポートは**1商品をちょうど1つの分類にだけ数える**。分類は順に
+//  1. 手動割り当て / 2. 特定アバター / 3. ワールド関連 / 4. アバター用ギミック・ツール
+//  5. 複数対応マーカー / 6. 未分類
+// の優先順で決める(先に当たったところで確定する)。各分類の件数を足すと
+// 商品の総点数になり、画面の検算行で確かめられる。
+//
+// 予約キーは辞書の key とぶつからないよう記号で囲む。手動割り当ての保存値
+// (`boothAvatarAssign`)にもそのまま入るので、**後から名前を変えない**。
+// `__multi__` は D14 からある既存キーで、意味(複数対応のアバター用アイテム)は変えない
 const AVATAR_MULTI_KEY = "__multi__";
+const AVATAR_MULTI_TOOL_KEY = "__multi_tool__";
+const AVATAR_WORLD_KEY = "__world__";
+const AVATAR_WORLD_ITEM_KEY = "__world_item__";
+
+// 予約キーの行。並びはそのまま画面の表示順になる
+const AVATAR_BUCKETS = Object.freeze([
+  { key: AVATAR_MULTI_KEY, name: "アバター用アイテム" },
+  { key: AVATAR_MULTI_TOOL_KEY, name: "アバター用ギミック・ツール" },
+  { key: AVATAR_WORLD_KEY, name: "ワールド" },
+  { key: AVATAR_WORLD_ITEM_KEY, name: "ワールド用アイテム" },
+]);
+
+function isAvatarBucketKey(key) {
+  return AVATAR_BUCKETS.some((bucket) => bucket.key === key);
+}
 
 // 対応する括弧の組。BOOTHの商品名には半角と全角のどちらも現れる
 const VARIATION_BRACKETS = { ")": "(", "）": "（" };
@@ -975,28 +1000,51 @@ function itemProductKey(item) {
 //  1. 手動割り当て(本人が決めたものを推測で覆さない)
 //  2. バリエーション名(「商品名 (エク)」の括弧の中。最も確度が高い)
 //  3. 商品名の本体(テクスチャ系など、素体名が品名側にしか出ない商品の補完)
-// 2 と 3 のどちらでも、素体名が2つ以上見つかれば「複数対応」にする。
+// 素体名を**1体に絞れた**ものだけがアバターの順位に入る。2体以上見つかったときと、
+// 「25アバター対応」のような体数の名乗りがあったときは複数対応(kind "multi")。
 // 1つも見つからなければ「未分類」。ここで当てずっぽうに1つ選ばない
+//
+// D20 特定アバターは複数対応マーカーより優先する。「【25アバター対応】ドレス (Milfy)」は
+// Milfy 1体に決まるので、体数の名乗りに負けない。そのためマーカーを見つけても
+// すぐには確定せず、残りの手掛かりで1体に絞れないか最後まで見る
+//
 // index は buildAvatarIndex の結果。省略すると名簿に載っているアバターだけを見る
 // (単票の判定や、集計を通さない呼び出し用)
 function classifyItemAvatar(item, assignments, index = null) {
   const manual = assignments ? assignments[itemProductKey(item)] : undefined;
   if (typeof manual === "string" && manual) {
-    if (manual === AVATAR_MULTI_KEY) return { kind: "multi", key: AVATAR_MULTI_KEY, manual: true };
+    // 予約キー(複数対応・ギミック/ツール・ワールド関連)は分類そのものの指定
+    if (isAvatarBucketKey(manual)) return { kind: "bucket", key: manual, manual: true };
     // 名簿に無いキー(未知トークンのバケツ、旧版で保存された割り当て)もそのまま通す。
     // 本人が指定したものを、こちらの都合で未分類へ落とさない。表示名は
     // avatarDisplayName がキーのまま出す
     return { kind: "avatar", key: manual, manual: true };
   }
   const { base, variation } = parseItemName(item && item.name);
+  let multi = false;
   for (const text of [variation, base]) {
     if (!text) continue;
-    if (hasAvatarMultiMarker(text)) return { kind: "multi", key: AVATAR_MULTI_KEY, manual: false };
     const keys = avatarKeysIn(text, index);
     if (keys.length === 1) return { kind: "avatar", key: keys[0], manual: false };
+    // 2体以上並んでいるなら、後ろの手掛かりを見ても1体には絞れない
     if (keys.length > 1) return { kind: "multi", key: AVATAR_MULTI_KEY, manual: false };
+    if (hasAvatarMultiMarker(text)) multi = true;
   }
+  if (multi) return { kind: "multi", key: AVATAR_MULTI_KEY, manual: false };
   return { kind: "none", key: "", manual: false };
+}
+
+// 排他分類の全行(特定アバター・予約キーの4行・未分類)。点数の検算と、
+// 金額を読めなかった商品の集計に使う
+function avatarAllRows(stats) {
+  return [
+    ...stats.rows,
+    stats.multiItem,
+    stats.multiTool,
+    stats.world,
+    stats.worldItem,
+    stats.none,
+  ];
 }
 
 function emptyAvatarRow(key, name) {
@@ -1008,17 +1056,32 @@ function finishAvatarRow(row) {
   return { ...rest, items: Array.from(items).sort((a, b) => a.localeCompare(b, "ja")) };
 }
 
+// 商品1件の行き先(予約キー・アバターのkey・未分類の "")をちょうど1つ決める。
+// D20 の優先順そのもの。手動割り当てと特定アバターが先で、次に品名本体から読み取る
+// 種別(ワールド関連 → アバター用ギミック・ツール)、最後に複数対応マーカーを見る
+function avatarSlotKey(verdict, item) {
+  if (verdict.kind === "avatar" || verdict.kind === "bucket") return verdict.key;
+  const kindKey = classifyItemKind(item && item.name);
+  if (kindKey) return ITEM_KIND_BUCKET[kindKey];
+  return verdict.kind === "multi" ? AVATAR_MULTI_KEY : "";
+}
+
 // アバター別の合計・点数。
 //
 // **ショップ別ランキングと同じく、注文単位のお支払金額は使えない。**1つの注文が
 // 複数のアバター向け商品にまたがるため、商品の合計(単価×数量+BOOST)で集計する。
 // 送料やクーポンは入らないので、全部足しても全体の合計額とは一致しない。画面で断ること。
 //
+// D20 分類は排他。rows(特定アバター)・予約キーの4行・none(未分類)の点数を足すと、
+// 明細のある商品の総点数になる。
+//
 // 返り値の products は手動割り当てUIの受け皿。未分類のものと、手動で割り当て済みの
 // ものだけを載せる(割り当て済みを外すと、間違えたときに戻せなくなる)
 function aggregateByAvatar(results, assignments = {}, sortBy = DEFAULT_SHOP_SORT) {
   const rows = new Map();
-  const multi = emptyAvatarRow(AVATAR_MULTI_KEY, "複数対応");
+  const buckets = new Map(
+    AVATAR_BUCKETS.map((bucket) => [bucket.key, emptyAvatarRow(bucket.key, bucket.name)])
+  );
   const none = emptyAvatarRow("", "未分類");
   const products = new Map();
   // バケツは買ったものぜんぶを見ないと決まらないので、1件ずつの判定より先に組む
@@ -1028,36 +1091,29 @@ function aggregateByAvatar(results, assignments = {}, sortBy = DEFAULT_SHOP_SORT
     if (!Array.isArray(result.items)) continue;
     for (const item of result.items) {
       const verdict = classifyItemAvatar(item, assignments, index);
-      let row = null;
-      let kindKey = "";
-      if (verdict.kind === "multi") row = multi;
-      else if (verdict.kind === "none") {
-        // D17-b 種別枠(ワールド・ツール等)が受け持つ商品は「未分類」に数えない。
-        // 二重に数えると未分類が膨らみ、アバター名を読み取れなかった買いものの量が
-        // 読めなくなる。手動割り当て済みの保存値は種別より優先して尊重する
-        kindKey = classifyItemKind(item && item.name);
-        if (!kindKey) row = none;
-      } else {
-        if (!rows.has(verdict.key)) {
-          rows.set(verdict.key, emptyAvatarRow(verdict.key, avatarDisplayName(verdict.key, index)));
+      const slot = avatarSlotKey(verdict, item);
+      let row;
+      if (slot === "") row = none;
+      else if (buckets.has(slot)) row = buckets.get(slot);
+      else {
+        if (!rows.has(slot)) {
+          rows.set(slot, emptyAvatarRow(slot, avatarDisplayName(slot, index)));
         }
-        row = rows.get(verdict.key);
+        row = rows.get(slot);
       }
 
       const quantity = itemQuantity(item);
       const count = typeof quantity === "number" ? quantity : 0;
       const amount = itemAmount(item);
-      if (row) {
-        row.count += count;
-        if (item.name) row.items.add(item.name);
-        if (amount === null) row.unknown++;
-        else row.total += amount;
-      }
+      row.count += count;
+      if (item.name) row.items.add(item.name);
+      if (amount === null) row.unknown++;
+      else row.total += amount;
 
       // 手動で直せる対象は「どの分類にも当たらなかったもの」と「手動割り当て済みのもの」
       // だけ。アバター・複数対応・種別のどれかに自動で当たったものまで並べると
       // 一覧が長くなりすぎる(2026-08-09 ユーザーフィードバック)
-      if (!verdict.manual && (verdict.kind !== "none" || kindKey)) continue;
+      if (!verdict.manual && slot !== "") continue;
       const productKey = itemProductKey(item);
       if (!products.has(productKey)) {
         products.set(productKey, {
@@ -1081,7 +1137,10 @@ function aggregateByAvatar(results, assignments = {}, sortBy = DEFAULT_SHOP_SORT
     rows: Array.from(rows.values())
       .map(finishAvatarRow)
       .sort((a, b) => compare(a, b) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)),
-    multi: finishAvatarRow(multi),
+    multiItem: finishAvatarRow(buckets.get(AVATAR_MULTI_KEY)),
+    multiTool: finishAvatarRow(buckets.get(AVATAR_MULTI_TOOL_KEY)),
+    world: finishAvatarRow(buckets.get(AVATAR_WORLD_KEY)),
+    worldItem: finishAvatarRow(buckets.get(AVATAR_WORLD_ITEM_KEY)),
     none: finishAvatarRow(none),
     products: Array.from(products.values()).sort(
       (a, b) => b.total - a.total || a.name.localeCompare(b.name, "ja")
@@ -1091,11 +1150,12 @@ function aggregateByAvatar(results, assignments = {}, sortBy = DEFAULT_SHOP_SORT
   };
 }
 
-// ---- D17-b 種別枠(ワールド・ワールド用アイテム・ギミック/ツール) ---------
+// ---- D17-b 種別の読み取り(ワールド・ワールド用アイテム・ギミック/ツール) ---
 //
-// アバターの順位表とは別枠。判定に使うのは**品名の本体だけ**で、バリエーション名は見ない
+// 判定に使うのは**品名の本体だけ**で、バリエーション名は見ない
 // (バリエーション名は素体名の置き場所であって、商品の種類を書く場所ではない)。
 // どれにも当たらなければ種別なしにする。無理に3つのどれかへ押し込まない。
+// D20 以降、種別は aggregateByAvatar の排他分類の一段(優先順3・4)として使う。
 
 // 「ギミック付き」「ギミック搭載」は衣装のおまけの説明。種別の手掛かりにしない
 const ITEM_KIND_IGNORE = /ギミック(付き?|つき|搭載|入り)/g;
@@ -1107,10 +1167,9 @@ const ITEM_KIND_MA_GIMMICK =
   /(?=[\s\S]*(?:\bma式|\bma対応|【ma[^】]*】|modular\s*avatar|モジュラーアバター))(?=[\s\S]*ギミック)/i;
 
 const ITEM_KIND_RULES = Object.freeze([
-  { key: "world", name: "ワールド", pattern: /向けワールド|【[^】]{0,8}ワールド】|ワールドアセット/ },
+  { key: "world", pattern: /向けワールド|【[^】]{0,8}ワールド】|ワールドアセット/ },
   {
     key: "world-item",
-    name: "ワールド用アイテム",
     // Udon(UdonSharp・U#)はVRChatのワールド用スクリプト環境。
     // これを名乗るギミックはアバター用ではなくワールド用
     pattern: /ワールドギミック|ワールド用|ワールド想定|\budon|\bu#/i,
@@ -1119,7 +1178,6 @@ const ITEM_KIND_RULES = Object.freeze([
   // 買いものなので、複数対応マーカーがあれば複数対応、無ければ未分類として扱う
   {
     key: "tool",
-    name: "アバター用ギミック・ツール",
     // 「ギミック」は【】の中に書かれているときだけ種別の名乗りとみなす。
     // 品名の途中に出るものは「シャンパンギミック」のような商品そのものの名前でありうる。
     // ponytail: 【】を使わない純粋なギミック商品は取りこぼす。既知の限界として残し、
@@ -1142,31 +1200,13 @@ function classifyItemKind(name) {
   return key;
 }
 
-// 種別ごとの金額・点数。当たった種別だけを ITEM_KIND_RULES の並び順で返す
-function aggregateByItemKind(results) {
-  const rows = new Map();
-  for (const result of results || []) {
-    if (!Array.isArray(result.items)) continue;
-    for (const item of result.items) {
-      const key = classifyItemKind(item && item.name);
-      if (!key) continue;
-      if (!rows.has(key)) {
-        const rule = ITEM_KIND_RULES.find((candidate) => candidate.key === key);
-        rows.set(key, emptyAvatarRow(key, rule.name));
-      }
-      const row = rows.get(key);
-      const quantity = itemQuantity(item);
-      row.count += typeof quantity === "number" ? quantity : 0;
-      if (item.name) row.items.add(item.name);
-      const amount = itemAmount(item);
-      if (amount === null) row.unknown++;
-      else row.total += amount;
-    }
-  }
-  return ITEM_KIND_RULES.filter((rule) => rows.has(rule.key)).map((rule) =>
-    finishAvatarRow(rows.get(rule.key))
-  );
-}
+// 種別から排他分類の行き先へ。ワールド用ギミックは world-item に入っているので、
+// 画面の「ワールド用アイテム」がそのままワールド用ギミックも受け持つ
+const ITEM_KIND_BUCKET = Object.freeze({
+  world: AVATAR_WORLD_KEY,
+  "world-item": AVATAR_WORLD_ITEM_KEY,
+  tool: AVATAR_MULTI_TOOL_KEY,
+});
 
 // 手動割り当ての保存値。壊れた値や、この版に無いアバターの割り当てが混ざっていても
 // 画面が壊れないよう、形だけを整える(知らないkeyは消さずに残す。辞書へ追加されれば
