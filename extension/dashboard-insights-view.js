@@ -339,7 +339,9 @@ function renderAvatarMergeHint(merges) {
 
 function renderAvatarAssignRows(products, options) {
   avatarAssignBody.innerHTML = "";
-  avatarAssignCount.textContent = `${products.length}件`;
+  // 「◯商品」はショップ+品名でまとめた数。未分類の枠の「◯種類」(品名の数)とは
+  // 単位が違うので、数が合わなくても取り違えないよう単位を書く
+  avatarAssignCount.textContent = `${products.length}商品`;
   avatarAssignBox.hidden = products.length === 0;
   for (const product of products) {
     const tr = el("tr");

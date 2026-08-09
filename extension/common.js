@@ -708,7 +708,8 @@ const AVATAR_STOP_WORDS = Object.freeze([
   "フォント", "シェーダー", "パーティクル", "アニメーション", "コーヒーをおごる",
   "カンタン", "オマケ", "ノミ", "ホワイト", "ブラック", "レッド", "ブルー", "グリーン",
   "ピンク", "イエロー", "パープル", "グレー", "ベージュ", "ゴールド", "シルバー", "オレンジ",
-  "版", "通常版", "無料版", "支援版", "電子版", "本体", "特典", "差分", "単品", "衣装",
+  // 「無料」は値段の話でアバター名ではない(「無料オリジナルアバター『ふうみ』」)
+  "版", "通常版", "無料", "無料版", "支援版", "電子版", "本体", "特典", "差分", "単品", "衣装",
   "素体", "汎用", "対応", "用", "向", "設定済", "自動", "想定", "購入", "販売", "支援",
   "合計", "中身", "更新", "拡張", "魔法", "天使", "心音", "以上", "数字", "内容",
   // 「同じです」は「同」(名簿に無い漢字1文字)が落ちて「じです」だけ残る。断片ごと止める
@@ -817,9 +818,9 @@ function avatarBucketKey(token, index) {
 
 // 素体商品(アバターそのもの)の名乗り。実データの表記より
 // (「オリジナル3Dモデル「しなの」」「【オリジナル3Dモデル】狛乃-Komano-」
-//  「慧 -Kei- オリジナル3Dモデル」「胴長パグ #パグ3D」)
+//  「慧 -Kei- オリジナル3Dモデル」「胴長パグ #パグ3D」「無料オリジナルアバター『ふうみ』」)
 const AVATAR_SOLO_MARKER =
-  /オリジナル[3３][DdＤｄ]モデル|オリジナル[3３][DdＤｄ]アバター|[3３][DdＤｄ]キャラクターモデル|アバター素体|#\S{1,15}[3３][DdＤｄ]\b/g;
+  /オリジナル[3３][DdＤｄ]モデル|オリジナル[3３][DdＤｄ]アバター|オリジナルアバター|[3３][DdＤｄ]キャラクターモデル|アバター素体|#\S{1,15}[3３][DdＤｄ]\b/g;
 
 // ハッシュタグは名前の一部ではない。「#パグ3D」「#arupaka_VRC」のような検索用の札で、
 // 残しておくと名前として拾ってしまう
@@ -1063,7 +1064,9 @@ function avatarSlotKey(verdict, item) {
   if (verdict.kind === "avatar" || verdict.kind === "bucket") return verdict.key;
   const kindKey = classifyItemKind(item && item.name);
   if (kindKey) return ITEM_KIND_BUCKET[kindKey];
-  return verdict.kind === "multi" ? AVATAR_MULTI_KEY : "";
+  if (verdict.kind === "multi") return AVATAR_MULTI_KEY;
+  // D21 ここまで全部外れたものだけ、品名の語彙から行き先を読む
+  return avatarVocabSlot(item && item.name);
 }
 
 // アバター別の合計・点数。
@@ -1207,6 +1210,62 @@ const ITEM_KIND_BUCKET = Object.freeze({
   "world-item": AVATAR_WORLD_ITEM_KEY,
   tool: AVATAR_MULTI_TOOL_KEY,
 });
+
+// ---- D21 未分類の直前に見る語彙 ----------------------------------------
+//
+// 実CSVの未分類210件を数えたところ、およそ7割は品名の語彙だけで行き先が決まった
+// (髪型・装身具・衣装がアバター用アイテム、素材とMA系ギミックがツール、家具がワールド用)。
+// **他の判定がすべて外れたときだけ**通る最後の砦なので、当てにいっても
+// 上位の分類を壊さない。先に当たった規則で1つに決める(品名だけで決まる純粋関数)。
+//
+// 判定に使うのは品名の**本体**を NFKC 正規化+小文字化したもの。
+// 「𝐒𝐰𝐞𝐞𝐭 𝐃𝐫𝐨𝐩 𝐁𝐫𝐚𝐢𝐝𝐬 𝐇𝐚𝐢𝐫」のような装飾文字はNFKCでASCIIへ折れる
+
+// 語彙判定そのものを掛けない品名。実CSVで誤爆を確認した3種類
+// (立ち絵素材の「衣装差分」、音声・ASMR素材、フォント商品)はアバターの買いものではない
+const ITEM_VOCAB_GUARD = /立ち絵|音声|asmr|フォント/;
+
+const ITEM_VOCAB_RULES = Object.freeze([
+  // ワールド商品の名乗り。「(家具付)」を含むワールドもあるので家具より先に見る
+  { pattern: /ワールド販売|【ワールド本体】/, key: AVATAR_WORLD_KEY },
+  { pattern: /家具/, key: AVATAR_WORLD_ITEM_KEY },
+  // 「ギミック付き」の類は ITEM_KIND_IGNORE で先に消えているので、ここに残る
+  // 「ギミック」は商品そのものの名乗り。【】の中に限る制約はこの段では外す
+  { pattern: /ギミック/, key: AVATAR_MULTI_TOOL_KEY },
+  // 制作に使う素材・道具。アバターにもワールドにも使えるのでツール枠へ入れる
+  {
+    pattern:
+      /マテリアル|matcap|テクスチャ|シェーダ|メッシュ|\bmesh|アイコン|\bicons?\b|絵文字|ステッカー|するやつ|\bposes?\b|ポーズ/,
+    key: AVATAR_MULTI_TOOL_KEY,
+  },
+  // 髪型。「ヘアピン」などの小物は髪そのものではないので外す(下の装身具で拾う)
+  {
+    pattern:
+      /hair|ヘア(?!ピン|クリップ|アクセ|ゴム)|髪|ボブ|\bbob\b|ツイン|ポニー|ポニテ|\bpony|三つ編み|みつあみ|braid|おさげ|お団子|シニヨン|ウルフ|twin\s*tails?|twintails?/,
+    key: AVATAR_MULTI_KEY,
+  },
+  // 装身具・衣装
+  {
+    pattern:
+      /ヘイロー|halo|天使の輪|角|horns?|尻尾|しっぽ|猫耳|ネイル|nail|ピアス|イヤリング|リング|チョーカー|メガネ|めがね|眼鏡|glasses|eyewear|レンズ|lens|帽|キャップ|\bcap\b|ベレー|ティアラ|花冠|かみさし|ヘッドドレス|ベール|veil|マント|ポンチョ|パンプス|ブーツ|衣装|服|ドレス|dress|costume|コート|パジャマ|pajamas|アイマスク|eyemask|翼|わっか|ウィッグ|浴衣|yukata|傘|うちわ|アクセ|花飾り|リボン|ribbon|アホ毛/,
+    key: AVATAR_MULTI_KEY,
+  },
+  // MA・PhysBone を名乗るだけの商品(スマホ・追従ギミックなど)。
+  // MA対応の**衣装**は上の装身具で先に拾われるので、ここには来ない
+  {
+    pattern: /\bma対応|\bma式|modular\s*avatar|モジュラーアバター|physbone|\bpb対応|audiolink/,
+    key: AVATAR_MULTI_TOOL_KEY,
+  },
+]);
+
+// 語彙から読み取った行き先(読み取れなければ空文字=未分類のまま)
+function avatarVocabSlot(name) {
+  const { base } = parseItemName(name);
+  const text = base.normalize("NFKC").toLowerCase().replace(ITEM_KIND_IGNORE, " ");
+  if (!text || ITEM_VOCAB_GUARD.test(text)) return "";
+  const rule = ITEM_VOCAB_RULES.find((candidate) => candidate.pattern.test(text));
+  return rule ? rule.key : "";
+}
 
 // 手動割り当ての保存値。壊れた値や、この版に無いアバターの割り当てが混ざっていても
 // 画面が壊れないよう、形だけを整える(知らないkeyは消さずに残す。辞書へ追加されれば

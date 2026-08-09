@@ -1160,7 +1160,7 @@ const avatarRows = [
     items: [avatarItem("パーカー (マヌカ)", 1000), avatarItem("スカート (マヌカ)", 500),
             avatarItem("髪 (森羅)", 1200), avatarItem("セット (【Full Pack】)", 300)] },
   { id: "v2", date: "2025年8月1日 10:00", amount: 800,
-    items: [avatarItem("なぞの服 (Lサイズ)", 800)] },
+    items: [avatarItem("なぞのふく (Lサイズ)", 800)] },
 ];
 const avatarAgg = aggregateByAvatar(avatarRows, {});
 check("アバター別は金額の多い順", avatarAgg.rows.map((r) => [r.name, r.count, r.total]),
@@ -1174,15 +1174,15 @@ check("購入数編にも切り替えられる",
   aggregateByAvatar(avatarRows, {}, "count").rows.map((r) => r.name), ["マヌカ", "森羅"]);
 // 未分類は手で割り当てる受け皿として並べる(自動で当たったものは並べない)
 check("手動割り当ての候補は未分類のものだけ",
-  avatarAgg.products.map((p) => p.name), ["なぞの服"]);
+  avatarAgg.products.map((p) => p.name), ["なぞのふく"]);
 const avatarAssigned = aggregateByAvatar(avatarRows, {
-  [itemProductKey(avatarItem("なぞの服 (Lサイズ)", 800))]: "shinra",
+  [itemProductKey(avatarItem("なぞのふく (Lサイズ)", 800))]: "shinra",
 });
 check("手動割り当てが集計に効く",
   avatarAssigned.rows.map((r) => [r.name, r.total]), [["森羅", 2000], ["マヌカ", 1500]]);
 // 割り当て済みを一覧から外すと、間違えたときに戻せなくなる
 check("割り当て済みも一覧に残して直せるようにする",
-  avatarAssigned.products.map((p) => [p.name, p.assigned]), [["なぞの服", "shinra"]]);
+  avatarAssigned.products.map((p) => [p.name, p.assigned]), [["なぞのふく", "shinra"]]);
 check("明細の無い注文は数えない", aggregateByAvatar([{ id: "x", items: null }], {}).rows, []);
 // 読めなかった分を0として足すと、少ない額を正しい合計に見せてしまう
 check("金額を読めない商品は合計に足さない",
@@ -1317,14 +1317,16 @@ check("髪型は種別にしない",
   ["♡⑅ Divine Hair ⑅♡", "【VRC Hair】♥ Custom Bob ♥", "ふんわりツインテール",
    "きらきらヘアピン"].map(classifyItemKind),
   ["", "", "", ""]);
-check("複数対応マーカー付きの髪型は複数対応に入る", (() => {
+// D21 髪型は種別(classifyItemKind)にはしないままだが、他の判定が全部外れたときは
+// 語彙からアバター用アイテムへ入れる。複数対応マーカー付きも同じ行へ入る
+check("複数対応マーカー付きの髪型も語彙の髪型も複数対応の行へ入る", (() => {
   const agg = aggregateByAvatar([{ id: "hm", items: [
     { ...item("〈17アバター対応〉 ✦｡💫Astroid｡✦", 700),
       name: "〈17アバター対応〉 ✦｡💫Astroid｡✦" },
     { ...item("♡⑅ Divine Hair ⑅♡", 500), name: "♡⑅ Divine Hair ⑅♡" },
   ] }], {});
   return [agg.multiItem.total, agg.none.total];
-})(), [700, 500]);
+})(), [1200, 0]);
 // 「ワールド用」を含めば髪の商品でもワールド用が先に当たる
 check("髪の商品でもワールド用は種別に入る",
   classifyItemKind("【VRChatワールド用】髪の毛オブジェクト"), "world-item");
@@ -1365,7 +1367,7 @@ check("実データのツール・ワールド用商品を見分ける",
 const kindNoneRows = [{ id: "kn", items: [
   { ...item("【Unityメッシュ編集ツール】EreMorph", 900),
     name: "【Unityメッシュ編集ツール】EreMorph" },
-  { ...item("なぞの服 (Lサイズ)", 800), name: "なぞの服 (Lサイズ)" },
+  { ...item("なぞのふく (Lサイズ)", 800), name: "なぞのふく (Lサイズ)" },
 ] }];
 const kindNoneAgg = aggregateByAvatar(kindNoneRows, {});
 check("種別に当たった商品は未分類に数えない",
@@ -1373,7 +1375,7 @@ check("種別に当たった商品は未分類に数えない",
 // 種別に当たった商品は手動割り当ての一覧にも出さない(2026-08-09 ユーザーフィードバック)。
 // 一覧は「どの分類にも当たらなかったもの」だけに絞る
 check("種別に当たった商品は手動割り当ての一覧に出さない",
-  kindNoneAgg.products.map((p) => p.name), ["なぞの服"]);
+  kindNoneAgg.products.map((p) => p.name), ["なぞのふく"]);
 check("手動割り当ては種別より優先される",
   aggregateByAvatar(kindNoneRows, {
     [itemProductKey({ ...item("【Unityメッシュ編集ツール】EreMorph", 900),
@@ -1389,7 +1391,7 @@ const taxonRows = [{ id: "t1", items: [
   taxonItem("【Udonギミック】水面", 800),
   taxonItem("【アバター衣装変換ツール】Alterith", 700),
   taxonItem("Halo Ring 95アバター対応", 600),
-  taxonItem("なぞの服 (Lサイズ)", 500),
+  taxonItem("なぞのふく (Lサイズ)", 500),
   taxonItem("【VRC向けワールド】BREEZE", 400),
 ] }];
 const taxonAgg = aggregateByAvatar(taxonRows, {});
@@ -1492,11 +1494,13 @@ check("素体商品の名前の先頭語で関連商品も寄る",
   ] }], {}).rows.map((r) => [r.name, r.total]), [["ラビ先輩", 10000]]);
 // 逆に「ラビポニー」はカタカナが続くので1語(らびぽにー)になり、切り出せない。
 // ここで前方一致を使うと「凪」が「凪夜」に当たる問題が戻るので、寄せないままにする
+// (D21 以降「ラビポニー」は語彙の髪型としてアバター用アイテムへ入るので、
+//  寄らないことは素体のバケツ側の点数で確かめる)
 check("カタカナが続く名前は語に切れないので寄らない",
   aggregateByAvatar([{ id: "s10", items: [
     soloItem("【オリジナル3Dモデル】ラビ先輩", 9000),
     soloItem("ラビポニー", 1000),
-  ] }], {}).none.count, 1);
+  ] }], {}).rows.map((r) => [r.name, r.count, r.total]), [["ラビ先輩", 1, 9000]]);
 // 「ラビ」は実在アバターの名前。ノイズ語として落としてはいけない
 check("ラビはストップ語ではない", avatarTokens("ラビ"), ["らび"]);
 
@@ -1516,6 +1520,62 @@ check("素体商品の名前は他の商品の照合にも効く",
     soloItem("慧 -Kei- オリジナル3Dモデル", 5000),
     soloItem("パーカー (Kei)", 1000),
   ] }], {}).rows.map((r) => [r.key, r.total]), [["kei", 6000]]);
+
+// --- D21 未分類の直前に見る語彙 ---
+// 実CSVの未分類210件のうち約7割は品名の語彙だけで行き先が決まる。ここに並ぶ品名は
+// すべて実データに実在した表記。どの判定も外れたときだけ通る最後の砦なので、
+// 上の分類(手動・特定アバター・種別・複数対応マーカー)の結果は変えない
+const vocabSlot = (name) => {
+  const agg = aggregateByAvatar([{ id: "d21", items: [{ ...item(name, 100), name }] }], {});
+  if (agg.rows.length) return agg.rows[0].key;
+  const hit = [agg.multiItem, agg.multiTool, agg.world, agg.worldItem]
+    .find((row) => row.count > 0);
+  return hit ? hit.key : "";
+};
+check("髪型の語彙はアバター用アイテムへ",
+  ["♡⑅ Divine Hair ⑅♡", "ふわふわなボブヘア", "🎀りぼんハーフツイン🎀",
+   "ダウナーみつあみ【3Dヘアモデル】"].map(vocabSlot),
+  [AVATAR_MULTI_KEY, AVATAR_MULTI_KEY, AVATAR_MULTI_KEY, AVATAR_MULTI_KEY]);
+// 装身具・衣装。PB対応を名乗っていても、アイテムの語彙が先に当たる
+check("装身具の語彙はアバター用アイテムへ",
+  ["【VRChat想定】PB対応　神GODヘイロー04　天使の輪 / Angel halo", "黒縁めがね",
+   "祝福の花冠"].map(vocabSlot),
+  [AVATAR_MULTI_KEY, AVATAR_MULTI_KEY, AVATAR_MULTI_KEY]);
+// 【】の外に書かれたギミックも、ここまで来ていればギミック商品とみなす
+check("ギミックの語彙はツールへ",
+  ["【フカさんの】心音ギミック【VRChat】",
+   "Breast Physics Plus Plus 物理演算胸揺れギミック"].map(vocabSlot),
+  [AVATAR_MULTI_TOOL_KEY, AVATAR_MULTI_TOOL_KEY]);
+// テクスチャ・マテリアル・ポーズ集は制作に使う素材。ツール枠へ入れる
+check("素材の語彙はツールへ",
+  ["【汎用】艶やか肌マテリアル", "どこどこテクスチャ", "【無料】著作権放棄 Matcap"]
+    .map(vocabSlot),
+  [AVATAR_MULTI_TOOL_KEY, AVATAR_MULTI_TOOL_KEY, AVATAR_MULTI_TOOL_KEY]);
+// MA・PBを名乗るだけの商品(スマホ・追従ギミック)はツール
+check("MA・PBの名乗りはツールへ",
+  ["【MA対応】Bloom Phone 2 - VRChat向け多機能スマートフォン",
+   "【Modular Avatar対応】自撮りギミック付きスマホ『TemPhone』"].map(vocabSlot),
+  [AVATAR_MULTI_TOOL_KEY, AVATAR_MULTI_TOOL_KEY]);
+// 「（家具付）」を含むワールドでも、ワールド販売の名乗りが先に当たる
+check("ワールドの語彙を家具より先に見る",
+  vocabSlot("【ワールド販売】Sepia Lodge（家具付） (【ワールド本体】 SepiaLodge)"),
+  AVATAR_WORLD_KEY);
+check("家具はワールド用アイテムへ",
+  vocabSlot("【家具】Musica 高級スピーカーセット【VRChat想定】"), AVATAR_WORLD_ITEM_KEY);
+// 誤爆ガード。立ち絵素材の「衣装差分」、音声素材、フォント商品はアバターの買いものではない
+check("立ち絵・音声・フォントは語彙判定を掛けず未分類のまま",
+  ["立ち絵素材　糸目シスター【表情差分８種＆衣装差分あり】",
+   "【令和最新版】全254種！ゆうたONEフォント【一括DL】",
+   "【 ASMR 】心音ループ素材"].map(vocabSlot), ["", "", ""]);
+// 上の分類が当たるものは語彙で変わらない
+check("語彙は特定アバターと複数対応の結果を変えない",
+  ["ふわふわドレス 浮遊ギミック付き【MA対応】", "【25アバター対応】ドレス (Milfy)"]
+    .map(vocabSlot), [AVATAR_MULTI_KEY, "milfy"]);
+// D21 「オリジナルアバター」も素体商品の名乗り
+check("オリジナルアバターの名乗りでも素体商品として昇格する",
+  aggregateByAvatar([{ id: "d21s", items: [
+    soloItem("無料オリジナルアバター「ふうみ」", 3000)] }], {})
+    .rows.map((r) => [r.key, r.name, r.total]), [["ふうみ", "ふうみ", 3000]]);
 
 // --- 今年のまとめ ---
 // 「はじめて出会った作者」を出すため、その年より前の注文も見る必要がある
@@ -3175,7 +3235,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
               item("髪 (森羅)", 1200), item("セット (【Full Pack】)", 300)] },
     n2: { v: CACHE_SCHEMA_VERSION, amount: 800, gift: 0, shipping: 0,
       status: "completed", date: "2025年8月1日 10:00",
-      items: [item("なぞの服 (Lサイズ)", 800)] },
+      items: [item("なぞのふく (Lサイズ)", 800)] },
   };
   state.avatarAssign = {};
   setAvatarYear("all");
@@ -3226,6 +3286,10 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
     [avatarAssignBody.querySelectorAll("tr").length,
      assignSelect.options.length, assignSelect.value],
     [1, AVATAR_MASTER.length + 5, ""]);
+  // D21 未分類の枠は品名単位の「◯種類」、この一覧はショップ+品名単位の「◯商品」。
+  // 単位を書かないと数が合わないように見える
+  check("手動割り当ての件数は商品単位と分かる形で出す",
+    avatarAssignCount.textContent, "1商品");
   // 大分類(アバター関連/ワールド関連)から選べるよう optgroup で束ねる
   check("割り当ての選択肢を大分類でまとめる",
     [...assignSelect.querySelectorAll("optgroup")].map((group) => group.label),
@@ -3243,10 +3307,10 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
     [...avatarTableBody.querySelectorAll("tr.shop-row")].map((tr) => tr.cells[1].textContent),
     ["森羅", "マヌカ"]);
   check("割り当てを保存する", await readStored(AVATAR_ASSIGN_KEY, null),
-    { "https://sourflavor.booth.pm/ / なぞの服": "shinra" });
+    { "https://sourflavor.booth.pm/ / なぞのふく": "shinra" });
   // 保存から読み戻せること(引っ越し・開き直しで消えない)
   check("保存した割り当てを読み戻せる", await loadAvatarAssign(),
-    { "https://sourflavor.booth.pm/ / なぞの服": "shinra" });
+    { "https://sourflavor.booth.pm/ / なぞのふく": "shinra" });
 
   // 「未分類のまま」は指定を持たない状態そのもの。項目ごと消して元へ戻す
   const undoSelect = avatarAssignBody.querySelector("select[data-product-key]");
@@ -3264,7 +3328,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   // この画面のstateは保存を経由せず直接入れてあるので、読み直す先を先に用意する
   await saveIndex(state.index);
   await saveCache(state.cache);
-  await saveAvatarAssign({ "https://sourflavor.booth.pm/ / なぞの服": "manuka" });
+  await saveAvatarAssign({ "https://sourflavor.booth.pm/ / なぞのふく": "manuka" });
   check("押す前は保存を読み直していないので順位が変わらない",
     [...avatarTableBody.querySelectorAll("tr.shop-row")].map((tr) => tr.cells[1].textContent),
     ["マヌカ", "森羅"]);
