@@ -1078,3 +1078,7 @@ P10〜P12の実装内容は `docs/improvement-plan.md` の D14・D15・D16・D17
 - A: 2026-08-09 — evidence: status=PASS; kind=compile+runtime; command=node --check 17ファイル、
   python -m http.server 8803 + Browserで/test/index.html(claude/p12-recount、幅1280px);
   counts=compile 17/0、ALL PASS 980 checks(975→980。D18で5件追加)
+- A: 2026-08-09 — evidence: status=PASS; kind=compile+runtime; command=node --check 17ファイル、
+  python -m http.server 8805 + Browserで/test/index.html(claude/p12-feedback2、幅1280px);
+  counts=compile 17/0、ALL PASS 989 checks(980→989。D17-dで9件追加)。統合SHA=73232eb
+  (D17-d: 「ラビ先輩」が「先輩」になる件と、「95アバター対応」が未分類へ落ちる件の修正)

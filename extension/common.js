@@ -792,9 +792,21 @@ function avatarBucketKey(token, index) {
 
 // 素体商品(アバターそのもの)の名乗り。実データの表記より
 // (「オリジナル3Dモデル「しなの」」「【オリジナル3Dモデル】狛乃-Komano-」
-//  「慧 -Kei- オリジナル3Dモデル」)
+//  「慧 -Kei- オリジナル3Dモデル」「胴長パグ #パグ3D」)
 const AVATAR_SOLO_MARKER =
-  /オリジナル[3３][DdＤｄ]モデル|オリジナル[3３][DdＤｄ]アバター|[3３][DdＤｄ]キャラクターモデル|アバター素体/g;
+  /オリジナル[3３][DdＤｄ]モデル|オリジナル[3３][DdＤｄ]アバター|[3３][DdＤｄ]キャラクターモデル|アバター素体|#\S{1,15}[3３][DdＤｄ]\b/g;
+
+// ハッシュタグは名前の一部ではない。「#パグ3D」「#arupaka_VRC」のような検索用の札で、
+// 残しておくと名前として拾ってしまう
+const AVATAR_HASHTAG = /#\S+/g;
+
+// 素体商品の題名から名乗りとハッシュタグを取り除いた残り。素体商品でなければ null
+function avatarSoloResidue(name) {
+  const { base } = parseItemName(name);
+  const stripped = base.replace(AVATAR_SOLO_MARKER, " ");
+  if (stripped === base) return null;
+  return stripped.replace(AVATAR_HASHTAG, " ");
+}
 
 // 素体商品の題名から、名乗っている名前のトークンを取り出す。素体商品でなければ空。
 //
@@ -803,11 +815,10 @@ const AVATAR_SOLO_MARKER =
 // 1商品でもバケツにする。
 // 題名は自分の名前を名乗る場所なので、ふつうなら捨てる漢字1文字(「慧」)もここでは残す
 function avatarSoloTokens(name) {
-  const { base } = parseItemName(name);
-  const stripped = base.replace(AVATAR_SOLO_MARKER, " ");
-  if (stripped === base) return [];
+  const residue = avatarSoloResidue(name);
+  if (residue === null) return [];
   const alias = avatarAliasMap();
-  return avatarRawTokens(stripped).filter((token) => alias.has(token) || !AVATAR_STOP_SET.has(token));
+  return avatarRawTokens(residue).filter((token) => alias.has(token) || !AVATAR_STOP_SET.has(token));
 }
 
 // 素体商品の題名から飾りを落とした名前そのもの。素体商品でなければ空。
@@ -815,10 +826,9 @@ function avatarSoloTokens(name) {
 const AVATAR_SOLO_DECORATION = /[【】「」『』（）()［］\[\]〈〉《》〔〕｛｝{}\-–—_|/\\・,、。!！?？"'”’’]+/g;
 
 function avatarSoloName(name) {
-  const { base } = parseItemName(name);
-  const stripped = base.replace(AVATAR_SOLO_MARKER, " ");
-  if (stripped === base) return "";
-  return stripped
+  const residue = avatarSoloResidue(name);
+  if (residue === null) return "";
+  return residue
     .normalize("NFKC")
     .replace(AVATAR_SOLO_DECORATION, " ")
     .replace(/\s+/g, " ")
@@ -1087,12 +1097,32 @@ function aggregateByAvatar(results, assignments = {}, sortBy = DEFAULT_SHOP_SORT
 // 「ギミック付き」「ギミック搭載」は衣装のおまけの説明。種別の手掛かりにしない
 const ITEM_KIND_IGNORE = /ギミック(付き?|つき|搭載|入り)/g;
 
+// MA(Modular Avatar)はアバターへギミックを入れる仕組み。ワールド用と区別が付くので、
+// 「ギミック」と同じ品名に並んでいればアバター用のギミックとみなす。
+// 「ギミック付き」は先に ITEM_KIND_IGNORE で消えるため、MA対応の衣装はここに来ない
+const ITEM_KIND_MA_GIMMICK =
+  /(?=[\s\S]*(?:\bma式|\bma対応|【ma[^】]*】|modular\s*avatar|モジュラーアバター))(?=[\s\S]*ギミック)/i;
+
 const ITEM_KIND_RULES = Object.freeze([
   { key: "world", name: "ワールド", pattern: /向けワールド|【[^】]{0,8}ワールド】|ワールドアセット/ },
-  { key: "world-item", name: "ワールド用アイテム", pattern: /ワールドギミック|ワールド用|ワールド想定/ },
+  {
+    key: "world-item",
+    name: "ワールド用アイテム",
+    // Udon(UdonSharp・U#)はVRChatのワールド用スクリプト環境。
+    // これを名乗るギミックはアバター用ではなくワールド用
+    pattern: /ワールドギミック|ワールド用|ワールド想定|\budon|\bu#/i,
+  },
+  {
+    key: "hair",
+    name: "髪型",
+    // ヘアピン・ヘアクリップ・ヘアアクセ・ヘアゴムは髪型ではなく小物なので外す。
+    // 「ショートパンツ」「ロングコート」「ロングスカート」も衣装であって髪型ではない
+    pattern:
+      /hair\b|ヘア(?!ピン|クリップ|アクセ|ゴム)|髪型|髪|ボブ|\bbob\b|ツインテ|ポニーテール|ポニテ|ハイポニー|ウルフ|三つ編み|\bbraid|twin\s*tail|twintail|ponytail|お団子|おだんご|ショート(?!パンツ)|ロング(?!コート|スカート)/i,
+  },
   {
     key: "tool",
-    name: "ギミック・ツール",
+    name: "アバター用ギミック・ツール",
     // 「ギミック」は【】の中に書かれているときだけ種別の名乗りとみなす。
     // 品名の途中に出るものは「シャンパンギミック」のような商品そのものの名前でありうる。
     // ponytail: 【】を使わない純粋なギミック商品は取りこぼす。既知の限界として残し、
@@ -1108,7 +1138,12 @@ function classifyItemKind(name) {
   const text = base.replace(ITEM_KIND_IGNORE, "");
   if (!text) return "";
   const rule = ITEM_KIND_RULES.find((candidate) => candidate.pattern.test(text));
-  return rule ? rule.key : "";
+  const key = rule ? rule.key : "";
+  // MA式のギミックはアバター用と分かっているので、種別なしと髪型より優先して拾う
+  // (「MA式ヘアギミック」は髪の見た目ではなく仕掛け)。ワールド判定が先に当たって
+  // いれば、そちらの方が確かなので触らない
+  if ((key === "" || key === "hair") && ITEM_KIND_MA_GIMMICK.test(text)) return "tool";
+  return key;
 }
 
 // 種別ごとの金額・点数。当たった種別だけを ITEM_KIND_RULES の並び順で返す

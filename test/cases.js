@@ -1295,6 +1295,35 @@ check("どれにも当たらなければ種別なし",
   [classifyItemKind("ふわもこパーカー (マヌカ)"), classifyItemKind("")], ["", ""]);
 check("種別はワールドを先に見る",
   classifyItemKind("【VRC向けワールド】ギミックシステム入りの部屋"), "world");
+
+// D17-e 調整1 Udon(UdonSharp・U#)はVRChatのワールド用スクリプト環境。
+// これを名乗るギミックはアバター用ではなくワールド用
+check("Udonを名乗るギミックはワールド用",
+  ["【Udonギミック】〇〇", "UdonSharp製 △△", "U# サンプル集"].map(classifyItemKind),
+  ["world-item", "world-item", "world-item"]);
+// D17-e 調整2 MA(Modular Avatar)はアバターへギミックを入れる仕組み。
+// 「ギミック」と並んでいればアバター用のギミックとみなす
+check("MA式のギミックはアバター用",
+  classifyItemKind("【フカさんの！】撫で音ギミック【VRChat】【MA式】"), "tool");
+// 「ギミック付き」の除外は従来どおり効く。MA対応なだけの衣装をツールにしない
+check("MA対応でもギミック付きの衣装は種別なし",
+  [classifyItemKind("ふわふわドレス 浮遊ギミック付き【MA対応】"),
+   classifyItemKind("ふわふわドレス【MA対応】")], ["", ""]);
+// D17-e 調整3 髪型の種別。ヘアピン・ヘアクリップ等の小物は髪型ではない
+check("髪型を見分ける",
+  ["♡⑅ Divine Hair ⑅♡", "【VRC Hair】♥ Custom Bob ♥", "ふんわりツインテール",
+   "三つ編みおさげ"].map(classifyItemKind),
+  ["hair", "hair", "hair", "hair"]);
+check("髪の小物は髪型にしない",
+  ["オーディオヘアクリップ【VRChat用】", "きらきらヘアピン", "ヘアゴムセット",
+   "ロングコート", "ショートパンツ"].map(classifyItemKind),
+  ["", "", "", "", ""]);
+// 「ワールド用」を含むので、ヘアクリップでもワールド用が先に当たる例と区別する
+check("髪型よりワールドを先に見る",
+  classifyItemKind("【VRChatワールド用】髪の毛オブジェクト"), "world-item");
+// D17-e 調整5 エディタ拡張がツールに当たること
+check("エディタ拡張はツール",
+  classifyItemKind("【Unity用】Mew【エディタ拡張】"), "tool");
 const kindRows = [{ id: "k1", items: [
   { ...item("【VRC向けワールド】BREEZE【Unity】", 2000),
     name: "【VRC向けワールド】BREEZE【Unity】" },
@@ -1305,7 +1334,8 @@ const kindRows = [{ id: "k1", items: [
 ] }];
 check("種別ごとに金額と点数を出す",
   aggregateByItemKind(kindRows).map((r) => [r.name, r.count, r.total]),
-  [["ワールド", 1, 2000], ["ワールド用アイテム", 1, 800], ["ギミック・ツール", 1, 500]]);
+  [["ワールド", 1, 2000], ["ワールド用アイテム", 1, 800],
+   ["アバター用ギミック・ツール", 1, 500]]);
 check("種別を読み取れなければ枠を出さない", aggregateByItemKind([
   { id: "k2", items: [{ ...item("ふわもこパーカー (マヌカ)", 300),
     name: "ふわもこパーカー (マヌカ)" }] }]), []);
@@ -1381,6 +1411,18 @@ check("カタカナが続く名前は語に切れないので寄らない",
   ] }], {}).none.count, 1);
 // 「ラビ」は実在アバターの名前。ノイズ語として落としてはいけない
 check("ラビはストップ語ではない", avatarTokens("ラビ"), ["らび"]);
+
+// D17-e 調整4 「#〇〇3D」のハッシュタグも素体商品の名乗り。
+// ハッシュタグ自体は名前ではないので、取り除いた残りを名前にする
+check("ハッシュタグの名乗りでも素体商品として昇格する",
+  aggregateByAvatar([{ id: "s11", items: [soloItem("胴長パグ　#パグ3D", 4000)] }], {})
+    .rows.map((r) => [r.key, r.name, r.total]), [["胴長パグ", "胴長パグ", 4000]]);
+// 素体でないアクセサリが #〇〇3D の札を持つ実例。名乗りが素体商品のものとは限らないので、
+// 名前を決められないときは従来の照合へ落ちる(変なバケツを作らない)
+check("素体でない商品が3Dタグを持っても従来どおり照合する",
+  aggregateByAvatar([{ id: "s12", items: [
+    soloItem("🐻Milfy🐻モチーフヘアピン【MA対応】 #arupaka_VRC #Milfy3D", 1200)] }], {})
+    .rows.map((r) => [r.key, r.name, r.total]), [["milfy", "ミルフィ", 1200]]);
 check("素体商品の名前は他の商品の照合にも効く",
   aggregateByAvatar([{ id: "s6", items: [
     soloItem("慧 -Kei- オリジナル3Dモデル", 5000),
