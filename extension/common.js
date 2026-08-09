@@ -1303,9 +1303,32 @@ function splitCamelCase(text) {
   return text.replace(/([a-z])([A-Z])/g, "$1 $2");
 }
 
-// D22 既知商品の辞書(avatar-master.js の ITEM_MASTER)。語彙判定より先に見る。
-// 語彙では読み取れない固有名(「もちふぃった」「BoneSync」)を名指しで拾うためのもの
-function itemMasterSlot(text) {
+// D22 既知商品の辞書(avatar-master.js)。語彙判定より先に見る。
+// 語彙では読み取れない固有名を名指しで拾うためのもの。引き方は2つある。
+//
+// - 完全一致(`ITEM_MASTER_EXACT`) …… 1000件規模の実在タイトル。一度だけ Map を
+//   組んで O(1) で引く。
+// - 部分一致(`ITEM_MASTER`) …… 表記ゆれのある少数の商品だけ。1000件を部分一致に
+//   すると、短い品名が長い品名の一部へ当たって総崩れになるので大量データには使わない。
+let itemMasterExactCache = null;
+function itemMasterExactMap() {
+  if (itemMasterExactCache) return itemMasterExactCache;
+  itemMasterExactCache = new Map();
+  for (const [key, names] of Object.entries(ITEM_MASTER_EXACT)) {
+    for (const name of names) {
+      const text = name.normalize("NFKC").toLowerCase().trim();
+      // 先に入れた方を残す(同じ品名が2つの分類に載っていても行き先は1つに保つ)
+      if (text && !itemMasterExactCache.has(text)) itemMasterExactCache.set(text, key);
+    }
+  }
+  return itemMasterExactCache;
+}
+
+// plain … 正規化した品名本体そのもの(完全一致用)
+// text …… camelCaseを割った形も足したもの(部分一致用)
+function itemMasterSlot(plain, text) {
+  const exact = itemMasterExactMap().get(plain);
+  if (exact) return exact;
   const entry = ITEM_MASTER.find((candidate) => text.includes(candidate.match));
   return entry ? entry.key : "";
 }
@@ -1318,7 +1341,7 @@ function avatarVocabSlot(name) {
     .toLowerCase()
     .replace(ITEM_KIND_IGNORE, " ");
   if (!text.trim()) return "";
-  const known = itemMasterSlot(text);
+  const known = itemMasterSlot(normalized.toLowerCase().trim(), text);
   if (known) return known;
   if (ITEM_VOCAB_GUARD.test(text)) return "";
   const rule = ITEM_VOCAB_RULES.find((candidate) => candidate.pattern.test(text));

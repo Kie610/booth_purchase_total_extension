@@ -1092,8 +1092,15 @@ check("対応する体数を名乗る表記も複数対応の印",
 check("数字が付いていても素体名は複数対応にしない",
   [hasAvatarMultiMarker("マヌカ 3点セット"), hasAvatarMultiMarker("2025年版パーカー")],
   [false, false]);
-check("名簿は日本語とローマ字の両方を持つ",
-  AVATAR_MASTER.every((a) => a.jp && a.en && /^[a-z0-9]+$/.test(a.en)), true);
+// D22 ローマ字表記が公開されていないアバターも名簿へ入れるようになったので、
+// en は「ローマ字が分かればローマ字、無ければ日本語表記そのもの」にしてある
+// (ローマ字は創作しない)。表示名と保存キーが必ず埋まっていることだけを見張る
+check("名簿は表示名と保存キーの両方を持つ",
+  AVATAR_MASTER.every((a) => Boolean(a.jp) && Boolean(a.en)), true);
+// ローマ字のキーは従来どおり英小文字(大文字が混じると保存キーが揺れる)
+check("ローマ字の保存キーは英小文字",
+  AVATAR_MASTER.filter((a) => /^[\x20-\x7e]+$/.test(a.en))
+    .every((a) => /^[a-z0-9 ]+$/.test(a.en)), true);
 check("名簿のenは重複しない",
   new Set(AVATAR_MASTER.map((a) => a.en)).size, AVATAR_MASTER.length);
 // P10(D14)で保存された割り当てのキーは、そのまま名前付きで読めること
@@ -1553,9 +1560,12 @@ check("素材の語彙はツールへ",
   [AVATAR_MULTI_TOOL_KEY, AVATAR_MULTI_TOOL_KEY, AVATAR_MULTI_TOOL_KEY]);
 // MA・PBを名乗るだけの商品(スマホ・追従ギミック)はツール
 check("MA・PBの名乗りはツールへ",
-  ["【MA対応】Bloom Phone 2 - VRChat向け多機能スマートフォン",
-   "【Modular Avatar対応】自撮りギミック付きスマホ『TemPhone』"].map(vocabSlot),
-  [AVATAR_MULTI_TOOL_KEY, AVATAR_MULTI_TOOL_KEY]);
+  ["【Modular Avatar対応】自撮りギミック付きスマホ『TemPhone』"].map(vocabSlot),
+  [AVATAR_MULTI_TOOL_KEY]);
+// D22 既知商品の辞書は語彙より先に見る。BOOTHが「3D小道具」として売っている
+// 「【MA対応】Bloom Phone 2」は、語彙のMA判定ではなく辞書どおりの行き先になる
+check("既知商品の辞書はMA・PBの語彙より先に効く",
+  vocabSlot("【MA対応】Bloom Phone 2 - VRChat向け多機能スマートフォン"), AVATAR_MULTI_KEY);
 // 「（家具付）」を含むワールドでも、ワールド販売の名乗りが先に当たる
 check("ワールドの語彙を家具より先に見る",
   vocabSlot("【ワールド販売】Sepia Lodge（家具付） (【ワールド本体】 SepiaLodge)"),
@@ -1646,6 +1656,52 @@ check("既知商品の辞書はデータだけの配列",
    ITEM_MASTER.every((entry) =>
      typeof entry.match === "string" && typeof entry.key === "string")],
   [true, true]);
+
+// --- D22 BOOTH公開ブラウズページ(2026-08-09取得)からのマスタ統合 ---
+// 名簿・既知商品はデータが主役なので、件数とキーの一意性を検算で見張る。
+// **保存キー(en)が重複すると別のアバターの支出が1つの行へ混ざる**ので、
+// 増やすたびにここで気付けるようにしておく
+check("名簿の件数とキーの一意性",
+  [AVATAR_MASTER.length,
+   new Set(AVATAR_MASTER.map((a) => a.en)).size,
+   new Set(AVATAR_MASTER.map((a) => a.jp)).size,
+   AVATAR_MASTER.every((a) => Boolean(a.jp) && Boolean(a.en))],
+  [226, 226, 226, true]);
+// 完全一致の辞書。同じ品名が2つの分類に載ると行き先が定まらない
+check("既知商品(完全一致)の件数と重複",
+  (() => {
+    const names = Object.values(ITEM_MASTER_EXACT).flat();
+    const normalized = names.map((n) => n.normalize("NFKC").toLowerCase().trim());
+    return [
+      names.length,
+      new Set(normalized).size,
+      Object.fromEntries(
+        Object.entries(ITEM_MASTER_EXACT).map(([key, list]) => [key, list.length])
+      ),
+    ];
+  })(),
+  [1080, 1080, { __multi__: 540, __multi_tool__: 420, __world__: 120 }]);
+
+// 名簿へ足したアバターがトークン照合で当たること(日本語キー・ローマ字キーの両方)
+const masterAvatarSlot = (name) => {
+  const agg = aggregateByAvatar([{ id: "d22m", items: [{ ...item(name, 100), name }] }], {});
+  return agg.rows.length ? agg.rows[0].key : "";
+};
+check("統合した名簿のアバターが照合で当たる",
+  ["パーカー (ゾーイ)", "ドレス (leeme)", "衣装 (みなほし)", "ぱたにゃこ用スカート"]
+    .map(masterAvatarSlot),
+  ["ゾーイ", "leeme", "minahoshi", "patanyako"]);
+
+// 既知商品(完全一致)は品名本体がそっくり同じときだけ当たる
+check("統合した既知商品が対応する行へ入る",
+  ["Urban Tech Obsidian", "VirtualLens2", "LuraSwitch2"].map(vocabSlot),
+  [AVATAR_MULTI_KEY, AVATAR_MULTI_TOOL_KEY, AVATAR_WORLD_KEY]);
+// 完全一致なので、辞書の品名を含むだけの別商品には当たらない
+check("既知商品(完全一致)は部分一致では当たらない",
+  vocabSlot("VirtualLens2 対応 追加プリセット") === AVATAR_MULTI_TOOL_KEY, false);
+// 上位の分類が先に当たる商品は、辞書があっても従来どおりそちらが勝つ
+check("既知商品より特定アバターが優先される",
+  masterAvatarSlot("Urban Tech Obsidian (マヌカ)"), "manuka");
 
 // --- 今年のまとめ ---
 // 「はじめて出会った作者」を出すため、その年より前の注文も見る必要がある
