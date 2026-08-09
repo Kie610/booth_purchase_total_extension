@@ -81,6 +81,7 @@ const noticeBox = document.getElementById("noticeBox");
 const errorBox = document.getElementById("errorBox");
 const menuBtn = document.getElementById("menuBtn");
 const themeSwitch = document.getElementById("themeSwitch");
+const themeModeName = document.getElementById("themeModeName");
 // D12 集計対象(すべて/自分用/ギフト)。全ビューの上に1つだけ置く
 const giftFilterSwitch = document.getElementById("giftFilterSwitch");
 const giftFilterNote = document.getElementById("giftFilterNote");
@@ -347,7 +348,9 @@ function applyNavLayout(wide) {
 }
 
 // 配色テーマの切り替えの見た目。選択中を .current で示し、
-// 押しボタンの集まりとして aria-pressed も合わせる
+// 押しボタンの集まりとして aria-pressed も合わせる。
+// ボタンは絵文字だけなので、選択中のモード名をスイッチの下に文字で出す
+const THEME_MODE_NAMES = { light: "ライト", dark: "ダーク", system: "システム" };
 function renderThemeSwitch(theme) {
   const current = normalizeTheme(theme);
   for (const btn of themeSwitch.querySelectorAll("button[data-theme-value]")) {
@@ -355,6 +358,7 @@ function renderThemeSwitch(theme) {
     btn.classList.toggle("current", selected);
     btn.setAttribute("aria-pressed", String(selected));
   }
+  if (themeModeName) themeModeName.textContent = THEME_MODE_NAMES[current];
 }
 
 // ---- D12 集計対象の絞り込み --------------------------------------------

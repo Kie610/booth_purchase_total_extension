@@ -24,8 +24,8 @@ complete:
 
 verified:
 - A: 2026-08-09 — evidence: status=PASS; kind=compile+runtime; command=node --check 17ファイル、
-  python -m http.server 8811 + Browserで/test/index.html(1.1.0+D17-f、幅1280px);
-  counts=compile 17/0、ALL PASS 998 checks
+  python -m http.server 8813 + Browserで/test/index.html(1.1.0+D17-f+D19、幅1280px);
+  counts=compile 17/0、ALL PASS 1000 checks
 - 前の証跡(P10=898、P11=924、P12=964、975、980、989 checks)は docs/handoff-history.md。
 - 注意: 共有カードの幅依存テスト1件は、ブラウザ幅521pxでは落ちる。検証は幅768px以上で行う。
 
@@ -45,7 +45,7 @@ not-run:
 
 ## Next
 
-1. D17-c〜f・D18の実環境再確認とpush判断 — blocked-by: ユーザーの確認
+1. D17-c〜f・D18・D19の実環境再確認とpush判断 — blocked-by: ユーザーの確認
 2. 次回の正式リリースでも検証後にバージョンブランチ、`main`、リモートのSHAを一致させる — blocked-by: none
 
 ## Paths

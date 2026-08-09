@@ -3771,6 +3771,9 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
     [...themeSwitch.querySelectorAll("button[data-theme-value]")]
       .every((b) => Boolean(b.getAttribute("aria-label"))), true);
   themeBtn("dark").click();
+  // ボタンは絵文字だけなので、選択中のモード名をスイッチの下に文字で出す
+  check("選択中のモード名がスイッチの下に出る",
+    document.getElementById("themeModeName").textContent, "ダーク");
   check("ダークを押すと配色と選択中の印が変わる",
     [document.documentElement.getAttribute("data-theme"),
      themeBtn("dark").classList.contains("current"),
@@ -3779,6 +3782,8 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
      ...bodyColors()],
     ["dark", true, "true", false, ...DARK_COLORS]);
   themeBtn("system").click();
+  check("システムへ戻すとモード名も変わる",
+    document.getElementById("themeModeName").textContent, "システム");
   check("システムを押すと端末の設定へ戻る",
     [document.documentElement.hasAttribute("data-theme"),
      themeBtn("system").classList.contains("current"),
@@ -3848,11 +3853,13 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
      realThemeSwitch && realThemeSwitch.closest(".app-header-inner") !== null,
      realThemeSwitch && realThemeSwitch.querySelectorAll("button[data-theme-value]").length],
     [true, true, 3]);
-  // 狭い画面での逃がし方。文字ラベルを畳み、それでも1行に入らない幅では
-  // 著作権表示を畳んで切り替えを残す(見出しが折り返してヘッダーが二段になるのを防ぐ)
-  check("狭い画面では文字ラベルと著作権表示を畳む",
-    [dashboardCss.includes(".theme-label {"),
-     dashboardCss.includes("@media (max-width: 520px) {")], [true, true]);
+  // ボタンは常に絵文字だけ+下にモード名(2026-08-09 ユーザー要望)。
+  // 1行に入らない幅では著作権表示を畳んで切り替えを残す
+  check("ボタンは絵文字だけでモード名を下に出す",
+    [Boolean(dashboardDoc.getElementById("themeModeName")),
+     realThemeSwitch && realThemeSwitch.querySelector(".theme-label") === null,
+     dashboardCss.includes(".theme-mode-name {"),
+     dashboardCss.includes("@media (max-width: 520px) {")], [true, true, true, true]);
 
   // hidden属性が付いている要素の全数チェック。1つでも表示されていたら、
   // その要素にクラス側の display 指定が効いてしまっている

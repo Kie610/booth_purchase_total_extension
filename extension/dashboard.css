@@ -283,18 +283,22 @@ body {
   white-space: nowrap;
 }
 
-/* 配色テーマの切り替え。見た目は他の segmented と同じで、ヘッダーへ収まるよう
-   一回り小さくする。ヘッダーは overflow: hidden なので、縮めずに右端まで残す */
-.theme-switch {
+/* 配色テーマの切り替え。ボタンは絵文字だけにし、選択中のモード名をすぐ下に出す
+   (文字ラベルを3つ並べると狭い幅で見出しが折り返す)。ヘッダーは overflow: hidden
+   なので、縮めずに右端まで残す */
+.theme-area {
   align-self: center;
   flex: none;
   margin-left: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
 }
 
 .theme-switch .segmented-btn {
   display: flex;
   align-items: center;
-  gap: 5px;
   padding: 4px 9px;
   font-size: 12px;
   line-height: 1.4;
@@ -304,6 +308,13 @@ body {
 .theme-icon {
   font-size: 13px;
   line-height: 1;
+}
+
+.theme-mode-name {
+  font-size: 10px;
+  line-height: 1;
+  color: var(--fg-muted);
+  white-space: nowrap;
 }
 
 /* ---- 画面切り替えのメニュー ---- */
@@ -2121,14 +2132,7 @@ button.segmented-btn.current {
     font-size: 10px;
   }
 
-  /* 狭い画面では文字ラベルを落として絵文字だけにする。
-     3つ並べても90px前後で収まり、引き出し表示のときでも押せる位置に残る。
-     意味は aria-label と title で伝わる */
-  .theme-label {
-    display: none;
-  }
-
-  .theme-switch {
+  .theme-area {
     margin-left: 8px;
   }
 
