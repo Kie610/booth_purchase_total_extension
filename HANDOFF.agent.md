@@ -18,14 +18,17 @@ complete:
 - C: D20(b01dcbd)で沼レポートを1商品=1分類の排他集計へ再設計(手動>特定アバター>
   ワールド関連>ギミック・ツール>複数対応>未分類)。`boothAvatarAssign`へ区分キー
   `__multi_tool__`/`__world__`/`__world_item__`を追加(追加のみ、既存キーの意味は不変)。
-- C: D21(7809436)で未分類直前の語彙判定(`avatarVocabSlot`)を追加。実CSVで未分類が
-  240点→88点(金額28.7%→13.5%)。誤爆ガード(立ち絵・音声・フォント)をテストで固定。
+- C: D21(7809436)で未分類直前の語彙判定(`avatarVocabSlot`)を追加。誤爆ガード
+  (立ち絵・音声・フォント)をテストで固定。
+- C: D22(e572bd2/5f4daac/6e1ddf7)で個別ルール修正・既知商品辞書・手動割り当てUI刷新
+  (区分5択+datalist検索)。BOOTH公開データ(スキ順、2026-08-09取得)から名簿を226体へ、
+  `ITEM_MASTER_EXACT`(完全一致)1080件を追加。実CSVで未分類63点(金額9.5%)。
 - C: 運用ルール合成(2026-08-08): AGENTS.mdへプロジェクト契約・設計の優先順位・委任と検品を追記。
 
 verified:
 - A: 2026-08-09 — evidence: status=PASS; kind=compile+runtime; command=node --check 17ファイル、
-  python -m http.server 8821 + Browserで/test/index.html(claude/p14-vocab=D21);
-  counts=compile 17/0、ALL PASS 1027 checks。実CSV検算で点数641・金額¥529,799が全体と一致
+  python -m http.server 8825 + Browserで/test/index.html(claude/p15-d22=D22);
+  counts=compile 17/0、ALL PASS 1053 checks。実CSV検算で点数641・金額¥529,799が全体と一致
 - 前の証跡(P10=898、P11=924、P12=964、975、980、989 checks)は docs/handoff-history.md。
 - 注意: 共有カードの幅依存テスト1件は、ブラウザ幅521pxでは落ちる。検証は幅768px以上で行う。
 
@@ -45,7 +48,7 @@ not-run:
 
 ## Next
 
-1. D17-c〜f・D18〜D21の実環境再確認とpush判断 — blocked-by: ユーザーの確認
+1. D17-c〜f・D18〜D22の実環境再確認とpush判断 — blocked-by: ユーザーの確認
 2. 次回の正式リリースでも検証後にバージョンブランチ、`main`、リモートのSHAを一致させる — blocked-by: none
 
 ## Paths
