@@ -543,11 +543,14 @@
            <button type="button" class="segmented-btn" data-sort="amount" aria-pressed="true">金額編</button>
            <button type="button" class="segmented-btn" data-sort="count" aria-pressed="false">購入数編</button>
          </div>
+         <button type="button" id="avatarRecountBtn" class="secondary"
+                 title="保存済みのデータから集計し直します（BOOTHへはアクセスしません）">再集計</button>
        </div>
        <p class="hint">
          商品名の末尾に付くバリエーション名（「商品名 (エク)」の括弧の中）を言葉ごとに分け、
          同じ言葉を持つ商品どうしをアバターとしてまとめます。アバター名を1つに絞れないものは
          「複数対応」、見つからないものは「未分類」として別に数えます（推測で振り分けません）。
+         「再集計」は保存済みのデータから集計し直すだけで、BOOTHへはアクセスしません。
        </p>
        <p class="hint" id="avatarCoverageNote">
          これは<strong>アバター名を読み取れた買い物だけの集計</strong>で、全支出の内訳ではありません。

@@ -1072,3 +1072,6 @@ P10〜P12の実装内容は `docs/improvement-plan.md` の D14・D15・D16・D17
 - A: 2026-08-09 — evidence: status=PASS; kind=compile+runtime; command=node --check 17ファイル、
   python -m http.server 8799 + Browserで/test/index.html(統合済み35b6e03を親が検品);
   counts=compile 17/0、ALL PASS 964 checks(924→964)、実CSV637明細でノイズバケツ0を確認
+- A: 2026-08-09 — evidence: status=PASS; kind=compile+runtime; command=node --check 17ファイル、
+  python -m http.server 8801 + Browserで/test/index.html(claude/p12-feedback、幅1280px);
+  counts=compile 17/0、ALL PASS 975 checks(964→975。D17-cで11件追加)

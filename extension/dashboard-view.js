@@ -132,6 +132,7 @@ const avatarKindBox = document.getElementById("avatarKindBox");
 const avatarKindBody = document.getElementById("avatarKindBody");
 const avatarYear = document.getElementById("avatarYear");
 const avatarSortToggle = document.getElementById("avatarSortToggle");
+const avatarRecountBtn = document.getElementById("avatarRecountBtn");
 const rankingYear = document.getElementById("rankingYear");
 const rankingSortToggle = document.getElementById("rankingSortToggle");
 const rankingHideNumbers = document.getElementById("rankingHideNumbers");

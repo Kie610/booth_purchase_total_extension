@@ -665,6 +665,23 @@ avatarAssignBody.addEventListener("change", (event) => {
   saveAvatarAssign(state.avatarAssign);
 });
 
+// D18 沼レポートの「再集計」。**BOOTHへは通信しない。**保存済みのデータを読み直して
+// 集計と描画をやり直すだけ。別のタブで手動割り当てを変えた場合もこれで揃う。
+// 読み直しの間はボタンを止める(連打で読み込みが重なると、最後に返ってきた古い方で
+// stateを上書きしうる)。押した人の指はボタンの上にあるので、終わったら焦点を戻す
+avatarRecountBtn.addEventListener("click", async () => {
+  avatarRecountBtn.disabled = true;
+  try {
+    state.index = await loadIndex();
+    state.cache = await loadCache();
+    state.avatarAssign = await loadAvatarAssign();
+    render();
+  } finally {
+    avatarRecountBtn.disabled = false;
+    avatarRecountBtn.focus();
+  }
+});
+
 function openShareWindow(text) {
   const url = new URL("https://x.com/intent/post");
   url.searchParams.set("text", text);

@@ -3064,7 +3064,45 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   undoSelect.value = "";
   undoSelect.dispatchEvent(new Event("change", { bubbles: true }));
   check("未分類へ戻すと保存から消える", await readStored(AVATAR_ASSIGN_KEY, null), {});
+
+  // D18 再集計。BOOTHへは通信せず、保存済みのデータを読み直して集計し直す。
+  // 別のタブで割り当てを変えた状況を、stateを触らず保存だけ書き換えて作る
+  check("再集計のボタンがある",
+    [avatarRecountBtn.textContent, avatarRecountBtn.disabled], ["再集計", false]);
+  // 焦点は表示中の要素にしか当たらないので、実際に沼レポートを開いた状態で試す
+  location.hash = "#/avatars";
+  renderCurrentView();
+  // この画面のstateは保存を経由せず直接入れてあるので、読み直す先を先に用意する
+  await saveIndex(state.index);
+  await saveCache(state.cache);
+  await saveAvatarAssign({ "https://sourflavor.booth.pm/ / なぞの服": "manuka" });
+  check("押す前は保存を読み直していないので順位が変わらない",
+    [...avatarTableBody.querySelectorAll("tr.shop-row")].map((tr) => tr.cells[1].textContent),
+    ["マヌカ", "森羅"]);
+  avatarRecountBtn.focus();
+  avatarRecountBtn.click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  check("再集計で保存し直された割り当てが反映される",
+    [...avatarTableBody.querySelectorAll("tr.shop-row")].map((tr) =>
+      [tr.cells[1].textContent, tr.cells[3].textContent]),
+    [["マヌカ", "¥2,300"], ["森羅", "¥1,200"]]);
+  // 押した人の指はボタンの上にある。描画のたびに焦点が飛ぶと連続で押せない
+  check("再集計のあともボタンに焦点が残る",
+    [document.activeElement === avatarRecountBtn, avatarRecountBtn.disabled], [true, false]);
+  // 連打しても壊れない(読み込み中は止まる)
+  avatarRecountBtn.click();
+  avatarRecountBtn.click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  check("連打しても順位は同じ",
+    [...avatarTableBody.querySelectorAll("tr.shop-row")].map((tr) => tr.cells[1].textContent),
+    ["マヌカ", "森羅"]);
+
   await removeStored(AVATAR_ASSIGN_KEY);
+  await removeStored(INDEX_KEY);
+  await removeStored(CACHE_KEY);
+  state.avatarAssign = {};
+  location.hash = "#/report";
+  render();
 
   // 期間フィルタ(D5と同じ作法)。年を選ぶとその年の注文だけで順位を出す
   setAvatarYear("2025");
