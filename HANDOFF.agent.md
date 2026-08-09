@@ -13,16 +13,12 @@ complete:
 - C: v1.0.0を正式リリース済み(GitHub Release公開、`main`を同じSHAへfast-forward同期済み)。
 - C: `1.1.0`へP1〜P9(A1〜A5・B1〜B4・C1〜C18・D1〜D5・D10〜D13・T1)を統合済み。
   統合内訳・実装詳細・設計判断・過去の検証証跡は docs/handoff-history.md。
-- C: P10〜P12(D14〜D18、辞書レスクラスタリング化)・D19・D20を検品のうえ`1.1.0`へ統合済み
-  (2026-08-09)。実装詳細は docs/improvement-plan.md の D14〜D20。
-- C: D20(b01dcbd)で沼レポートを1商品=1分類の排他集計へ再設計(手動>特定アバター>
-  ワールド関連>ギミック・ツール>複数対応>未分類)。`boothAvatarAssign`へ区分キー
-  `__multi_tool__`/`__world__`/`__world_item__`を追加(追加のみ、既存キーの意味は不変)。
-- C: D21(7809436)で未分類直前の語彙判定(`avatarVocabSlot`)を追加。誤爆ガード
-  (立ち絵・音声・フォント)をテストで固定。
-- C: D22(e572bd2/5f4daac/6e1ddf7)で個別ルール修正・既知商品辞書・手動割り当てUI刷新
-  (区分5択+datalist検索)。BOOTH公開データ(スキ順、2026-08-09取得)から名簿を226体へ、
-  `ITEM_MASTER_EXACT`(完全一致)1080件を追加。実CSVで未分類63点(金額9.5%)。
+- C: P10〜P12(D14〜D18)・D19〜D22を検品のうえ`1.1.0`へ統合済み(2026-08-09)。
+  詳細は docs/improvement-plan.md の D14〜D22。
+- C: D20で排他集計(手動>特定>ワールド>ツール>複数対応>未分類)、`boothAvatarAssign`へ
+  区分キー`__multi_tool__`/`__world__`/`__world_item__`を追加(追加のみ)。D21で語彙判定
+  `avatarVocabSlot`。D22で名簿226体+`ITEM_MASTER_EXACT`1080件(BOOTH公開データ、スキ順)と
+  手動割り当てUI刷新(区分5択+datalist検索)。実CSVで未分類63点(金額9.5%)。
 - C: 運用ルール合成(2026-08-08): AGENTS.mdへプロジェクト契約・設計の優先順位・委任と検品を追記。
 
 verified:
