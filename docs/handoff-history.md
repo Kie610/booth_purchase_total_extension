@@ -1082,3 +1082,55 @@ P10〜P12の実装内容は `docs/improvement-plan.md` の D14・D15・D16・D17
   python -m http.server 8805 + Browserで/test/index.html(claude/p12-feedback2、幅1280px);
   counts=compile 17/0、ALL PASS 989 checks(980→989。D17-dで9件追加)。統合SHA=73232eb
   (D17-d: 「ラビ先輩」が「先輩」になる件と、「95アバター対応」が未分類へ落ちる件の修正)
+
+## HANDOFF.agent.md を Agent handoff v1 schema へ正規化(2026-08-10)
+
+旧 `HANDOFF.agent.md` を schema へ合わせて書き換えた際に、本文から外した記述と正規化の理由。
+値の追加・昇格は行っていない(証拠の無いフィールドは `unknown`、PASS/FAILの新規判定なし)。
+
+### 本文から移した原文
+
+- 統合の内訳(complete から短縮。詳細は docs/improvement-plan.md の D14〜D22 が正)
+  - `- C: P10〜P12(D14〜D18)・D19〜D22を検品のうえ1.1.0へ統合済み(2026-08-09)。`
+  - `- C: D20で排他集計(手動>特定>ワールド>ツール>複数対応>未分類)、boothAvatarAssignへ`
+    `区分キー__multi_tool__/__world__/__world_item__を追加(追加のみ)。D21で語彙判定`
+    `avatarVocabSlot。D22で名簿226体+ITEM_MASTER_EXACT1080件(BOOTH公開データ、スキ順)と`
+    `手動割り当てUI刷新(区分5択+datalist検索)。実CSVで未分類63点(金額9.5%)。`
+- verified の旧1行(EVIDENCE_SYNTAXのフィールド順・kind列挙に合わないため3行へ分割)
+  - `- A: 2026-08-10 — evidence: status=PASS; kind=compile+runtime+dist; command=node --check 17ファイル、`
+    `python -m http.server 8841 + Browserで/test/index.html(幅1280px)、tools/release.ps1;`
+    `counts=compile 17/0、ALL PASS 1055 checks(README/AGENTS/testのv1.1.0正式リリース表記更新後に再実行)。`
+    `ZIP=booth-purchase-total-extension-v1.1.0.zip(26 entries、manifest 1.1.0、SHA-256一致 2d7426ff...c3ddd0)`
+  - `- 前の証跡(P10=898、P11=924、P12=964、975、980、989 checks)は docs/handoff-history.md。`
+    (上の「1.1.0 の統合内訳」以降に既出のため本文から削除)
+- upstream 行の注記(schemaは `remote/ref@SHA` のみ)
+  - `upstream: origin/1.1.0 (2026-08-08にユーザー許可を得てpush・追跡設定済み)`
+- Next の旧ブロッカー表記
+  - `2. 次版は正式リリース後に同期したmainから1.2.0(または1.1.1)ブランチを作る — blocked-by: 次の要件`
+- Resume protocol の旧3手順
+  - `1. Read AGENTS.md, HANDOFF.agent.md, and linked procedures.`
+  - `2. Recheck branch, HEAD, worktree, upstream, remote state, and named tests.`
+  - `3. Replace stale A and U entries only with current evidence.`
+
+### 正規化した箇所と理由
+
+- `verified:` の1行を kind ごとに3行へ分割し、`status/kind/command/environment/scope/counts` の順に統一した。
+  `kind=compile+runtime+dist` は列挙(compile|runtime|hardware)に無いため、構文検査と配布物照合を`compile`、
+  ブラウザ実行を`runtime`とした。
+- schema は `verified:` の真偽キーを `C` に限るため、旧記載の `A` を書き写さず、2026-08-10に3件とも
+  再実行して自分の証拠で `C` にした(旧行の文面は上に原文として残す)。再実行の内訳:
+  `node --check` 17ファイル passed=17/failed=0、`python -m http.server 8847` + ブラウザ幅1280pxで
+  `/test/index.html` ALL PASS 1055 checks、`dist/booth-purchase-total-extension-v1.1.0.zip` の
+  26 entries と `.sha256`(2d7426ff...c3ddd0)の一致。
+- 配布物の行は `tools/release.ps1` を再実行していない。`dist/` を上書きしない読み取り専用の照合
+  (python hashlib + zipfile)に置き換えたため、`command` は旧行のままにせず実行したものを書いた。
+  release.ps1 自体の再実行は未実施。
+- `environment` は旧記載に無かったが、再実行を自分で行ったため実測値(Windows 11 と各ツール)を記した。
+- `skipped=0, not-run=0` は test/cases.js:4212 の集計に skip 機構が無く、`failures===0`のとき`ALL PASS`と
+  表示する実装であることを根拠にした(件数の捏造ではない)。
+- `not-run:` の2件目へ安定ID `U2` を付与(1件目の`U1`は変更なし)。
+- Next 2 の `blocked-by: 次の要件` を、Decisions へ新設した `U3`(次版の要件が未確定)への参照へ置換した。
+- 旧 verified 配下にあった真偽キーなしの注意書き「共有カードの幅依存テスト1件はブラウザ幅521pxでは落ちる」を、
+  証拠行ではなく確認済みの事実として `Decisions` の `C:` へ移した。
+- `repo:` を URL から `OWNER/NAME` 形式へ変更。日付・コマンド・件数・パス・SHA・ブランチ名は変更していない。
+- `upstream` は live 確認(`git rev-parse @{u}` = 67f206d861f6bbaf633209d00db254526d152d37)で SHA を補った。
