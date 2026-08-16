@@ -1,6 +1,6 @@
 # Agent handoff v1
 
-updated: 2026-08-10
+updated: 2026-08-16
 repo: Kie610/booth_purchase_total_extension
 work_branch: 1.1.0
 upstream: origin/1.1.0@67f206d861f6bbaf633209d00db254526d152d37
@@ -12,7 +12,7 @@ goal: v1.1.0を正式リリースする(2026-08-10にユーザー指示で実施
 complete:
 - C: v1.0.0を正式リリース済み(GitHub Release公開、`main`を同じSHAへff同期済み)。
 - C: `1.1.0`へP1〜P12(A1〜A5・B1〜B4・C1〜C18・D1〜D22・T1)を検品のうえ統合済み。内訳と設計判断は docs/improvement-plan.md と docs/handoff-history.md。
-- C: 運用ルール合成(2026-08-08)でAGENTS.mdへ契約・設計優先順位・委任と検品を追記。
+- C: 運用ルール合成(2026-08-08、2026-08-16に再実施)でAGENTS.mdへ契約・設計優先順位・委任と検品・依存と先行事例・IRREV確認を追記。採否は docs/handoff-history.md。
 
 verified:
 - C: 2026-08-10 — evidence: status=PASS; kind=compile; command=node --check extension/*.js test/*.js; environment=Windows 11 / Node.js; scope=extension/とtest/の全JavaScript構文; counts=passed=17, failed=0, skipped=0, not-run=0
