@@ -12,7 +12,7 @@ goal: v1.1.0を正式リリースする(2026-08-10にユーザー指示で実施
 complete:
 - C: v1.0.0を正式リリース済み(GitHub Release公開、`main`を同じSHAへff同期済み)。
 - C: `1.1.0`へP1〜P12(A1〜A5・B1〜B4・C1〜C18・D1〜D22・T1)を検品のうえ統合済み。内訳と設計判断は docs/improvement-plan.md と docs/handoff-history.md。
-- C: 運用ルール合成(2026-08-08、2026-08-16に再実施)でAGENTS.mdへ契約・設計優先順位・委任と検品・依存と先行事例・IRREV確認を追記。採否は docs/handoff-history.md。
+- C: 運用ルール合成を2026-08-08と2026-08-16に実施。AGENTS.mdをひな形の必須節へそろえ、場面限定ルールを docs/agent-appendix.md へ分離(6文書構成)。採否は docs/handoff-history.md。
 
 verified:
 - C: 2026-08-10 — evidence: status=PASS; kind=compile; command=node --check extension/*.js test/*.js; environment=Windows 11 / Node.js; scope=extension/とtest/の全JavaScript構文; counts=passed=17, failed=0, skipped=0, not-run=0
@@ -42,7 +42,8 @@ not-run:
 
 - C: `extension/manifest.json` — 拡張機能と配布物のversion
 - C: `tools/release.ps1` — 配布ZIPとSHA-256の生成
-- C: `AGENTS.md` — 永続的な開発・ブランチ運用ルール
+- C: `AGENTS.md` — 毎回有効な永続ルール
+- C: `docs/agent-appendix.md` — 委任・並行実装・リリース・引き継ぎ整備の場面限定ルール
 - C: `docs/versioning.md` — バージョン決定、正式リリース、main同期の詳細手順
 - C: `docs/handoff-history.md` — 旧HANDOFFの詳細手順・調査履歴・縮小前の原文
 - C: `docs/improvement-plan.md` — 2026-08-07レビューの指摘一覧と委任プロンプト
