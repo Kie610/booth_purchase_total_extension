@@ -707,11 +707,7 @@
    <div class="view" id="view-gifts" hidden>
      <section class="step">
        <h2>贈ったギフト</h2>
-       <p class="hint">
-         収集した注文のうち、ギフトとして買った商品を並べます。受け取られたかどうかは
-         BOOTHのギフト管理ページ(booth.pm)にしか出ないため、下のボタンで確認します。
-         受取済みになったギフトは二度と取りに行きません。
-       </p>
+       <p class="hint">収集した注文のうち、ギフトとして買った商品と受取状況を並べます。</p>
 
        <div id="giftEmpty" class="empty-note">
          まだ収集したギフトがありません。「お買いものレポート」で金額を収集すると、ここに並びます。
@@ -732,18 +728,11 @@
            </label>
            <span class="status" id="giftCheckStatus" role="status" aria-live="polite"></span>
          </div>
-         <p class="hint">
-           URL未取得のギフトを含む注文の詳細ページ(accounts.booth.pm)だけを取り直します。
-           「キャッシュを無視して」を付けると、ギフトを含む注文を保存済みでも取り直します。
-           どちらもギフトの無い注文には触れません。
-         </p>
 
          <!-- ② 金額の収集と同じ形: 月の範囲を指定して受取状況を確認する -->
          <h3 class="gift-check-title">受取状況の確認</h3>
          <p class="hint">
-           未確認と未受取のギフトについて、ギフト管理ページ(booth.pm)を1件ずつ開いて状態を読みます。
-           件数が多いと時間がかかるため、月の範囲を指定して分割して進められます。
-           初回は booth.pm へのアクセス許可を求めます。
+           ギフト管理ページ(booth.pm)から受取状況とメモを取得します。初回は booth.pm へのアクセス許可を求めます。
          </p>
          <div id="giftRangeArea">
            <div class="range-controls">
@@ -771,13 +760,6 @@
            </thead>
            <tbody id="giftMonthTableBody"></tbody>
          </table>
-         <p class="hint">
-           年の行の ▸ をクリックすると月別を開閉できます。
-           年の行をクリックするとその年全体が、月の行をクリックするとその月が範囲に設定されます。
-           右端の「選択」が塗られている行が、いま確認する範囲です。確認するのは未受取と未確認で、
-           受取済みは「キャッシュを無視して指定範囲を再取得」を付けたときだけ開き直します
-           (メモの変更を拾いたいとき)。URL未取得のギフトはこの表に入れません。
-         </p>
          <p id="giftUnknownArea" class="unknown-area" hidden><span id="giftUnknownCount"></span></p>
 
          <div class="gift-view-filter">
