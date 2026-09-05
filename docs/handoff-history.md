@@ -1327,3 +1327,9 @@ procedure: ai-project-management 0.4.0-dev (ADOPT-PROMPT.md, 2026-09-05)
   ユーザー指定を優先)。
 - U7: 移動前のパスを指していた worktree 9本を `git worktree prune` で整理した。ブランチは残っている。
 - U8: `origin/1.2.0-dev` への push を許可。
+
+## バックアップ実施記録
+
+- 2026-09-05 初回 mirror: `git clone --mirror` → `D:\GitHub_WorkSpace\BrowserExtensionackupooth_purchase_total_extension-2026-09-05.git`
+  (5.8MB、ブランチ46、タグ2、`1.2.0-dev`=18085a2、`main`=67f206d)。復元確認: mirror から scratchpad へ clone し、
+  `node --check` 17ファイル failed=0、`tools/release.ps1` で配布ZIPと SHA-256 の生成に成功。検証後の復元コピーは削除した。
