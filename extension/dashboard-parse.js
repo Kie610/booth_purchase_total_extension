@@ -82,6 +82,8 @@ function parseYenAmount(text) {
 //       div.sheet   > b.u-tpg-title3                「ダウンロード商品」「ギフト」
 //       div.sheet                                   商品1件
 //         a.nav[href*="/items/"]                    商品名
+//         a[href*="/gifts/"]                        「ギフトを渡す」(ギフトのみ。href は
+//                                                   booth.pm/gifts/<UUID>/edit。受取済みでも残る)
 //         div.u-tpg-caption1                        価格   "¥ 890"
 //         div.u-tpg-caption1 > .particulars-heading 数量   "数量4"
 //         div.u-tpg-caption1 > .particulars-heading BOOST  "BOOST¥ 0"
@@ -99,6 +101,7 @@ function parseYenAmount(text) {
 const SHOP_SECTION_SELECTOR = ".l-order-detail-by-shop";
 const SHOP_NAME_SELECTOR = ".l-order-detail-sheet-group-header a";
 const ITEM_LINK_SELECTOR = 'a.nav[href*="/items/"]';
+const GIFT_LINK_SELECTOR = 'a[href*="/gifts/"]';
 const GIFT_GROUP_LABEL = "ギフト";
 const QUANTITY_LABEL = "数量";
 const BOOST_LABEL = "BOOST";
@@ -145,7 +148,7 @@ function parseItemSheet(sheet, shop, gift) {
     // (取りこぼした分はお支払金額との差額に出るので、黙って消えることはない)
   }
 
-  return {
+  const item = {
     shop: shop.name,
     shopUrl: shop.url,
     name: link.textContent.trim(),
@@ -153,6 +156,47 @@ function parseItemSheet(sheet, shop, gift) {
     quantity,
     boost,
     gift,
+  };
+  // ギフト管理ページのUUID。読めなければ項目ごと持たせない(空文字で埋めると
+  // 「URLがある」ように見えて受取状況の確認対象に混ざる)
+  const giftId = gift ? extractGiftId(sheet.querySelector(GIFT_LINK_SELECTOR)) : null;
+  if (giftId) item.giftId = giftId;
+  return item;
+}
+
+function extractGiftId(link) {
+  if (!link) return null;
+  const m = (link.getAttribute("href") || "").match(/\/gifts\/([^/?#]+)/);
+  return m && GIFT_ID_PATTERN.test(m[1]) ? m[1].toLowerCase() : null;
+}
+
+// ギフト管理ページ(booth.pm/gifts/<UUID>/edit)。ラベルの div の隣の要素が値
+// (2026-09-05 実測。意味のある class は無く、Tailwind のユーティリティだけ)。
+//   発行日時  2026年9月5日 03時15分
+//   受取日時  -            (受取済みなら 2026年7月23日 00時06分)
+//   状態      未受取 / 受取済み
+// 状態を読めなければ null(不明)。未受取と断定しない
+const GIFT_STATE_TEXTS = { 未受取: "unreceived", 受取済み: "received" };
+
+function labeledValue(doc, label) {
+  const el = Array.from(doc.querySelectorAll("div")).find(
+    (d) => d.children.length === 0 && d.textContent.trim() === label
+  );
+  const value = el && el.nextElementSibling;
+  return value ? value.textContent.trim() : null;
+}
+
+function parseGiftPage(doc) {
+  const stateText = labeledValue(doc, "状態");
+  const state = Object.prototype.hasOwnProperty.call(GIFT_STATE_TEXTS, stateText)
+    ? GIFT_STATE_TEXTS[stateText]
+    : null;
+  if (!state) return null;
+  const receivedAt = labeledValue(doc, "受取日時");
+  return {
+    state,
+    issuedAt: labeledValue(doc, "発行日時"),
+    receivedAt: receivedAt && receivedAt !== "-" ? receivedAt : null,
   };
 }
 

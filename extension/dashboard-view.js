@@ -45,6 +45,18 @@ const orderSearch = document.getElementById("orderSearch");
 const orderStatusFilter = document.getElementById("orderStatusFilter");
 const orderSort = document.getElementById("orderSort");
 const orderFilterCount = document.getElementById("orderFilterCount");
+// 贈ったギフト(受取状況)
+const giftEmpty = document.getElementById("giftEmpty");
+const giftArea = document.getElementById("giftArea");
+const giftStats = document.getElementById("giftStats");
+const giftMissingNote = document.getElementById("giftMissingNote");
+const refetchGiftUrlsBtn = document.getElementById("refetchGiftUrlsBtn");
+const checkGiftStatusBtn = document.getElementById("checkGiftStatusBtn");
+const giftCheckStatus = document.getElementById("giftCheckStatus");
+const giftViewFilterSwitch = document.getElementById("giftViewFilterSwitch");
+const giftFilterCount = document.getElementById("giftFilterCount");
+const giftTableBody = document.getElementById("giftTableBody");
+const authorHeaderBtn = document.getElementById("authorHeaderBtn");
 const footTotal = document.getElementById("footTotal");
 const footTotalCount = document.getElementById("footTotalCount");
 const footYearLabel = document.getElementById("footYearLabel");
@@ -194,6 +206,8 @@ const ACTION_BUTTONS = [
   clearIndexBtn,
   clearAmountsBtn,
   backupSaveBtn,
+  refetchGiftUrlsBtn,
+  checkGiftStatusBtn,
 ];
 
 // ---- 画面の切り替え ----------------------------------------------------
@@ -203,7 +217,7 @@ const ACTION_BUTTONS = [
 // (ポップアップではなく専用タブで処理しているのと同じ理由)。
 // 現在の画面はURLのハッシュに持たせるので、再読み込みしても同じ画面に戻る。
 
-const VIEW_NAMES = ["report", "ranking", "avatars", "trends", "summary", "export", "backup"];
+const VIEW_NAMES = ["report", "ranking", "avatars", "trends", "summary", "export", "backup", "gifts"];
 const DEFAULT_VIEW = "report";
 // 見出しの右に添える画面名。既定の画面では何も足さない
 const VIEW_TITLES = {
@@ -214,6 +228,7 @@ const VIEW_TITLES = {
   summary: "今年のまとめ",
   export: "データ出力",
   backup: "データの引っ越し",
+  gifts: "ギフト・注文",
 };
 
 function viewFromHash(hash) {
@@ -685,6 +700,7 @@ function render() {
   renderYearSummary(results);
   renderExportArea(results);
   renderBackupArea(results);
+  renderGiftArea(results);
   // 出し分けと共有ボタンは上の描画結果に依るので最後に決める。
   // renderCurrentView が共有ボタンまで更新するので、ここで呼ぶのは1回でよい
   renderCurrentView();
@@ -1026,7 +1042,6 @@ function renderResult(results = currentResults()) {
 
   if (results.length === 0) {
     summarySection.hidden = true;
-    breakdownSection.hidden = true;
     return;
   }
 
@@ -1045,11 +1060,9 @@ function renderResult(results = currentResults()) {
     (failed > 0 ? ` / 金額取得失敗: ${failed}件` : "");
 
   renderPeriodTable(results);
-  renderOrderTable(results);
   highlightSelectedRange();
 
   summarySection.hidden = false;
-  breakdownSection.hidden = false;
 }
 
 // 画面下部に固定表示する合計。収集済みの注文のみを対象にする
@@ -1279,6 +1292,122 @@ function renderOrderTable(results) {
   orderFilterCount.textContent = filtered.length === results.length
     ? `${results.length}件を表示`
     : `${results.length}件中 ${filtered.length}件を表示`;
+}
+
+// ---- 贈ったギフト(受取状況) ----------------------------------------------
+//
+// 表示の絞り込み(すべて/未受取/受取済み)。D12の集計対象とは別で、この表だけに効く。
+// 保存しない(開き直せば「すべて」に戻る)
+let giftViewFilter = "all";
+
+function setGiftViewFilter(value) {
+  const next = GIFT_VIEW_FILTERS.includes(value) ? value : "all";
+  if (next === giftViewFilter) return;
+  giftViewFilter = next;
+  renderGiftArea();
+}
+
+function renderGiftViewFilter() {
+  for (const btn of giftViewFilterSwitch.querySelectorAll("button[data-gift-view-filter]")) {
+    const selected = btn.dataset.giftViewFilter === giftViewFilter;
+    btn.classList.toggle("current", selected);
+    btn.setAttribute("aria-pressed", String(selected));
+  }
+}
+
+function giftStateCell(row) {
+  return td(GIFT_STATE_LABELS[row.state], `gift-state gift-state-${row.state}`);
+}
+
+function giftNameCell(row) {
+  const cell = td("");
+  const url = giftPageUrl(row.giftId);
+  if (!url) {
+    cell.textContent = row.name;
+    return cell;
+  }
+  // 商品名からギフト管理ページへ飛べるようにする(URLをコピーして渡し直すのはそこ)
+  const link = el("a", null, row.name);
+  link.href = url;
+  link.target = "_blank";
+  link.rel = "noopener";
+  cell.appendChild(link);
+  return cell;
+}
+
+function giftShopCell(row) {
+  const cell = td("");
+  if (SHOP_URL_PATTERN.test(String(row.shopUrl || ""))) {
+    const link = el("a", null, row.shop);
+    link.href = row.shopUrl;
+    link.target = "_blank";
+    link.rel = "noopener";
+    cell.appendChild(link);
+  } else {
+    cell.textContent = row.shop || "—";
+  }
+  return cell;
+}
+
+function giftCountsText(rows) {
+  const counts = {};
+  for (const state of GIFT_STATES) counts[state] = 0;
+  for (const row of rows) counts[row.state]++;
+  const parts = GIFT_STATES.filter((state) => counts[state] > 0).map(
+    (state) => `${GIFT_STATE_LABELS[state]} ${counts[state]}件`
+  );
+  return `ギフト ${rows.length}件(${parts.join(" / ")})`;
+}
+
+// 贈ったギフトの表と、レポートから移した「注文ごとの内訳」。
+// どちらも収集済みの注文が元なので、無ければ案内だけを出す
+function renderGiftArea(results = currentResults()) {
+  breakdownSection.hidden = results.length === 0;
+  if (results.length > 0) renderOrderTable(results);
+
+  const rows = buildGiftRows(results, state.giftStatus);
+  giftEmpty.hidden = rows.length > 0;
+  giftArea.hidden = rows.length === 0;
+  renderGiftViewFilter();
+  if (rows.length === 0) {
+    giftTableBody.innerHTML = "";
+    return;
+  }
+
+  const missing = rows.filter((row) => row.state === "missing").length;
+  const toCheck = giftIdsToCheck(rows).length;
+  giftStats.textContent = giftCountsText(rows);
+  giftMissingNote.hidden = missing === 0;
+  giftMissingNote.textContent =
+    missing > 0
+      ? `${missing}件はギフトのURLを保存していません(以前の版で収集した注文)。` +
+        "「ギフトのURLを取り直す」で注文詳細を取り直すと確認できるようになります。"
+      : "";
+  // 実行中の無効化を上書きしないよう、待機中だけ件数で決める(renderClearArea と同じ)
+  if (!running) {
+    refetchGiftUrlsBtn.disabled = missing === 0;
+    checkGiftStatusBtn.disabled = toCheck === 0;
+  }
+
+  const filtered = filterGiftRows(rows, giftViewFilter);
+  giftTableBody.innerHTML = "";
+  for (const row of filtered) {
+    const tr = el("tr");
+    tr.appendChild(giftStateCell(row));
+    tr.appendChild(giftNameCell(row));
+    tr.appendChild(giftShopCell(row));
+    tr.appendChild(td(row.date));
+    tr.appendChild(
+      typeof row.amount === "number" ? td(formatYen(row.amount), "num") : td("不明", "num amount-pending")
+    );
+    tr.appendChild(td(row.receivedAt || "—"));
+    tr.appendChild(orderIdCell(row.orderId));
+    giftTableBody.appendChild(tr);
+  }
+  giftFilterCount.textContent =
+    filtered.length === rows.length
+      ? `${rows.length}件を表示`
+      : `${rows.length}件中 ${filtered.length}件を表示`;
 }
 
 // 共有ボタンと共有カードの表示は dashboard-share-view.js に分離。

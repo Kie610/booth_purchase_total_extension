@@ -38,7 +38,9 @@ let lastRunStateWrite = 0;
 let runLockHeartbeatTimer = null;
 // avatarAssign は D14 沼レポートの手動割り当て。集計結果ではなく本人の指定なので、
 // キャッシュ削除や再収集では消さない(消すと割り当て直しになる)
-const state = { index: null, cache: {}, avatarAssign: {} };
+// giftStatus は贈ったギフトの受取状況。注文キャッシュとは別に保存し、注文の
+// 取り直しや金額の削除では消さない(受取済みは確定した事実なので取り直す理由が無い)
+const state = { index: null, cache: {}, avatarAssign: {}, giftStatus: {} };
 
 // 描画1回のあいだ使い回す buildResults() の結果。
 // buildResults() は注文数に比例して新しい配列を組み立てるため、各描画関数が
@@ -128,6 +130,7 @@ document.addEventListener("keydown", (event) => {
 });
 
 authorBtn.addEventListener("click", openAuthorPanel);
+authorHeaderBtn.addEventListener("click", openAuthorPanel);
 authorCloseBtn.addEventListener("click", closeAuthorPanel);
 authorOverlay.addEventListener("click", closeAuthorPanel);
 authorPortrait.addEventListener("error", () => {
@@ -262,6 +265,27 @@ collectRangeBtn.addEventListener("click", () =>
 );
 
 runAllBtn.addEventListener("click", () => runTask(runAllTask));
+
+// 贈ったギフト。(a) URL未取得の注文の取り直しと (b) 受取状況の確認は別のボタンにする
+// (同時にすると booth.pm と accounts.booth.pm の両方へ続けてアクセスすることになる)
+refetchGiftUrlsBtn.addEventListener("click", () => runTask(refetchGiftUrlsTask));
+// 権限の要求はクリック直後に行う。runTask はロック取得のためにストレージを待つので、
+// その後に呼ぶとユーザー操作の文脈が切れて要求が黙って失敗することがある
+checkGiftStatusBtn.addEventListener("click", async () => {
+  if (running) return;
+  if (!(await requestGiftPagePermission())) {
+    showNotice(
+      "booth.pm へのアクセスが許可されなかったため、受取状況を確認できません。" +
+        "もう一度押すと再度許可を求めます。"
+    );
+    return;
+  }
+  await runTask(checkGiftStatusTask);
+});
+giftViewFilterSwitch.addEventListener("click", (event) => {
+  const btn = event.target.closest("button[data-gift-view-filter]");
+  if (btn) setGiftViewFilter(btn.dataset.giftViewFilter);
+});
 
 forceRefreshRange.addEventListener("change", updatePlannedCount);
 forceRefreshAll.addEventListener("change", updatePlannedCount);
@@ -847,6 +871,7 @@ async function init() {
   state.index = await loadIndex();
   state.cache = await loadCache();
   state.avatarAssign = await loadAvatarAssign();
+  state.giftStatus = await loadGiftStatus();
   render();
 }
 
@@ -1606,4 +1631,76 @@ async function runAllTask(signal) {
   // 「ここまでに取得した金額は保存されている」という案内に反して全部失われる
   await fetchIndexTask(signal, force);
   await collectAmounts(targetOrders(), force, signal);
+}
+
+// ---- 贈ったギフトの受取状況 ----------------------------------------------
+//
+// 受取状況は booth.pm のギフト管理ページにしか出ない。通常の収集(accounts.booth.pm)
+// とは切り離し、この画面のボタンからしか取りに行かない(サーバーへの負荷を増やさない)。
+
+// (a) ギフトのURL(giftId)を保存していない注文の詳細ページを取り直す。
+// 対象は isOutdatedEntry(v1 でギフトを含む注文)だけなので、他の注文には触れない
+async function refetchGiftUrlsTask(signal) {
+  const orders = targetOrders().filter((o) => isOutdatedEntry(state.cache[o.id]));
+  if (orders.length === 0) {
+    showNotice("取り直す注文はありません(すべてのギフトのURLを保存済みです)。");
+    return;
+  }
+  await collectAmounts(orders, true, signal);
+}
+
+function requestGiftPagePermission() {
+  if (!ext.permissions || typeof ext.permissions.request !== "function") {
+    return Promise.resolve(false);
+  }
+  return ext.permissions.request({ origins: [GIFT_PAGE_ORIGIN] });
+}
+
+// (b) 未確認・未受取のギフトについてギフト管理ページを読み、受取状況を保存する。
+// 受取済みは確定なので対象に入らない(giftIdsToCheck)。
+// D12 の絞り込み中でも全ギフトを対象にする(絞り込みは表示の都合で、確認する範囲を狭める理由にならない)
+async function checkGiftStatusTask(signal) {
+  const ids = giftIdsToCheck(buildGiftRows(buildAllResults(), state.giftStatus));
+  if (ids.length === 0) {
+    showNotice("確認するギフトはありません(未確認・未受取のギフトがありません)。");
+    return;
+  }
+
+  let done = 0;
+  let failed = 0;
+  let unreadable = 0;
+  const flushEvery = cacheFlushInterval(ids.length);
+  try {
+    for (const [index, id] of ids.entries()) {
+      setProgress(`受取状況を確認中... (${index + 1}/${ids.length}件)`, (index + 1) / ids.length);
+      await publishRunState({ phase: "受取状況の確認", current: index + 1, total: ids.length });
+      try {
+        const doc = await fetchDocWithRetry(giftPageUrl(id), signal);
+        const parsed = parseGiftPage(doc);
+        if (parsed) {
+          state.giftStatus[id] = { ...parsed, checkedAt: Date.now() };
+          done++;
+          if (done % flushEvery === 0) await saveGiftStatus(state.giftStatus);
+        } else {
+          // ページは開けたが「状態」を読めない。未受取と断定せず、前の記録も消さない
+          unreadable++;
+        }
+      } catch (err) {
+        if (isFatalFetchError(err)) throw err;
+        failed++;
+      }
+      if (index + 1 < ids.length) await sleep(requestIntervalMs(), signal);
+    }
+  } finally {
+    await saveGiftStatus(state.giftStatus);
+  }
+
+  const notes = [`受取状況を確認しました(${done}件)。`];
+  if (failed > 0) notes.push(`${failed}件は通信に失敗したため確認できていません。`);
+  if (unreadable > 0) {
+    notes.push(
+      `${unreadable}件はページを開けましたが状態を読み取れませんでした(BOOTHの構造が変わった可能性があります)。`
+    );
+  }
+  addNotice(notes.join(""));
 }

@@ -20,5 +20,11 @@ var browser = {
     update: () => Promise.resolve(),
   },
   windows: { update: () => Promise.resolve() },
+  // 受取状況の確認で booth.pm の許可を求める。テストでは常に許可されたことにする
+  permissions: {
+    _requested: [],
+    request(p) { this._requested.push(p); return Promise.resolve(true); },
+    contains: () => Promise.resolve(true),
+  },
   runtime: { getURL: (p) => "chrome-extension://test/" + p },
 };

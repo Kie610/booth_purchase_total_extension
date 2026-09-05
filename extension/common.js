@@ -13,6 +13,10 @@ const DASHBOARD_TAB_KEY = "boothDashboardTab"; // 集計ページのタブID
 const THEME_KEY = "boothTheme"; // 配色テーマの選択("light" | "dark" | "system")
 // D14 沼レポートの手動割り当て { [商品キー]: "アバターkey" | "__multi__" }
 const AVATAR_ASSIGN_KEY = "boothAvatarAssign";
+// 贈ったギフトの受取状況 { [giftId]: { state, issuedAt, receivedAt, checkedAt } }
+// state: "received" | "unreceived"。注文キャッシュとは分けて持つ
+// (注文の取り直しで消えず、受取済みは確定なので二度と取りに行かない)
+const GIFT_STATUS_KEY = "boothGiftStatus";
 
 // 注文詳細ページ。取得(dashboard.js)と内訳のリンク(dashboard-view.js)の両方で使うので
 // 共通側に置く
@@ -21,6 +25,16 @@ const ORDER_DETAIL_URL = "https://accounts.booth.pm/orders/";
 // 注文番号はBOOTHのHTML由来の文字列なので、URLへ挿す前に数字だけであることを確かめる。
 // 通らないものはリンクにせず、文字のまま出す(勝手に別のURLを組み立てない)
 const ORDER_ID_PATTERN = /^\d+$/;
+
+// 贈ったギフトの管理ページ(送り主向け)。受取状況はここにしか出ない。
+// host が booth.pm なので optional_host_permissions で、押されたときに許可を求める
+const GIFT_PAGE_ORIGIN = "https://booth.pm/*";
+const GIFT_PAGE_URL = "https://booth.pm/gifts/";
+const GIFT_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function giftPageUrl(giftId) {
+  return GIFT_ID_PATTERN.test(String(giftId)) ? `${GIFT_PAGE_URL}${giftId}/edit` : null;
+}
 
 function orderDetailUrl(id) {
   return ORDER_ID_PATTERN.test(String(id)) ? `${ORDER_DETAIL_URL}${id}` : null;
@@ -70,7 +84,9 @@ function hasItems(entry) {
 //
 //   1 — 商品明細(shop/shopUrl/name/price/quantity/boost/gift)と送料
 //       v0.15.0以前は版数を持たず、配送商品の行と送料と数量が欠けている
-const CACHE_SCHEMA_VERSION = 1;
+//   2 — ギフト商品の giftId(ギフト管理ページのUUID)。ギフトの無い注文は
+//       v1 と保存内容が同じなので取り直さない(isOutdatedEntry)
+const CACHE_SCHEMA_VERSION = 2;
 
 function entrySchemaVersion(entry) {
   return entry && typeof entry.v === "number" ? entry.v : 0;
@@ -79,7 +95,11 @@ function entrySchemaVersion(entry) {
 // 新しい版で保存されたものは取り直さない(バックアップの復元で、この環境より
 // 新しい版のデータが入ってくることがある)
 function isOutdatedEntry(entry) {
-  return entrySchemaVersion(entry) < CACHE_SCHEMA_VERSION;
+  const v = entrySchemaVersion(entry);
+  if (v >= CACHE_SCHEMA_VERSION) return false;
+  if (v < 1) return true;
+  // v1 → v2 で増えたのはギフトの giftId だけ。ギフトを含む注文だけを取り直す
+  return hasItems(entry) && entry.items.some((item) => item.gift);
 }
 
 // 数量の行はデジタル商品の注文には無い。無ければ1個として数える
@@ -308,6 +328,77 @@ function orderWeekday(date) {
 function orderSortKey(order) {
   const d = parseOrderDate(order.date);
   return d ? d.sortKey : -1;
+}
+
+// ---- 贈ったギフトの一覧 --------------------------------------------------
+//
+// 商品明細のギフト行と受取状況(boothGiftStatus)を突き合わせて1行にする。
+// 状態は受取状況の取得を待つので、注文キャッシュ側だけでは決まらない。
+//   unreceived — 未受取(ギフトページで確認済み)
+//   unknown    — まだ確認していない(giftId はある)
+//   missing    — giftId を保存していない(v1 の注文。詳細ページの取り直しで解消)
+//   received   — 受取済み
+const GIFT_STATES = ["unreceived", "unknown", "missing", "received"];
+const GIFT_STATE_LABELS = {
+  unreceived: "未受取",
+  unknown: "未確認",
+  missing: "URL未取得",
+  received: "受取済み",
+};
+
+function giftRowState(item, giftStatus) {
+  if (!item.giftId) return "missing";
+  const status = giftStatus && giftStatus[item.giftId];
+  if (!status) return "unknown";
+  return status.state === "received" ? "received" : "unreceived";
+}
+
+function buildGiftRows(results, giftStatus) {
+  const rows = [];
+  for (const result of results) {
+    if (!Array.isArray(result.items)) continue;
+    for (const item of result.items) {
+      if (!item.gift) continue;
+      const status = item.giftId && giftStatus ? giftStatus[item.giftId] : null;
+      rows.push({
+        orderId: result.id,
+        date: result.date,
+        name: item.name,
+        shop: item.shop,
+        shopUrl: item.shopUrl,
+        amount: itemAmount(item),
+        giftId: item.giftId,
+        state: giftRowState(item, giftStatus),
+        issuedAt: status ? status.issuedAt : null,
+        receivedAt: status ? status.receivedAt : null,
+        checkedAt: status ? status.checkedAt : null,
+      });
+    }
+  }
+  return rows.sort(compareGiftRows);
+}
+
+// 未受取 → 未確認 → URL未取得 → 受取済み。同じ状態なら注文日時の新しい順
+function compareGiftRows(a, b) {
+  const order = GIFT_STATES.indexOf(a.state) - GIFT_STATES.indexOf(b.state);
+  if (order !== 0) return order;
+  return orderSortKey(b) - orderSortKey(a) || String(a.orderId).localeCompare(String(b.orderId));
+}
+
+// 受取状況を確認しにいく対象(giftId ごとに1回)。受取済みは確定なので外す
+function giftIdsToCheck(rows) {
+  const ids = new Set();
+  for (const row of rows) {
+    if (row.state === "unreceived" || row.state === "unknown") ids.add(row.giftId);
+  }
+  return Array.from(ids);
+}
+
+// 受取状況の絞り込み(すべて / 未受取 / 受取済み)。「すべて」以外では
+// 未確認と URL未取得を出さない(未受取と断定できないため)
+const GIFT_VIEW_FILTERS = ["all", "unreceived", "received"];
+function filterGiftRows(rows, filter) {
+  return filter === "all" ? rows : rows.filter((row) => row.state === filter);
 }
 
 // ---- 期間(年・月)のまとめ ----------------------------------------------
@@ -1594,6 +1685,15 @@ async function loadAvatarAssign() {
 
 function saveAvatarAssign(assignments) {
   return writeStored(AVATAR_ASSIGN_KEY, normalizeAvatarAssign(assignments));
+}
+
+// 贈ったギフトの受取状況。保存が無い環境では空
+function loadGiftStatus() {
+  return readStored(GIFT_STATUS_KEY, {});
+}
+
+function saveGiftStatus(giftStatus) {
+  return writeStored(GIFT_STATUS_KEY, giftStatus);
 }
 
 function loadSummary() {

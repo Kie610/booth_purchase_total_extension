@@ -79,15 +79,19 @@ check("parseDetailPage 金額が無い場合", parseDetailPage(parse("<html><bod
 // 別グループだが同じ区切りの中に並ぶ)。
 // ダウンロードファイル名の行も .u-tpg-caption1 を使っているので、金額のある行だけを拾う
 let itemSeq = 0;
-function itemSheet(price, boost, name) {
+// giftId を渡すと、実ページのギフト商品と同じ「ギフトを渡す」リンク(booth.pm/gifts/<UUID>/edit)を付ける
+function itemSheet(price, boost, name, giftId) {
   const id = ++itemSeq;
   const label = name || `商品${id}`;
+  const giftLink = giftId
+    ? `<div class="mt-8 w-[207px]"><a class="btn small" href="https://booth.pm/gifts/${giftId}/edit">ギフトを渡す</a></div>`
+    : "";
   return `<div class="sheet sheet--p400">
     <div class="flex"><div class="flex-[1]">
       <div class="text-14 text-[#505c6b]"><b><a class="nav" href="https://sourflavor.booth.pm/items/${id}">${label}</a></b></div>
       <div class="u-tpg-caption1 text-[#505c6b]">¥ ${price}</div>
       <div class="u-tpg-caption1 text-[#505c6b]"><span class="particulars-heading">BOOST<i class="icon-boost"></i></span>¥ ${boost}</div>
-    </div></div>
+    </div></div>${giftLink}
     <div class="list list--collapse"><div class="legacy-list-item">
       <div class="legacy-list-item__center u-tpg-caption1"><b>${label}.zip</b></div>
     </div></div>
@@ -99,7 +103,7 @@ function sheetGroup(title, items) {
       <div class="l-col-pc flex items-center"><b class="u-tpg-title3">${title}</b></div>
       <div class="l-col-pc-auto"><a class="btn small calm" href="https://sourflavor.booth.pm/conversations/new">ショップにメッセージを送る</a></div>
     </div></div>
-    ${items.map(([p, b, n]) => itemSheet(p, b, n)).join("")}
+    ${items.map(([p, b, n, g]) => itemSheet(p, b, n, g)).join("")}
   </div>`;
 }
 function shopSection(shop, groups) {
@@ -164,6 +168,36 @@ const multiGift = orderHtml("2,000",
   sheetGroup("ダウンロード商品", [[500, 0]]) +
   sheetGroup("ギフト", [[1000, 0]]));
 check("ギフトのグループが複数あれば合算する", parseDetailPage(parse(multiGift)).gift, 1500);
+
+// --- ギフト管理ページのUUID(受取状況の確認に使う) ---
+// 2026-09-05 実測: ギフト商品の .sheet に「ギフトを渡す」リンク(booth.pm/gifts/<UUID>/edit)が
+// あり、受け取り済みでも残る。自分用の商品には無い
+const GIFT_UUID_A = "45dd0a91-2eda-4147-b2ea-8b7ff6b6d0de";
+const GIFT_UUID_B = "50AB63E8-D594-4E55-9F8C-3033F5A40D3F";
+const withGiftIds = parseDetailPage(parse(orderHtml("1,275",
+  sheetGroup("ダウンロード商品", [[425, 0, "自分用"]]) +
+  sheetGroup("ギフト", [[425, 0, "髪型A", GIFT_UUID_A], [425, 0, "髪型B", GIFT_UUID_B], [425, 0, "リンク無し"]]))));
+check("ギフト商品からUUIDを読む(小文字にそろえる)",
+  withGiftIds.items.map(i => i.giftId), [undefined, GIFT_UUID_A, GIFT_UUID_B.toLowerCase(), undefined]);
+check("UUIDの形でないものは読まない", extractGiftId(parse('<a href="https://booth.pm/gifts/not-a-uuid/edit">x</a>').querySelector("a")), null);
+check("giftPageUrl はUUIDだけを許す",
+  [giftPageUrl(GIFT_UUID_A), giftPageUrl("../orders"), giftPageUrl(undefined)],
+  [`https://booth.pm/gifts/${GIFT_UUID_A}/edit`, null, null]);
+
+// ギフト管理ページ(2026-09-05 実測)。ラベルの div の隣が値
+function giftPageHtml(state, receivedAt) {
+  return `<html><body><main><div class="w-full"><div class="rounded-16 bg-white">
+    <div class="mt-24 grid"><div class="typography-14 font-bold text-right">発行日時</div><div class="typography-14 text-left">2026年9月5日 03時15分</div>
+    <div class="typography-14 font-bold text-right">受取日時</div><div class="typography-14 text-left">${receivedAt}</div>
+    <div class="typography-14 font-bold text-right">状態</div><div class="typography-14 text-left">${state}</div></div>
+  </div></div></main></body></html>`;
+}
+check("parseGiftPage 未受取", parseGiftPage(parse(giftPageHtml("未受取", "-"))),
+  { state: "unreceived", issuedAt: "2026年9月5日 03時15分", receivedAt: null });
+check("parseGiftPage 受取済み", parseGiftPage(parse(giftPageHtml("受取済み", "2026年7月23日 00時06分"))),
+  { state: "received", issuedAt: "2026年9月5日 03時15分", receivedAt: "2026年7月23日 00時06分" });
+check("parseGiftPage 状態を読めなければ不明", parseGiftPage(parse(giftPageHtml("受け取り待ち", "-"))), null);
+check("parseGiftPage 何も無いページは不明", parseGiftPage(parse("<html><body></body></html>")), null);
 
 // 複数のショップにまたがる注文。ショップ名はそれぞれの区切りから取る
 const multiShop = parseDetailPage(parse(`<html><body>
@@ -384,6 +418,14 @@ check("版数が無ければ取り直す", [isOutdatedEntry(oldEntry), needsColl
 check("現行版なら取り直さない", [isOutdatedEntry(newEntry), needsCollect(newEntry)], [false, false]);
 // バックアップの復元で、この環境より新しい版のデータが入ってくることがある
 check("新しい版は取り直さない", isOutdatedEntry({ ...newEntry, v: CACHE_SCHEMA_VERSION + 1 }), false);
+// v2 で増えたのはギフトの giftId だけ。ギフトを含まない v1 の注文まで取り直すと、
+// 全ユーザーに無関係な再取得を強いる
+check("v1 でもギフトが無ければ取り直さない",
+  isOutdatedEntry({ v: 1, amount: 500, items: [{ name: "x", price: 500, gift: false }] }), false);
+check("v1 でギフトを含む注文は取り直す",
+  isOutdatedEntry({ v: 1, amount: 500, items: [{ name: "x", price: 500, gift: true }] }), true);
+check("v1 で明細が無ければ取り直さない(明細なしは needsCollect が別に拾う)",
+  isOutdatedEntry({ v: 1, amount: 500, items: null }), false);
 // 混在注文の欠落は差額に出るが、差額はクーポン利用でも出るので判定材料にはしない
 check("欠落したエントリの差額は0にならない",
   amountGapOf({ amount: 4060, items: [item("髪型A", 500)] }), 3560);
@@ -423,6 +465,42 @@ check("ギフト分は金額と同じ額を持つ", giftOnly.rows.map(r => r.gif
 check("自分用は該当商品のある注文だけ残す", selfOnly.rows.map(r => r.id), ["g1", "g3"]);
 check("自分用の金額は内訳ベース", selfOnly.rows.map(r => r.amount), [1200, undefined]);
 check("自分用ではギフト分を0にする", selfOnly.rows[0].gift, 0);
+
+// --- 贈ったギフトの一覧(受取状況) ---
+const giftResults = [
+  { id: "g-new", date: "2026年9月5日 03:15", items: [
+    { ...item("自分用", 100), giftId: "ignored" },
+    { ...item("未確認の贈り物", 300, true), giftId: "aaaaaaaa-0000-4000-8000-000000000001" },
+  ] },
+  { id: "g-old", date: "2026年6月15日 19:58", items: [
+    { ...item("受取済みの贈り物", 425, true), giftId: "aaaaaaaa-0000-4000-8000-000000000002" },
+    { ...item("未受取の贈り物", 425, true), giftId: "aaaaaaaa-0000-4000-8000-000000000003" },
+  ] },
+  { id: "g-v1", date: "2026年1月1日 00:00", items: [item("URLの無い贈り物", 200, true)] },
+  { id: "g-none", date: "2026年2月1日 00:00", items: null },
+];
+const giftStatusFixture = {
+  "aaaaaaaa-0000-4000-8000-000000000002": { state: "received", issuedAt: "a", receivedAt: "2026年7月23日 00時06分", checkedAt: 1 },
+  "aaaaaaaa-0000-4000-8000-000000000003": { state: "unreceived", issuedAt: "a", receivedAt: null, checkedAt: 1 },
+};
+const giftListRows = buildGiftRows(giftResults, giftStatusFixture);
+check("ギフト商品だけを1行ずつ並べる", giftListRows.map(r => r.name),
+  ["未受取の贈り物", "未確認の贈り物", "URLの無い贈り物", "受取済みの贈り物"]);
+check("状態は 未受取→未確認→URL未取得→受取済み の順", giftListRows.map(r => r.state),
+  ["unreceived", "unknown", "missing", "received"]);
+check("受取日時は状況から引く", giftListRows.map(r => r.receivedAt), [null, null, null, "2026年7月23日 00時06分"]);
+check("金額は商品の内訳から", giftListRows.map(r => r.amount), [425, 300, 200, 425]);
+check("確認しにいくのは未受取と未確認だけ", giftIdsToCheck(giftListRows),
+  ["aaaaaaaa-0000-4000-8000-000000000003", "aaaaaaaa-0000-4000-8000-000000000001"]);
+check("同じ状態は注文日時の新しい順", buildGiftRows([
+  { id: "1", date: "2026年1月1日 00:00", items: [item("古い", 1, true)] },
+  { id: "2", date: "2026年3月1日 00:00", items: [item("新しい", 1, true)] },
+], {}).map(r => r.name), ["新しい", "古い"]);
+check("表示の絞り込み(未受取)", filterGiftRows(giftListRows, "unreceived").map(r => r.name), ["未受取の贈り物"]);
+check("表示の絞り込み(受取済み)", filterGiftRows(giftListRows, "received").map(r => r.name), ["受取済みの贈り物"]);
+check("表示の絞り込み(すべて)は未確認も含む", filterGiftRows(giftListRows, "all").length, 4);
+check("受取状況が無ければ全部未確認かURL未取得", buildGiftRows(giftResults, {}).map(r => r.state),
+  ["unknown", "unknown", "unknown", "missing"]);
 // 送料やクーポンは注文に1つしか無く、対象別に割り振れない。黙って消さない
 check("分けられない差額を残す", [giftOnly.gap, selfOnly.gap], [500, 500]);
 check("差額を出せない注文は件数で数える", [giftOnly.gapUnknown, selfOnly.gapUnknown], [2, 1]);
@@ -2342,10 +2420,10 @@ renderCurrentView();
 check("データ出力へ切り替わる",
   [document.getElementById("view-report").hidden, document.getElementById("view-export").hidden], [true, false]);
 check("メニューに現在地が出る",
-  [...navDrawer.querySelectorAll(".nav-link")].map(a => a.classList.contains("current")), [false, false, false, false, false, true, false]);
+  [...navDrawer.querySelectorAll(".nav-link")].map(a => a.classList.contains("current")), [false, false, false, false, false, true, false, false]);
 check("現在地は読み上げにも出す",
   [...navDrawer.querySelectorAll(".nav-link")].map(a => a.getAttribute("aria-current")),
-  [null, null, null, null, null, "page", null]);
+  [null, null, null, null, null, "page", null, null]);
 check("画面名を見出しに添える", viewTitle.textContent, "データ出力");
 location.hash = "#/trends";
 renderCurrentView();
@@ -2357,6 +2435,69 @@ renderCurrentView();
 check("レポートへ戻る",
   [document.getElementById("view-report").hidden, document.getElementById("view-export").hidden], [false, true]);
 check("既定の画面では画面名を出さない", viewTitle.textContent, "");
+
+// --- ギフト・注文の画面(贈ったギフトの表と、レポートから移した内訳) ---
+{
+  const savedIndex = state.index;
+  const savedCache = state.cache;
+  const savedGiftStatus = state.giftStatus;
+  location.hash = "#/gifts";
+  renderCurrentView();
+  check("ギフト・注文へ切り替わる",
+    [document.getElementById("view-report").hidden, document.getElementById("view-gifts").hidden], [true, false]);
+  check("ギフト・注文の画面名", viewTitle.textContent, "ギフト・注文");
+  check("メニューの末尾がギフト・注文",
+    [...navDrawer.querySelectorAll(".nav-link")].at(-1).dataset.view, "gifts");
+
+  // 何も無ければ案内だけ
+  state.index = null;
+  state.cache = {};
+  state.giftStatus = {};
+  render();
+  check("収集前はギフトの案内だけを出す", [giftEmpty.hidden, giftArea.hidden, breakdownSection.hidden], [false, true, true]);
+
+  // 索引が無くてもキャッシュだけで並ぶ
+  state.cache = {
+    "910001": { v: CACHE_SCHEMA_VERSION, amount: 725, gift: 300, shipping: 0, status: "completed", date: "2026年9月5日 03:15",
+      items: [item("自分用", 425), { ...item("贈り物X", 300, true), giftId: "bbbbbbbb-0000-4000-8000-000000000001" }] },
+    "910002": { v: 1, amount: 200, gift: 200, shipping: 0, status: "completed", date: "2026年1月1日 00:00",
+      items: [item("古い贈り物", 200, true)] },
+  };
+  state.giftStatus = { "bbbbbbbb-0000-4000-8000-000000000001": { state: "unreceived", issuedAt: "a", receivedAt: null, checkedAt: 1 } };
+  render();
+  const giftTrs = [...giftTableBody.querySelectorAll("tr")];
+  check("ギフトの表に状態順で並ぶ", giftTrs.map(tr => tr.cells[0].textContent), ["未受取", "URL未取得"]);
+  check("未受取は目立つclass", giftTrs[0].cells[0].className.includes("gift-state-unreceived"), true);
+  check("商品名からギフト管理ページへ飛べる",
+    giftTrs[0].cells[1].querySelector("a").href, "https://booth.pm/gifts/bbbbbbbb-0000-4000-8000-000000000001/edit");
+  check("URL未取得の商品はリンクにしない", giftTrs[1].cells[1].querySelector("a"), null);
+  check("注文番号から注文詳細へ飛べる", giftTrs[0].cells[6].querySelector("a").href, "https://accounts.booth.pm/orders/910001");
+  check("件数の内訳", giftStats.textContent, "ギフト 2件(未受取 1件 / URL未取得 1件)");
+  check("URL未取得の注意書き", [giftMissingNote.hidden, giftMissingNote.textContent.includes("1件はギフトのURLを保存していません")], [false, true]);
+  check("取り直しと確認のボタンは対象があるときだけ押せる", [refetchGiftUrlsBtn.disabled, checkGiftStatusBtn.disabled], [false, false]);
+  check("内訳もこの画面に出る", [breakdownSection.hidden, orderTableBody.querySelectorAll("tr").length], [false, 2]);
+
+  // 表示の絞り込み
+  giftViewFilterSwitch.querySelector('[data-gift-view-filter="unreceived"]').click();
+  check("未受取だけに絞る", [...giftTableBody.querySelectorAll("tr")].map(tr => tr.cells[1].textContent), ["贈り物X"]);
+  check("絞り込みの件数", giftFilterCount.textContent, "2件中 1件を表示");
+  check("絞り込みの選択が見える",
+    [...giftViewFilterSwitch.querySelectorAll("button")].map(b => b.getAttribute("aria-pressed")), ["false", "true", "false"]);
+  giftViewFilterSwitch.querySelector('[data-gift-view-filter="all"]').click();
+  check("すべてに戻す", giftTableBody.querySelectorAll("tr").length, 2);
+
+  // 受取済みしか無ければ確認ボタンは押せない
+  state.cache = { "910001": state.cache["910001"] };
+  state.giftStatus = { "bbbbbbbb-0000-4000-8000-000000000001": { state: "received", issuedAt: "a", receivedAt: "b", checkedAt: 1 } };
+  render();
+  check("受取済みだけなら確認も取り直しもしない", [refetchGiftUrlsBtn.disabled, checkGiftStatusBtn.disabled, giftMissingNote.hidden], [true, true, true]);
+
+  state.index = savedIndex;
+  state.cache = savedCache;
+  state.giftStatus = savedGiftStatus;
+  location.hash = "#/report";
+  render();
+}
 
 // 広い画面では6画面をヘッダー直下の水平タブとして常時見せる。
 // 畳んだままだとランキング・まとめ・支出推移の存在に気付けない
@@ -2948,7 +3089,8 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   // ルートは HTML文字列(そのまま200で返す)か、応答を組み立てる関数で指定する
   window.fetch = (url, init) => {
     const path = String(url);
-    if (!path.startsWith("https://accounts.booth.pm")) return realFetch(url, init);
+    // ギフト管理ページ(booth.pm)も差し替える。それ以外は本物へ
+    if (!/^https:\/\/(accounts\.)?booth\.pm\//.test(path)) return realFetch(url, init);
     const route = routes[path];
     if (route === undefined) {
       return Promise.resolve({ ok: false, status: 404, url: path, text: () => Promise.resolve("") });
@@ -3302,6 +3444,74 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   check("ログイン切れはその場で止める", state.cache.s2, undefined);
   check("ログイン切れは理由を出す", errorBox.textContent.includes("ログインが必要です"), true);
 
+  // --- 贈ったギフト: URLの取り直しと受取状況の確認(別ボタン・別ホスト) ---
+  {
+    const U1 = "cccccccc-0000-4000-8000-000000000001";
+    const U2 = "cccccccc-0000-4000-8000-000000000002";
+    const U3 = "cccccccc-0000-4000-8000-000000000003";
+    const giftUrl = (u) => `https://booth.pm/gifts/${u}/edit`;
+    state.index = {
+      updatedAt: "x", complete: true,
+      orders: [
+        { id: "gt1", status: "completed", date: "2026年9月5日 03:15" },
+        { id: "gt2", status: "completed", date: "2026年6月15日 19:58" },
+        { id: "gt3", status: "completed", date: "2026年5月1日 00:00" },
+      ],
+    };
+    // gt1: v1 でギフトを含む(URL未取得) / gt2: v2 で giftId あり / gt3: v1 でギフト無し
+    state.cache = {
+      gt1: { v: 1, amount: 300, gift: 300, shipping: 0, status: "completed", date: "2026年9月5日 03:15", items: [item("贈り物", 300, true)] },
+      gt2: { v: CACHE_SCHEMA_VERSION, amount: 850, gift: 850, shipping: 0, status: "completed", date: "2026年6月15日 19:58",
+        items: [{ ...item("済み", 425, true), giftId: U2 }, { ...item("未", 425, true), giftId: U3 }] },
+      gt3: { v: 1, amount: 100, gift: 0, shipping: 0, status: "completed", date: "2026年5月1日 00:00", items: [item("自分用", 100)] },
+    };
+    state.giftStatus = { [U2]: { state: "received", issuedAt: "a", receivedAt: "b", checkedAt: 1 } };
+    const fetched = [];
+    routes = {
+      [detailUrl("gt1")]: (path) => { fetched.push(path); return okResponse(path, orderHtml("300", sheetGroup("ギフト", [[300, 0, "贈り物", U1]]))); },
+      [detailUrl("gt3")]: (path) => { fetched.push(path); return okResponse(path, detailHtml(100)); },
+      [giftUrl(U1)]: (path) => { fetched.push(path); return okResponse(path, giftPageHtml("未受取", "-")); },
+      [giftUrl(U2)]: (path) => { fetched.push(path); return okResponse(path, giftPageHtml("受取済み", "2026年7月23日 00時06分")); },
+      [giftUrl(U3)]: (path) => { fetched.push(path); return okResponse(path, giftPageHtml("受取済み", "2026年8月1日 12時00分")); },
+    };
+
+    // (a) URLの取り直し: v1 でギフトを含む注文だけ。booth.pm には触れない
+    await runTask(refetchGiftUrlsTask);
+    check("URLの取り直しはギフトを含む v1 の注文だけ", fetched, [detailUrl("gt1")]);
+    check("取り直した注文に giftId が入り v2 になる", [state.cache.gt1.items[0].giftId, state.cache.gt1.v], [U1, CACHE_SCHEMA_VERSION]);
+    check("ギフトの無い v1 の注文はそのまま", state.cache.gt3.v, 1);
+
+    // (b) 受取状況の確認: 未確認と未受取だけ。受取済み(U2)は取りに行かない
+    fetched.length = 0;
+    browser.permissions._requested.length = 0;
+    checkGiftStatusBtn.click();
+    await new Promise((r) => setTimeout(r, 50));
+    while (running) await new Promise((r) => setTimeout(r, 20));
+    check("押した時点で booth.pm の許可を求める", browser.permissions._requested, [{ origins: ["https://booth.pm/*"] }]);
+    check("確認するのは未確認と未受取のギフトページだけ", fetched.sort(), [giftUrl(U1), giftUrl(U3)].sort());
+    check("受取状況が保存される",
+      [state.giftStatus[U1].state, state.giftStatus[U3].state, state.giftStatus[U3].receivedAt, typeof state.giftStatus[U1].checkedAt],
+      ["unreceived", "received", "2026年8月1日 12時00分", "number"]);
+    check("受取済みの記録は残る", state.giftStatus[U2].state, "received");
+    check("ストレージにも書く", (await browser.storage.local.get([GIFT_STATUS_KEY]))[GIFT_STATUS_KEY][U3].state, "received");
+    check("確認の結果を案内する", noticeBox.textContent.includes("受取状況を確認しました(2件)"), true);
+
+    // 二度目は未受取(U1)だけを見に行く
+    fetched.length = 0;
+    await runTask(checkGiftStatusTask);
+    check("二度目は未受取だけを見に行く", fetched, [giftUrl(U1)]);
+
+    // 状態を読めないページは未受取と断定せず、前の記録も消さない
+    fetched.length = 0;
+    routes[giftUrl(U1)] = (path) => okResponse(path, "<html><body>メンテナンス中</body></html>");
+    await runTask(checkGiftStatusTask);
+    check("読めないページは前の記録を残す", state.giftStatus[U1].state, "unreceived");
+    check("読めなかったことを案内する", noticeBox.textContent.includes("状態を読み取れませんでした"), true);
+
+    state.giftStatus = {};
+    await saveGiftStatus(state.giftStatus);
+  }
+
   fetchRetryBaseWaitMs = savedRetryWait;
   window.fetch = realFetch;
   resetIndex();
@@ -3580,7 +3790,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
     dashboardDoc.querySelector('.nav-link[data-view="ranking"]').getAttribute("href"), "#/ranking");
   check("メニューに追加した画面が並んでいる",
     [...dashboardDoc.querySelectorAll(".nav-link")].map((a) => a.getAttribute("href")),
-    ["#/report", "#/ranking", "#/avatars", "#/trends", "#/summary", "#/export", "#/backup"]);
+    ["#/report", "#/ranking", "#/avatars", "#/trends", "#/summary", "#/export", "#/backup", "#/gifts"]);
   // D14 沼レポートの断り書き。アバター別の金額もショップ別と同じく商品の合計なので、
   // 外すと少ない額を「そのアバターに使った額」として見せることになる
   check("沼レポートに合計と一致しない旨の断りがある",
@@ -3781,7 +3991,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
      dashboardDoc.getElementById("confirmPanel").getAttribute("aria-modal")], ["dialog", "true"]);
   check("ナビは1組のリンクを画面幅で見せ分ける",
     [dashboardDoc.querySelectorAll(".nav-link").length,
-     dashboardDoc.getElementById("navDrawer").parentElement.id], [7, "navBar"]);
+     dashboardDoc.getElementById("navDrawer").parentElement.id], [8, "navBar"]);
 
   // 読み込めなかったファイルを名指しできるよう、スクリプトの一覧と対応させる
   const harnessDoc = new DOMParser().parseFromString(await (await fetch("index.html")).text(), "text/html");
@@ -3956,7 +4166,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   // 正式リリース後はセマンティックバージョンを使い、配布対象のversionを固定して検証する
   check("正式リリース版のセマンティックバージョン", /^[1-9]\d*\.\d+\.\d+$/.test(manifest.version), true);
   // 統合先ブランチ名とversionの一致ルールがあるため、配布対象の番号で固定する
-  check("配布対象バージョン", manifest.version, "1.1.0");
+  check("配布対象バージョン", manifest.version, "1.2.0");
 
   check("manifestのiconsに4サイズを宣言", manifest.icons, expectedIcons);
   check("ツールバー用のdefault_iconも同じ4サイズ", manifest.action.default_icon, expectedIcons);
@@ -4199,6 +4409,28 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
      realThemeSwitch && realThemeSwitch.querySelector(".theme-label") === null,
      dashboardCss.includes(".theme-mode-name {"),
      dashboardCss.includes("@media (max-width: 520px) {")], [true, true, true, true]);
+
+  // 1.2.0 ギフト・注文の画面。本物のHTMLで、内訳がレポートから移っていることと、
+  // 8画面を1行に収めるため「作者について」がタブ列からヘッダーへ移っていることを見る
+  const realNavViews = [...dashboardDoc.querySelectorAll("#navDrawer .nav-link")].map((a) => a.dataset.view);
+  check("本物のナビは8画面でギフト・注文が末尾", realNavViews, VIEW_NAMES);
+  check("注文ごとの内訳はギフト・注文の画面にだけある",
+    [dashboardDoc.querySelector("#view-gifts #breakdownSection") !== null,
+     dashboardDoc.querySelector("#view-report #breakdownSection")],
+    [true, null]);
+  check("ギフト・注文の画面に2つのボタンと表がある",
+    ["refetchGiftUrlsBtn", "checkGiftStatusBtn", "giftTableBody", "giftViewFilterSwitch"]
+      .map((id) => dashboardDoc.querySelector(`#view-gifts #${id}`) !== null),
+    [true, true, true, true]);
+  check("作者についてはヘッダー右と引き出しの両方にある",
+    [dashboardDoc.querySelector(".app-header-inner #authorHeaderBtn") !== null,
+     dashboardDoc.querySelector("#navDrawer #authorBtn") !== null,
+     dashboardCss.includes(".nav-tabs .nav-author-btn {\n  display: none;"),
+     dashboardCss.includes("body.nav-wide .header-author-btn {")],
+    [true, true, true, true]);
+  check("booth.pm は任意の権限として宣言する",
+    [manifest.optional_host_permissions, manifest.host_permissions],
+    [["https://booth.pm/*"], ["https://accounts.booth.pm/*"]]);
 
   // hidden属性が付いている要素の全数チェック。1つでも表示されていたら、
   // その要素にクラス側の display 指定が効いてしまっている

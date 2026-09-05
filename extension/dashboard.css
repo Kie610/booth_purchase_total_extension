@@ -398,17 +398,19 @@ body.nav-wide .nav-bar {
   align-items: stretch;
   flex-wrap: wrap;
   width: auto;
-  max-width: 900px;
+  /* 8画面のタブは合計 約870px。本文と同じ900pxでは内側852pxに収まらず折り返すので、
+     タブ列だけ少し広げる(1.2.0)。本文との左端のずれは30pxで、帯の中なので目立たない */
+  max-width: 960px;
   margin: 0 auto;
   padding: 0 24px;
   border-right: 0;
   box-shadow: none;
 }
 
-/* 6項目+作者情報を1行に収めるため、引き出しのときより一段詰める。
+/* 8項目を1行に収めるため、引き出しのときより一段詰める(作者情報はヘッダー側)。
    幅が足りないときは折り返す(横スクロールにすると、隠れたタブに気付けない) */
 .nav-tabs .nav-link {
-  padding: 10px;
+  padding: 10px 8px;
   border-bottom: 3px solid transparent;
   font-size: 13px;
   white-space: nowrap;
@@ -419,13 +421,35 @@ body.nav-wide .nav-bar {
   border-bottom-color: var(--accent);
 }
 
+/* 水平タブでは「作者について」をヘッダー右側(header-author-btn)に置くので、
+   タブ列の方は出さない。8画面を1行に収めるための幅を空けるため */
 .nav-tabs .nav-author-btn {
-  width: auto;
-  margin: 0 0 0 auto;
-  padding: 10px;
-  border-top: 0;
-  font-size: 13px;
+  display: none;
+}
+
+/* ヘッダー右側の「作者について」。広い画面(水平タブ)のときだけ出す。
+   ©表記と同じ薄い小さな文字にし、見出しの帯より目立たせない */
+.header-author-btn {
+  display: none;
+  align-self: center;
+  flex: none;
+  margin-left: 12px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: none;
   color: var(--fg-muted);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+body.nav-wide .header-author-btn {
+  display: inline-block;
+}
+
+.header-author-btn:hover {
+  background: var(--bg-soft);
 }
 
 /* ---- 作者情報 ---- */
@@ -1634,6 +1658,40 @@ button.table-toggle:hover:not(:disabled) {
 span.amount-pending {
   margin-right: 8px;
   font-size: 11px;
+}
+
+/* ---- 贈ったギフト(受取状況) ---- */
+
+.gift-view-filter {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.gift-view-filter .share-field-label {
+  margin-bottom: 0;
+}
+
+/* 未受取だけを目立たせる。受取済みは済んだものなので薄く、未確認は判断できないので中間 */
+.gift-state {
+  white-space: nowrap;
+  font-weight: 700;
+}
+
+.gift-state-unreceived {
+  color: var(--danger-text);
+}
+
+.gift-state-unknown,
+.gift-state-missing {
+  color: var(--fg-muted);
+}
+
+.gift-state-received {
+  color: var(--fg-muted);
+  font-weight: 400;
 }
 
 /* ---- 共有カード ---- */

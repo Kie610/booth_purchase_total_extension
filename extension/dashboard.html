@@ -13,6 +13,9 @@
       <h1>BOOTHお買いものレポート</h1>
       <span class="view-title" id="viewTitle"></span>
       <span class="copyright">©2026 Kie (Kie工房)</span>
+      <!-- 広い画面では「作者について」をタブ列からここへ移し、タブ列の幅を空ける
+           (8画面ぶん並べると900pxで折り返す)。狭い画面では引き出しの末尾にあるものを使う -->
+      <button type="button" id="authorHeaderBtn" class="header-author-btn">作者について</button>
       <!-- 配色テーマの切り替え。ボタンは絵文字だけにし、選択中のモード名をすぐ下に出す
            (文字ラベルを3つ並べると見出しが折り返すため。2026-08-09 ユーザー要望)。
            意味が分かるよう aria-label と title を必ず付ける。
@@ -41,6 +44,8 @@
       <a class="nav-link" href="#/summary" data-view="summary">今年のまとめ</a>
       <a class="nav-link" href="#/export" data-view="export">データ出力</a>
       <a class="nav-link" href="#/backup" data-view="backup">データの引っ越し</a>
+      <a class="nav-link" href="#/gifts" data-view="gifts">ギフト・注文</a>
+      <!-- 引き出し(狭い画面)用。広い画面ではヘッダー右の authorHeaderBtn を使う -->
       <button type="button" id="authorBtn" class="nav-author-btn">作者について</button>
     </nav>
   </div>
@@ -270,41 +275,7 @@
     </section>
     </details>
 
-    <section id="breakdownSection" hidden>
-      <details class="panel accordion">
-        <summary><h2>注文ごとの内訳<span class="accordion-count" id="orderRowCount"></span></h2></summary>
-        <div class="order-tools" role="search" aria-label="注文内訳の検索と絞り込み">
-          <label class="order-tool-field">
-            注文番号・ショップを検索
-            <input type="search" id="orderSearch" autocomplete="off" placeholder="注文番号またはショップ名">
-          </label>
-          <label class="order-tool-field">
-            ステータス
-            <select id="orderStatusFilter"><option value="">すべて</option></select>
-          </label>
-          <label class="order-tool-field">
-            並べ替え
-            <select id="orderSort">
-              <option value="date-desc">注文日時が新しい順</option>
-              <option value="date-asc">注文日時が古い順</option>
-              <option value="amount-desc">金額が高い順</option>
-              <option value="amount-asc">金額が低い順</option>
-              <option value="shop-asc">ショップ名順</option>
-            </select>
-          </label>
-          <span class="status order-filter-count" id="orderFilterCount" role="status" aria-live="polite"></span>
-        </div>
-        <div class="table-scroll">
-          <table class="data-table">
-            <caption class="visually-hidden">注文ごとの内訳</caption>
-            <thead>
-              <tr><th>注文日時</th><th>ステータス</th><th>ショップ</th><th class="num">金額</th><th>注文番号</th></tr>
-            </thead>
-            <tbody id="orderTableBody"></tbody>
-          </table>
-        </div>
-      </details>
-    </section>
+    <!-- 「注文ごとの内訳」は 1.2.0 で「ギフト・注文」の画面へ移した -->
 
     <details class="panel accordion">
       <summary><h2>キャッシュ削除</h2></summary>
@@ -730,6 +701,96 @@
        </div>
        <div class="status" id="restoreStatus" role="status" aria-live="polite"></div>
      </section>
+   </div>
+
+   <!-- 贈ったギフトの受取状況と、注文ごとの内訳。注文個別の確認はこの画面にまとめる -->
+   <div class="view" id="view-gifts" hidden>
+     <section class="step">
+       <h2>贈ったギフト</h2>
+       <p class="hint">
+         収集した注文のうち、ギフトとして買った商品を並べます。受け取られたかどうかは
+         BOOTHのギフト管理ページ(booth.pm)にしか出ないため、下のボタンで確認します。
+         受取済みになったギフトは二度と取りに行きません。
+       </p>
+
+       <div id="giftEmpty" class="empty-note">
+         まだ収集したギフトがありません。「お買いものレポート」で金額を収集すると、ここに並びます。
+       </div>
+
+       <div id="giftArea" hidden>
+         <div class="index-status">
+           <div class="status" id="giftStats"></div>
+           <div class="status warn" id="giftMissingNote" hidden></div>
+         </div>
+
+         <div class="step-controls">
+           <button id="refetchGiftUrlsBtn" class="secondary">ギフトのURLを取り直す</button>
+           <button id="checkGiftStatusBtn" class="primary">受取状況を確認</button>
+           <span class="status" id="giftCheckStatus" role="status" aria-live="polite"></span>
+         </div>
+         <p class="hint">
+           「ギフトのURLを取り直す」は、URL未取得のギフトを含む注文の詳細ページ(accounts.booth.pm)を
+           取り直します。「受取状況を確認」は、未確認と未受取のギフトについてギフト管理ページ
+           (booth.pm)を1件ずつ開いて状態を読みます。初回は booth.pm へのアクセス許可を求めます。
+         </p>
+
+         <div class="gift-view-filter">
+           <span class="share-field-label" id="giftViewFilterLabel">表示</span>
+           <div class="segmented" id="giftViewFilterSwitch" role="group" aria-labelledby="giftViewFilterLabel">
+             <button type="button" class="segmented-btn current" data-gift-view-filter="all" aria-pressed="true">すべて</button>
+             <button type="button" class="segmented-btn" data-gift-view-filter="unreceived" aria-pressed="false">未受取</button>
+             <button type="button" class="segmented-btn" data-gift-view-filter="received" aria-pressed="false">受取済み</button>
+           </div>
+           <span class="status" id="giftFilterCount" role="status" aria-live="polite"></span>
+         </div>
+
+         <div class="table-scroll">
+           <table class="data-table">
+             <caption class="visually-hidden">贈ったギフト</caption>
+             <thead>
+               <tr><th>状態</th><th>商品</th><th>ショップ</th><th>注文日時</th><th class="num">金額</th><th>受取日時</th><th>注文番号</th></tr>
+             </thead>
+             <tbody id="giftTableBody"></tbody>
+           </table>
+         </div>
+       </div>
+     </section>
+
+    <section id="breakdownSection" hidden>
+      <details class="panel accordion">
+        <summary><h2>注文ごとの内訳<span class="accordion-count" id="orderRowCount"></span></h2></summary>
+        <div class="order-tools" role="search" aria-label="注文内訳の検索と絞り込み">
+          <label class="order-tool-field">
+            注文番号・ショップを検索
+            <input type="search" id="orderSearch" autocomplete="off" placeholder="注文番号またはショップ名">
+          </label>
+          <label class="order-tool-field">
+            ステータス
+            <select id="orderStatusFilter"><option value="">すべて</option></select>
+          </label>
+          <label class="order-tool-field">
+            並べ替え
+            <select id="orderSort">
+              <option value="date-desc">注文日時が新しい順</option>
+              <option value="date-asc">注文日時が古い順</option>
+              <option value="amount-desc">金額が高い順</option>
+              <option value="amount-asc">金額が低い順</option>
+              <option value="shop-asc">ショップ名順</option>
+            </select>
+          </label>
+          <span class="status order-filter-count" id="orderFilterCount" role="status" aria-live="polite"></span>
+        </div>
+        <div class="table-scroll">
+          <table class="data-table">
+            <caption class="visually-hidden">注文ごとの内訳</caption>
+            <thead>
+              <tr><th>注文日時</th><th>ステータス</th><th>ショップ</th><th class="num">金額</th><th>注文番号</th></tr>
+            </thead>
+            <tbody id="orderTableBody"></tbody>
+          </table>
+        </div>
+      </details>
+    </section>
    </div>
   </main>
 
