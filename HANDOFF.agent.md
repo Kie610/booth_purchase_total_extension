@@ -18,11 +18,13 @@ complete:
   2ボタン(URL取り直し / 受取状況の確認)で取得。「注文ごとの内訳」をレポートからこの画面へ移設。
   CACHE_SCHEMA_VERSION=2(取り直し対象はギフトを含む v1 注文のみ)。新キー boothGiftStatus。
   optional_host_permissions に https://booth.pm/*。manifest version 1.2.0。
+- C: 2026-09-05 受取状況の確認に「② 金額の収集」と同じ月の範囲指定(開始/終了・未確認のある範囲を選択・
+  月別の表・予定件数)を追加(ユーザー要望)。URLの取り直しは①と同じボタン1つのまま。
 
 verified:
 - C: 2026-09-05(1.2.0実装後) — evidence: status=PASS; kind=compile; command=node --check extension/*.js test/*.js; environment=Windows 11 / Node.js 24.18.1; scope=extension/とtest/の全JavaScript構文; counts=passed=17, failed=0, skipped=0, not-run=0
-- C: 2026-09-05(1.2.0実装後) — evidence: status=PASS; kind=runtime; command=python -m http.server 8731 と http://localhost:8731/test/index.html を幅1280pxで開く; environment=Windows 11 / Chromium 1280x900; scope=test/cases.js全体 ALL PASS; counts=passed=1110, failed=0, skipped=0, not-run=0
-- C: 2026-09-05 — evidence: status=PASS; kind=runtime; command=stub差し込みの dashboard.html 複製を幅1280pxで表示; environment=Windows 11 / Chromium; scope=水平タブ8項目が1行に収まる・ヘッダー右の「作者について」表示・#/gifts の表と2ボタンの描画; counts=passed=1, failed=0, skipped=0, not-run=0
+- C: 2026-09-05(1.2.0実装後) — evidence: status=PASS; kind=runtime; command=python -m http.server 8731 と http://localhost:8731/test/index.html を幅1280pxで開く; environment=Windows 11 / Chromium 1280x900; scope=test/cases.js全体 ALL PASS; counts=passed=1121, failed=0, skipped=0, not-run=0
+- C: 2026-09-05 — evidence: status=PASS; kind=runtime; command=stub差し込みの dashboard.html 複製を幅1280pxで表示; environment=Windows 11 / Chromium; scope=水平タブ8項目が1行に収まる・ヘッダー右の「作者について」表示・#/gifts の表・範囲指定(月別の表と予定件数)・2ボタンの描画; counts=passed=1, failed=0, skipped=0, not-run=0
 - C: 2026-09-05 — evidence: status=PASS; kind=external; command=ログイン済みChromeで accounts.booth.pm/orders/87212632・82903405 と booth.pm/gifts/<UUID>/edit を読み取り; environment=Windows 11 / Chrome; scope=ギフトリンクのhref形式・「状態」「受取日時」「発行日時」のラベル構造(未受取1件・受取済み6件); counts=passed=7, failed=0, skipped=0, not-run=0
 - C: 2026-09-05 — evidence: status=PASS; kind=compile; command=git clone -b 1.2.0-dev ../backup/booth_purchase_total_extension-2026-09-05.git と tools/release.ps1; environment=Windows 11 / PowerShell 7; scope=復元cloneで配布ZIPとSHA-256を生成; counts=passed=1, failed=0, skipped=0, not-run=0
 

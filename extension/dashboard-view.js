@@ -56,6 +56,15 @@ const giftCheckStatus = document.getElementById("giftCheckStatus");
 const giftViewFilterSwitch = document.getElementById("giftViewFilterSwitch");
 const giftFilterCount = document.getElementById("giftFilterCount");
 const giftTableBody = document.getElementById("giftTableBody");
+// 受取状況の確認範囲(② 金額の収集の範囲指定と同じ部品)
+const giftRangeArea = document.getElementById("giftRangeArea");
+const giftRangeFrom = document.getElementById("giftRangeFrom");
+const giftRangeTo = document.getElementById("giftRangeTo");
+const giftSelectPendingBtn = document.getElementById("giftSelectPendingBtn");
+const giftPlannedCount = document.getElementById("giftPlannedCount");
+const giftMonthTableBody = document.getElementById("giftMonthTableBody");
+const giftUnknownArea = document.getElementById("giftUnknownArea");
+const giftUnknownCount = document.getElementById("giftUnknownCount");
 const authorHeaderBtn = document.getElementById("authorHeaderBtn");
 const footTotal = document.getElementById("footTotal");
 const footTotalCount = document.getElementById("footTotalCount");
@@ -208,6 +217,7 @@ const ACTION_BUTTONS = [
   backupSaveBtn,
   refetchGiftUrlsBtn,
   checkGiftStatusBtn,
+  giftSelectPendingBtn,
 ];
 
 // ---- 画面の切り替え ----------------------------------------------------
@@ -630,6 +640,8 @@ function renderRunningState(isRunning) {
   forceRefreshAll.disabled = isRunning;
   rangeFrom.disabled = isRunning;
   rangeTo.disabled = isRunning;
+  giftRangeFrom.disabled = isRunning;
+  giftRangeTo.disabled = isRunning;
   // 復元は state を丸ごと差し替えるので、収集中に走らせると取得結果と衝突する
   restoreFile.disabled = isRunning;
   abortBtn.disabled = !isRunning;
@@ -953,26 +965,28 @@ function statRow(stat, { className, toggle, expanded, indent, pick }) {
   return tr;
 }
 
-function renderRangeOptions(monthStats) {
+// 開始/終了の選択肢。金額の収集(rangeFrom/rangeTo)とギフトの受取状況の確認
+// (giftRangeFrom/giftRangeTo)で同じ作り。pendingLabel は選択肢に添える未処理の呼び方
+function renderRangeOptions(monthStats, from = rangeFrom, to = rangeTo, pendingLabel = "未収集") {
   const keys = monthStats.map((s) => s.key);
-  const prevFrom = rangeFrom.value;
-  const prevTo = rangeTo.value;
+  const prevFrom = from.value;
+  const prevTo = to.value;
 
-  for (const select of [rangeFrom, rangeTo]) {
+  for (const select of [from, to]) {
     select.innerHTML = "";
     for (const stat of monthStats) {
       const option = document.createElement("option");
       option.value = stat.key;
       option.textContent =
-        stat.label + (stat.pending > 0 ? `（未収集 ${stat.pending}）` : "");
+        stat.label + (stat.pending > 0 ? `（${pendingLabel} ${stat.pending}）` : "");
       select.appendChild(option);
     }
   }
 
-  // 既存の選択を保てるなら保ち、無理なら未収集のある最新の月に寄せる
+  // 既存の選択を保てるなら保ち、無理なら未処理のある最新の月に寄せる
   const fallback = (monthStats.find((s) => s.pending > 0) || monthStats[0]).key;
-  rangeFrom.value = keys.includes(prevFrom) ? prevFrom : fallback;
-  rangeTo.value = keys.includes(prevTo) ? prevTo : fallback;
+  from.value = keys.includes(prevFrom) ? prevFrom : fallback;
+  to.value = keys.includes(prevTo) ? prevTo : fallback;
 }
 
 function setRange(from, to) {
@@ -1021,17 +1035,20 @@ function updatePlannedCount() {
 }
 
 function highlightSelectedRange() {
-  const from = rangeFrom.value;
-  const to = rangeTo.value;
+  highlightRangeRows(monthTableBody, rangeFrom.value, rangeTo.value);
+}
+
+// 月別の表で、範囲に入っている行を塗る(金額の収集とギフトの受取状況の確認で共通)
+function highlightRangeRows(tbody, from, to) {
   if (!from || !to) return;
   const lo = from <= to ? from : to;
   const hi = from <= to ? to : from;
-  monthTableBody.querySelectorAll("tr.month-row").forEach((tr) => {
+  tbody.querySelectorAll("tr.month-row").forEach((tr) => {
     const key = tr.dataset.monthKey;
     tr.classList.toggle("in-range", key >= lo && key <= hi);
   });
   // 年は、その年の月がすべて範囲に入っているときだけ強調する
-  monthTableBody.querySelectorAll("tr.year-row").forEach((tr) => {
+  tbody.querySelectorAll("tr.year-row").forEach((tr) => {
     const covered = tr.dataset.rangeFrom >= lo && tr.dataset.rangeTo <= hi;
     tr.classList.toggle("in-range", covered);
   });
@@ -1359,6 +1376,86 @@ function giftCountsText(rows) {
   return `ギフト ${rows.length}件(${parts.join(" / ")})`;
 }
 
+// 直近の描画で組み立てたギフトの行。範囲の予定件数と「受取状況を確認」が同じ行を見る
+// (描画と確認で対象がずれると、予定件数と実際に開く件数が食い違う)
+let giftRowsMemo = [];
+const expandedGiftYears = new Set();
+
+// ② 金額の収集の範囲指定と同じ部品。月別の「ギフト数 / 確認済み / 未確認」の表と、
+// 開始/終了の選択肢、予定件数。URL未取得のギフトは確認しようがないので表に入れない
+function renderGiftRangeArea(rows) {
+  const years = buildGiftYearStats(rows);
+  renderCollapsibleTable(
+    giftMonthTableBody,
+    years,
+    expandedGiftYears,
+    (year, expanded) => {
+      if (year.key === null) return statRow(year, { className: "unknown-row" });
+      const row = statRow(year, { className: "year-row", toggle: true, expanded, pick: true });
+      row.dataset.rangeFrom = year.months[year.months.length - 1].key;
+      row.dataset.rangeTo = year.months[0].key;
+      row.tabIndex = 0;
+      row.setAttribute("aria-label", `${year.label}を確認範囲に設定`);
+      return row;
+    },
+    (month, year) => {
+      if (year.key === null) return null;
+      const row = statRow(month, { className: "month-row", indent: true, pick: true });
+      row.dataset.monthKey = month.key;
+      row.tabIndex = 0;
+      row.setAttribute("aria-label", `${month.label}を確認範囲に設定`);
+      return row;
+    }
+  );
+
+  const monthStats = years.flatMap((year) => year.months).filter((s) => s.key !== null);
+  giftRangeArea.hidden = monthStats.length === 0;
+  if (monthStats.length > 0) {
+    renderRangeOptions(monthStats, giftRangeFrom, giftRangeTo, "未確認");
+  } else {
+    giftRangeFrom.innerHTML = "";
+    giftRangeTo.innerHTML = "";
+  }
+
+  const unknown = years.find((year) => year.key === null);
+  giftUnknownArea.hidden = !unknown;
+  if (unknown) {
+    giftUnknownCount.textContent =
+      `注文日時を読み取れなかったギフトが${unknown.count}件あります` +
+      `(未確認 ${unknown.pending}件)。月の範囲では指定できません。`;
+  }
+  highlightGiftRange();
+  updateGiftPlannedCount();
+}
+
+function setGiftRange(from, to) {
+  giftRangeFrom.value = from;
+  giftRangeTo.value = to;
+  highlightGiftRange();
+  updateGiftPlannedCount();
+}
+
+function highlightGiftRange() {
+  highlightRangeRows(giftMonthTableBody, giftRangeFrom.value, giftRangeTo.value);
+}
+
+// 選択範囲で実際に開きにいくギフト(受取済みは外す)
+function plannedGiftIds() {
+  const from = giftRangeFrom.value;
+  const to = giftRangeTo.value;
+  if (!from || !to) return [];
+  return giftIdsToCheck(giftRowsInRange(giftRowsMemo, from, to));
+}
+
+function updateGiftPlannedCount() {
+  const planned = plannedGiftIds().length;
+  giftPlannedCount.textContent =
+    planned > 0
+      ? `確認予定: ${planned}件 / 目安: ${collectionTimeEstimate(planned)}`
+      : "確認予定: なし(確認済み)";
+  if (!running) checkGiftStatusBtn.disabled = planned === 0;
+}
+
 // 贈ったギフトの表と、レポートから移した「注文ごとの内訳」。
 // どちらも収集済みの注文が元なので、無ければ案内だけを出す
 function renderGiftArea(results = currentResults()) {
@@ -1366,16 +1463,17 @@ function renderGiftArea(results = currentResults()) {
   if (results.length > 0) renderOrderTable(results);
 
   const rows = buildGiftRows(results, state.giftStatus);
+  giftRowsMemo = rows;
   giftEmpty.hidden = rows.length > 0;
   giftArea.hidden = rows.length === 0;
   renderGiftViewFilter();
   if (rows.length === 0) {
     giftTableBody.innerHTML = "";
+    giftMonthTableBody.innerHTML = "";
     return;
   }
 
   const missing = rows.filter((row) => row.state === "missing").length;
-  const toCheck = giftIdsToCheck(rows).length;
   giftStats.textContent = giftCountsText(rows);
   giftMissingNote.hidden = missing === 0;
   giftMissingNote.textContent =
@@ -1384,10 +1482,8 @@ function renderGiftArea(results = currentResults()) {
         "「ギフトのURLを取り直す」で注文詳細を取り直すと確認できるようになります。"
       : "";
   // 実行中の無効化を上書きしないよう、待機中だけ件数で決める(renderClearArea と同じ)
-  if (!running) {
-    refetchGiftUrlsBtn.disabled = missing === 0;
-    checkGiftStatusBtn.disabled = toCheck === 0;
-  }
+  if (!running) refetchGiftUrlsBtn.disabled = missing === 0;
+  renderGiftRangeArea(rows);
 
   const filtered = filterGiftRows(rows, giftViewFilter);
   giftTableBody.innerHTML = "";

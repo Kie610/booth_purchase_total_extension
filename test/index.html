@@ -178,8 +178,16 @@
     <div class="status" id="giftStats"></div>
     <div class="status warn" id="giftMissingNote" hidden></div>
     <button class="secondary" id="refetchGiftUrlsBtn"></button>
-    <button class="primary" id="checkGiftStatusBtn"></button>
     <span class="status" id="giftCheckStatus" role="status"></span>
+    <div id="giftRangeArea">
+      <select id="giftRangeFrom"></select>
+      <select id="giftRangeTo"></select>
+      <button class="secondary small" id="giftSelectPendingBtn"></button>
+      <button class="primary" id="checkGiftStatusBtn"></button>
+      <span class="planned" id="giftPlannedCount"></span>
+    </div>
+    <table><tbody id="giftMonthTableBody"></tbody></table>
+    <p id="giftUnknownArea" class="unknown-area" hidden><span id="giftUnknownCount"></span></p>
     <div class="segmented" id="giftViewFilterSwitch" role="group">
       <button type="button" class="segmented-btn current" data-gift-view-filter="all" aria-pressed="true">すべて</button>
       <button type="button" class="segmented-btn" data-gift-view-filter="unreceived" aria-pressed="false">未受取</button>

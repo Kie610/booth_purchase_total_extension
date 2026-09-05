@@ -287,6 +287,50 @@ giftViewFilterSwitch.addEventListener("click", (event) => {
   if (btn) setGiftViewFilter(btn.dataset.giftViewFilter);
 });
 
+// 受取状況の確認範囲。② 金額の収集の範囲指定(selectPendingBtn / monthTableBody)と同じ操作
+giftSelectPendingBtn.addEventListener("click", () => {
+  const pending = buildGiftMonthStats(giftRowsMemo).filter((s) => s.key && s.pending > 0);
+  if (pending.length === 0) {
+    showNotice("未確認のギフトはありません。");
+    return;
+  }
+  const keys = pending.map((s) => s.key);
+  setGiftRange(keys[keys.length - 1], keys[0]);
+});
+
+for (const select of [giftRangeFrom, giftRangeTo]) {
+  select.addEventListener("change", () => {
+    highlightGiftRange();
+    updateGiftPlannedCount();
+  });
+}
+
+giftMonthTableBody.addEventListener("click", (event) => {
+  if (running) return;
+  const yearRow = event.target.closest("tr.year-row");
+  if (yearRow) {
+    if (event.target.closest(".table-toggle")) {
+      toggleYearRow(giftMonthTableBody, expandedGiftYears, yearRow);
+    } else {
+      setGiftRange(yearRow.dataset.rangeFrom, yearRow.dataset.rangeTo);
+    }
+    return;
+  }
+  const monthRow = event.target.closest("tr.month-row");
+  if (monthRow) setGiftRange(monthRow.dataset.monthKey, monthRow.dataset.monthKey);
+});
+
+giftMonthTableBody.addEventListener("keydown", (event) => {
+  if (running || (event.target !== event.currentTarget && event.target.closest(".table-toggle"))) return;
+  if (event.key !== "Enter" && event.key !== " ") return;
+  const yearRow = event.target.closest("tr.year-row");
+  const monthRow = event.target.closest("tr.month-row");
+  if (!yearRow && !monthRow) return;
+  event.preventDefault();
+  if (yearRow) setGiftRange(yearRow.dataset.rangeFrom, yearRow.dataset.rangeTo);
+  if (monthRow) setGiftRange(monthRow.dataset.monthKey, monthRow.dataset.monthKey);
+});
+
 forceRefreshRange.addEventListener("change", updatePlannedCount);
 forceRefreshAll.addEventListener("change", updatePlannedCount);
 rangeFrom.addEventListener("change", onRangeChanged);
@@ -1656,13 +1700,17 @@ function requestGiftPagePermission() {
   return ext.permissions.request({ origins: [GIFT_PAGE_ORIGIN] });
 }
 
-// (b) 未確認・未受取のギフトについてギフト管理ページを読み、受取状況を保存する。
-// 受取済みは確定なので対象に入らない(giftIdsToCheck)。
-// D12 の絞り込み中でも全ギフトを対象にする(絞り込みは表示の都合で、確認する範囲を狭める理由にならない)
+// (b) 選択した月の範囲にある未確認・未受取のギフトについてギフト管理ページを読み、
+// 受取状況を保存する。受取済みは確定なので対象に入らない(giftIdsToCheck)。
+// 対象は画面の予定件数と同じ plannedGiftIds() から取る(表示と実際の件数をずらさない)
 async function checkGiftStatusTask(signal) {
-  const ids = giftIdsToCheck(buildGiftRows(buildAllResults(), state.giftStatus));
+  if (!giftRangeFrom.value || !giftRangeTo.value) {
+    showNotice("確認する範囲を選択してください。");
+    return;
+  }
+  const ids = plannedGiftIds();
   if (ids.length === 0) {
-    showNotice("確認するギフトはありません(未確認・未受取のギフトがありません)。");
+    showNotice("選択範囲に確認するギフトはありません(すべて確認済みです)。");
     return;
   }
 

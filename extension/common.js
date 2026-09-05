@@ -394,6 +394,40 @@ function giftIdsToCheck(rows) {
   return Array.from(ids);
 }
 
+// 受取状況の確認は「② 金額の収集」と同じく月の範囲で分けて進める。
+// 年ごと・月ごとの「ギフト数 / 確認済み / 未確認」。URL未取得のギフトは確認しようが
+// ないので数に入れない(上の注意書きと「ギフトのURLを取り直す」で扱う)
+function giftNeedsCheck(row) {
+  return row.state === "unreceived" || row.state === "unknown";
+}
+
+function buildGiftYearStats(rows) {
+  const withPending = (row) => ({ ...row, pending: row.count - row.collected });
+  return groupByPeriod(
+    rows.filter((row) => row.state !== "missing"),
+    (row) => row.date,
+    () => ({ count: 0, collected: 0 }),
+    (stat, row) => {
+      stat.count++;
+      if (!giftNeedsCheck(row)) stat.collected++;
+    }
+  ).map((year) => ({ ...withPending(year), months: year.months.map(withPending) }));
+}
+
+function buildGiftMonthStats(rows) {
+  return buildGiftYearStats(rows).flatMap((year) => year.months);
+}
+
+// 指定された月の範囲(両端を含む)に入るギフト。日付が読めないものは範囲に入れない
+function giftRowsInRange(rows, from, to) {
+  const lo = from <= to ? from : to;
+  const hi = from <= to ? to : from;
+  return rows.filter((row) => {
+    const key = monthKeyOf(row.date);
+    return key !== null && key >= lo && key <= hi;
+  });
+}
+
 // 受取状況の絞り込み(すべて / 未受取 / 受取済み)。「すべて」以外では
 // 未確認と URL未取得を出さない(未受取と断定できないため)
 const GIFT_VIEW_FILTERS = ["all", "unreceived", "received"];

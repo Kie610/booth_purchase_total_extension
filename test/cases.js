@@ -501,6 +501,19 @@ check("表示の絞り込み(受取済み)", filterGiftRows(giftListRows, "recei
 check("表示の絞り込み(すべて)は未確認も含む", filterGiftRows(giftListRows, "all").length, 4);
 check("受取状況が無ければ全部未確認かURL未取得", buildGiftRows(giftResults, {}).map(r => r.state),
   ["unknown", "unknown", "unknown", "missing"]);
+
+// 受取状況の確認は月の範囲で分ける(② 金額の収集と同じ)。URL未取得は表に入れない
+const giftYearStats = buildGiftYearStats(giftListRows);
+check("ギフトの年別統計(URL未取得は除く)",
+  giftYearStats.map(y => [y.key, y.count, y.collected, y.pending]), [["2026", 3, 1, 2]]);
+check("ギフトの月別統計", buildGiftMonthStats(giftListRows).map(m => [m.key, m.count, m.pending]),
+  [["2026-09", 1, 1], ["2026-06", 2, 1]]);
+check("範囲内のギフト(両端を含む・逆順でも同じ)",
+  [giftRowsInRange(giftListRows, "2026-06", "2026-06").map(r => r.name),
+   giftRowsInRange(giftListRows, "2026-09", "2026-06").length],
+  [["未受取の贈り物", "受取済みの贈り物"], 3]);
+check("日付が読めないギフトは範囲に入れない",
+  giftRowsInRange([{ date: "不明", state: "unknown", giftId: "x" }], "2020-01", "2030-12").length, 0);
 // 送料やクーポンは注文に1つしか無く、対象別に割り振れない。黙って消さない
 check("分けられない差額を残す", [giftOnly.gap, selfOnly.gap], [500, 500]);
 check("差額を出せない注文は件数で数える", [giftOnly.gapUnknown, selfOnly.gapUnknown], [2, 1]);
@@ -2473,6 +2486,17 @@ check("既定の画面では画面名を出さない", viewTitle.textContent, ""
   check("URL未取得の商品はリンクにしない", giftTrs[1].cells[1].querySelector("a"), null);
   check("注文番号から注文詳細へ飛べる", giftTrs[0].cells[6].querySelector("a").href, "https://accounts.booth.pm/orders/910001");
   check("件数の内訳", giftStats.textContent, "ギフト 2件(未受取 1件 / URL未取得 1件)");
+  // 確認範囲(② と同じ月別の表と開始/終了)。URL未取得(910002)は表に入らない
+  check("月別の表はURL未取得を除いて数える",
+    [...giftMonthTableBody.querySelectorAll("tr.year-row")].map(tr => [tr.cells[0].textContent, tr.cells[1].textContent, tr.cells[3].textContent]),
+    [["▸2026年", "1", "1"]]);
+  check("開始/終了の選択肢は未確認の件数付き",
+    [...giftRangeFrom.options].map(o => [o.value, o.textContent]), [["2026-09", "2026年9月（未確認 1）"]]);
+  check("確認予定の件数と目安", giftPlannedCount.textContent, "確認予定: 1件 / 目安: 約1秒以上");
+  giftMonthTableBody.querySelector("tr.year-row").click();
+  check("年の行を押すとその年が範囲になる",
+    [giftRangeFrom.value, giftRangeTo.value, giftMonthTableBody.querySelector("tr.year-row").classList.contains("in-range")],
+    ["2026-09", "2026-09", true]);
   check("URL未取得の注意書き", [giftMissingNote.hidden, giftMissingNote.textContent.includes("1件はギフトのURLを保存していません")], [false, true]);
   check("取り直しと確認のボタンは対象があるときだけ押せる", [refetchGiftUrlsBtn.disabled, checkGiftStatusBtn.disabled], [false, false]);
   check("内訳もこの画面に出る", [breakdownSection.hidden, orderTableBody.querySelectorAll("tr").length], [false, 2]);
@@ -3484,6 +3508,11 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
     // (b) 受取状況の確認: 未確認と未受取だけ。受取済み(U2)は取りに行かない
     fetched.length = 0;
     browser.permissions._requested.length = 0;
+    // 範囲は ② と同じく月で指定する。既定は未確認のある最新の月(2026-09)だけなので広げる
+    check("既定の範囲は未確認のある最新の月", [giftRangeFrom.value, giftRangeTo.value], ["2026-09", "2026-09"]);
+    check("既定の範囲の予定件数", giftPlannedCount.textContent.startsWith("確認予定: 1件"), true);
+    setGiftRange("2026-06", "2026-09");
+    check("範囲を広げると予定件数が増える", giftPlannedCount.textContent.startsWith("確認予定: 2件"), true);
     checkGiftStatusBtn.click();
     await new Promise((r) => setTimeout(r, 50));
     while (running) await new Promise((r) => setTimeout(r, 20));

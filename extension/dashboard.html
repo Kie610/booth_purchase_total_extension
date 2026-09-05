@@ -723,16 +723,52 @@
            <div class="status warn" id="giftMissingNote" hidden></div>
          </div>
 
+         <!-- ① 注文履歴の取得と同じ形: ボタン1つ。URL未取得の注文だけを取り直す -->
          <div class="step-controls">
            <button id="refetchGiftUrlsBtn" class="secondary">ギフトのURLを取り直す</button>
-           <button id="checkGiftStatusBtn" class="primary">受取状況を確認</button>
            <span class="status" id="giftCheckStatus" role="status" aria-live="polite"></span>
          </div>
          <p class="hint">
-           「ギフトのURLを取り直す」は、URL未取得のギフトを含む注文の詳細ページ(accounts.booth.pm)を
-           取り直します。「受取状況を確認」は、未確認と未受取のギフトについてギフト管理ページ
-           (booth.pm)を1件ずつ開いて状態を読みます。初回は booth.pm へのアクセス許可を求めます。
+           URL未取得のギフトを含む注文の詳細ページ(accounts.booth.pm)だけを取り直します。
+           ギフトの無い注文には触れません。
          </p>
+
+         <!-- ② 金額の収集と同じ形: 月の範囲を指定して受取状況を確認する -->
+         <h3 class="gift-check-title">受取状況の確認</h3>
+         <p class="hint">
+           未確認と未受取のギフトについて、ギフト管理ページ(booth.pm)を1件ずつ開いて状態を読みます。
+           件数が多いと時間がかかるため、月の範囲を指定して分割して進められます。
+           初回は booth.pm へのアクセス許可を求めます。
+         </p>
+         <div id="giftRangeArea">
+           <div class="range-controls">
+             <label class="range-field">開始
+               <select id="giftRangeFrom"></select>
+             </label>
+             <span class="range-sep">〜</span>
+             <label class="range-field">終了
+               <select id="giftRangeTo"></select>
+             </label>
+             <button id="giftSelectPendingBtn" class="secondary small">未確認のある範囲を選択</button>
+           </div>
+           <div class="step-controls">
+             <button id="checkGiftStatusBtn" class="primary">選択範囲の受取状況を確認</button>
+             <span class="planned" id="giftPlannedCount"></span>
+           </div>
+         </div>
+         <table class="data-table month-table">
+           <thead>
+             <tr><th>期間</th><th class="num">ギフト数</th><th class="num">確認済み</th><th class="num">未確認</th><th class="pick">範囲</th></tr>
+           </thead>
+           <tbody id="giftMonthTableBody"></tbody>
+         </table>
+         <p class="hint">
+           年の行の ▸ をクリックすると月別を開閉できます。
+           年の行をクリックするとその年全体が、月の行をクリックするとその月が範囲に設定されます。
+           右端の「選択」が塗られている行が、いま確認する範囲です。受取済みは確認済みに数え、
+           二度と取りに行きません。URL未取得のギフトはこの表に入れません。
+         </p>
+         <p id="giftUnknownArea" class="unknown-area" hidden><span id="giftUnknownCount"></span></p>
 
          <div class="gift-view-filter">
            <span class="share-field-label" id="giftViewFilterLabel">表示</span>
