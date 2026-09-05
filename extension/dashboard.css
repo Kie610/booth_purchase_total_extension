@@ -1707,13 +1707,20 @@ span.amount-pending {
   font-weight: 400;
 }
 
-/* メモは長くなりうるので、列を伸ばさず折り返す */
+/* メモは誰に渡したかを書く欄なので、ショップ名の列と同じ程度の幅を確保して折り返す
+   (幅を指定しないと表の自動配分で数文字幅に潰れる) */
 .gift-memo {
-  max-width: 200px;
+  min-width: 160px;
+  max-width: 240px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   font-size: 12px;
   color: var(--fg-muted);
+}
+
+th.gift-memo {
+  font-size: inherit;
+  color: inherit;
 }
 
 /* ---- 共有カード ---- */

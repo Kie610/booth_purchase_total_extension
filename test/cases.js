@@ -2491,7 +2491,10 @@ check("既定の画面では画面名を出さない", viewTitle.textContent, ""
   check("商品名からギフト管理ページへ飛べる",
     giftTrs[0].cells[1].querySelector("a").href, "https://booth.pm/gifts/bbbbbbbb-0000-4000-8000-000000000001/edit");
   check("URL未取得の商品はリンクにしない", giftTrs[1].cells[1].querySelector("a"), null);
-  check("注文番号から注文詳細へ飛べる", giftTrs[0].cells[7].querySelector("a").href, "https://accounts.booth.pm/orders/910001");
+  check("列の順は 状態・商品・注文日時・メモ・注文番号・ショップ・金額・受取日時",
+    [...giftTrs[0].cells].map(c => c.className.split(" ")[0] || c.textContent.slice(0, 4)),
+    ["gift-state", "贈り物X", "2026", "gift-memo", "9100", "SOUR", "num", "—"]);
+  check("注文番号から注文詳細へ飛べる", giftTrs[0].cells[4].querySelector("a").href, "https://accounts.booth.pm/orders/910001");
   check("件数の内訳", giftStats.textContent, "ギフト 2件(未受取 1件 / URL未取得 1件)");
   // 確認範囲(② と同じ月別の表と開始/終了)。URL未取得(910002)は表に入らない
   check("月別の表はURL未取得を除いて数える",
@@ -2530,10 +2533,10 @@ check("既定の画面では画面名を出さない", viewTitle.textContent, ""
     check("コピーしたことを知らせる", copyBtn.textContent, "コピーしました");
     copyTextToClipboard = realCopy;
   });
-  check("メモの列(確認前は空)", giftTrs.map(tr => tr.cells[6].textContent), ["—", "—"]);
+  check("メモの列(確認前は空)", giftTrs.map(tr => tr.cells[3].textContent), ["—", "—"]);
   state.giftStatus["bbbbbbbb-0000-4000-8000-000000000001"].memo = "Aさん宛";
   render();
-  check("メモを表示する", giftTableBody.querySelector("tr").cells[6].textContent, "Aさん宛");
+  check("メモを表示する", giftTableBody.querySelector("tr").cells[3].textContent, "Aさん宛");
 
   // 表示の絞り込み
   giftViewFilterSwitch.querySelector('[data-gift-view-filter="unreceived"]').click();
@@ -2549,6 +2552,13 @@ check("既定の画面では画面名を出さない", viewTitle.textContent, ""
   state.giftStatus = { "bbbbbbbb-0000-4000-8000-000000000001": { state: "received", issuedAt: "a", receivedAt: "b", checkedAt: 1 } };
   render();
   check("受取済みだけなら確認も取り直しもしない", [refetchGiftUrlsBtn.disabled, checkGiftStatusBtn.disabled, giftMissingNote.hidden], [true, true, true]);
+  // キャッシュを無視するなら、URL未取得が無くても取り直せる
+  giftUrlForceRefresh.checked = true;
+  giftUrlForceRefresh.dispatchEvent(new Event("change"));
+  check("キャッシュ無視ならURL取り直しを押せる", refetchGiftUrlsBtn.disabled, false);
+  giftUrlForceRefresh.checked = false;
+  giftUrlForceRefresh.dispatchEvent(new Event("change"));
+  check("戻せば押せない", refetchGiftUrlsBtn.disabled, true);
 
   state.index = savedIndex;
   state.cache = savedCache;
@@ -3538,6 +3548,14 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
     check("URLの取り直しはギフトを含む v1 の注文だけ", fetched, [detailUrl("gt1")]);
     check("取り直した注文に giftId が入り v2 になる", [state.cache.gt1.items[0].giftId, state.cache.gt1.v], [U1, CACHE_SCHEMA_VERSION]);
     check("ギフトの無い v1 の注文はそのまま", state.cache.gt3.v, 1);
+    // キャッシュを無視: ギフトを含む注文(gt1, gt2)を保存済みでも取り直す。ギフトの無い gt3 は対象外
+    fetched.length = 0;
+    routes[detailUrl("gt2")] = (path) => { fetched.push(path); return okResponse(path, orderHtml("850", sheetGroup("ギフト", [[425, 0, "済み", U2], [425, 0, "未", U3]]))); };
+    giftUrlForceRefresh.checked = true;
+    await runTask(refetchGiftUrlsTask);
+    giftUrlForceRefresh.checked = false;
+    check("キャッシュ無視ならギフトを含む注文を全件取り直す", fetched.sort(), [detailUrl("gt1"), detailUrl("gt2")].sort());
+    check("取り直しても giftId は保たれる", state.cache.gt2.items.map(i => i.giftId), [U2, U3]);
 
     // (b) 受取状況の確認: 未確認と未受取だけ。受取済み(U2)は取りに行かない
     fetched.length = 0;

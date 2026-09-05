@@ -332,6 +332,7 @@ giftMonthTableBody.addEventListener("keydown", (event) => {
 });
 
 giftForceRefresh.addEventListener("change", updateGiftPlannedCount);
+giftUrlForceRefresh.addEventListener("change", updateRefetchGiftUrlsButton);
 
 // 未受取のギフトのURLをコピーする。書き込みだけなので clipboardWrite 権限は要らない
 // (拡張ページ上のユーザー操作の中で navigator.clipboard.writeText が使える)。
@@ -1708,9 +1709,18 @@ async function runAllTask(signal) {
 // とは切り離し、この画面のボタンからしか取りに行かない(サーバーへの負荷を増やさない)。
 
 // (a) ギフトのURL(giftId)を保存していない注文の詳細ページを取り直す。
-// 対象は isOutdatedEntry(v1 でギフトを含む注文)だけなので、他の注文には触れない
+// 対象は isOutdatedEntry(v1 でギフトを含む注文)だけなので、他の注文には触れない。
+// 「キャッシュを無視して」ではギフトを含む注文をすべて取り直す(ギフトの無い注文は対象外のまま)
+function orderHasGift(entry) {
+  return hasItems(entry) && entry.items.some((item) => item.gift);
+}
+
 async function refetchGiftUrlsTask(signal) {
-  const orders = targetOrders().filter((o) => isOutdatedEntry(state.cache[o.id]));
+  const force = giftUrlForceRefresh.checked;
+  const orders = targetOrders().filter((o) => {
+    const entry = state.cache[o.id];
+    return force ? orderHasGift(entry) : isOutdatedEntry(entry);
+  });
   if (orders.length === 0) {
     showNotice("取り直す注文はありません(すべてのギフトのURLを保存済みです)。");
     return;

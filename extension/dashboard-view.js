@@ -66,6 +66,7 @@ const giftMonthTableBody = document.getElementById("giftMonthTableBody");
 const giftUnknownArea = document.getElementById("giftUnknownArea");
 const giftUnknownCount = document.getElementById("giftUnknownCount");
 const giftForceRefresh = document.getElementById("giftForceRefresh");
+const giftUrlForceRefresh = document.getElementById("giftUrlForceRefresh");
 // D12 集計対象のバー。ギフト・注文の画面ではギフトそのものが対象なので隠す
 const giftFilterBar = document.getElementById("giftFilterBar");
 const authorHeaderBtn = document.getElementById("authorHeaderBtn");
@@ -649,6 +650,7 @@ function renderRunningState(isRunning) {
   giftRangeFrom.disabled = isRunning;
   giftRangeTo.disabled = isRunning;
   giftForceRefresh.disabled = isRunning;
+  giftUrlForceRefresh.disabled = isRunning;
   // 復元は state を丸ごと差し替えるので、収集中に走らせると取得結果と衝突する
   restoreFile.disabled = isRunning;
   abortBtn.disabled = !isRunning;
@@ -1394,6 +1396,17 @@ function giftCountsText(rows) {
   return `ギフト ${rows.length}件(${parts.join(" / ")})`;
 }
 
+// URL未取得のギフトの数(直近の描画)。「ギフトのURLを取り直す」を押せるかの判断に使う
+let giftMissingCount = 0;
+
+// 取り直しは URL未取得があるとき、またはキャッシュ無視のときだけ押せる。
+// 実行中の無効化を上書きしないよう、待機中だけ決める(renderClearArea と同じ)
+function updateRefetchGiftUrlsButton() {
+  if (!running) {
+    refetchGiftUrlsBtn.disabled = giftMissingCount === 0 && !giftUrlForceRefresh.checked;
+  }
+}
+
 // 直近の描画で組み立てたギフトの行。範囲の予定件数と「受取状況を確認」が同じ行を見る
 // (描画と確認で対象がずれると、予定件数と実際に開く件数が食い違う)
 let giftRowsMemo = [];
@@ -1528,24 +1541,25 @@ function renderGiftArea() {
       ? `${missing}件はギフトのURLを保存していません(以前の版で収集した注文)。` +
         "「ギフトのURLを取り直す」で注文詳細を取り直すと確認できるようになります。"
       : "";
-  // 実行中の無効化を上書きしないよう、待機中だけ件数で決める(renderClearArea と同じ)
-  if (!running) refetchGiftUrlsBtn.disabled = missing === 0;
+  giftMissingCount = missing;
+  updateRefetchGiftUrlsButton();
   renderGiftRangeArea(rows);
 
   const filtered = filterGiftRows(rows, giftViewFilter);
   giftTableBody.innerHTML = "";
   for (const row of filtered) {
     const tr = el("tr");
+    // 列の順は「誰に何を渡したか」を左に寄せる: 状態・商品・注文日時・メモ・注文番号・ショップ・金額・受取日時
     tr.appendChild(giftStateCell(row));
     tr.appendChild(giftNameCell(row));
-    tr.appendChild(giftShopCell(row));
     tr.appendChild(td(row.date));
+    tr.appendChild(td(row.memo || "—", "gift-memo"));
+    tr.appendChild(orderIdCell(row.orderId));
+    tr.appendChild(giftShopCell(row));
     tr.appendChild(
       typeof row.amount === "number" ? td(formatYen(row.amount), "num") : td("不明", "num amount-pending")
     );
     tr.appendChild(td(row.receivedAt || "—"));
-    tr.appendChild(td(row.memo || "—", "gift-memo"));
-    tr.appendChild(orderIdCell(row.orderId));
     giftTableBody.appendChild(tr);
   }
   giftFilterCount.textContent =
