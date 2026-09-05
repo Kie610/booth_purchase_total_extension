@@ -8,6 +8,7 @@ desktop.ini
 .idea/
 .claude/
 *.swp
+.local/
 
 # アイコンの下書き(ペイントソフトの作業ファイルと試し書き出し)。
 # 配布するPNGは tools/make_icons.py の生成物だけにする

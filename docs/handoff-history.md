@@ -1249,3 +1249,69 @@ bootstrap 提唱の運用ルールを再度当てはめ、2026-08-08 の合成�
 - `node --check`: extension/ と test/ の 17ファイル、failed=0。
 - `git diff --check`: 空白エラーなし。
 - ブラウザ全体テストと `tools/release.ps1` は未実行。文書のみの変更で JavaScript と配布物に差分がないため。
+
+## Migration record
+
+procedure: ai-project-management 0.4.0-dev (ADOPT-PROMPT.md, 2026-09-05)
+
+2026-08-08 と 2026-08-16 の合成は手順パッケージの版が記録される前に行われた(版は unknown)。
+
+## 運用ルール合成の第3回(2026-09-05、ai-project-management 0.4.0-dev)
+
+6文書構成・handoff v1 schema・委任と検品は前2回で導入済みのため、今回は 0.4.0-dev で新たに提唱された
+要素(ディレクトリ構造、バックアップと過去版、手順版の記録)と live 状態の更新だけを扱った。
+`AGENTS.md` は変更していない(96行 / 6869bytes で上限に近く、追加規則はすべて場面限定のため補遺へ置いた)。
+既存文書の規則は1つも削除していない。
+
+### 採用(そのまま)
+
+- 手順版の記録(`## Migration record` の `procedure:`)。本節がその記録。
+- 過去版のコピーをリポジトリ内に作らない。過去版はバージョンブランチと `vX.Y.Z` タグが持つ。
+- `tools/` を手順の正本にしない(`docs/versioning.md` が正本で、`tools/release.ps1` はその機械化)。
+- 破壊的操作前の `backup/<日付>-<内容>` タグ。既存の「force push しない」に前段の保全を足した。
+- 復元を試していないバックアップは未検証、年1回の復元確認、3世代保持。
+- 委任の利得は親の文脈へ読み込みを残さないことにある、という判定基準(親200k超で読み込み作業は委任既定)。
+
+### 適合して採用
+
+- `.local/`: 秘密は現状無いが、規則の置き場として `.gitignore` に1行追加した。`.env.example` は引き続き不要。
+- `docs/SOURCES.md`: 新設せず既存の `CREDIT.md` を取得元・ライセンスの記録先とした。復元不能な素材の明記を規則に足した。
+- バックアップ方式: remote(`origin`)があるため push を第一とし、年1回の `git clone --mirror` を追加。
+  保存先ディレクトリは未決定のため `HANDOFF.agent.md` の U6 とした。bundle は remote があるので不採用。
+- `RELEASE` ファイル: 新設しない。版の正本は既存どおり `extension/manifest.json`(README・テスト・配布物と一致させる不変条件)。
+
+### 不採用(既存優先)
+
+- `main` を置かないブランチ運用と `dev` のリネームによるリリース。2026-08-16 に不採用とした判断を維持する。
+  ただし現在の作業ブランチ `1.2.0-dev` は「ブランチ名 = manifest の version」の既存規則と一致しておらず、
+  次版確定時にどちらへ寄せるかを決める必要がある(U5)。
+- git LFS。追跡ファイルの最大は 276KB(`test/cases.js`)、PNG は 120KB 以下で、導入は履歴の書き換えを要する。
+- `research/`・`archive/`(退役)・ワークスペース統括層。単独の製品で該当がない。
+- 「求められていない `Co-Authored-By` を追加しない」。本リポジトリの全コミットはエージェントの harness 指示により
+  `Co-Authored-By` を付けており、既存の慣行を維持する。
+- `SECURITY.md`・CI の新規導入。前2回と同じ理由。
+
+### live 状態の更新(`HANDOFF.agent.md`)
+
+- 記録は `work_branch: 1.1.0` だったが、live は `1.2.0-dev`(df980ad、`origin/1.2.0-dev` bc3908d より1コミット先行)。
+  `main`・`1.1.0`・`v1.1.0` は同一 SHA 67f206d で、v1.1.0 リリースの main 同期は完了している。
+- `.claude/worktrees/` 配下の worktree 9本は移動前のパス(`D:/GitHub_WorkSpace/booth_purchase_total_extension/...`)
+  を指して prunable。所有者確認まで prune しない(U7)。
+- `HANDOFF.agent.md` から退避した検証行(4096bytes 枠のため):
+  - `C: 2026-08-10 — evidence: status=PASS; kind=compile; command=python hashlib と zipfile で dist/*.zip を照合; environment=Windows 11 / Python; scope=dist/booth-purchase-total-extension-v1.1.0.zip の26 entriesと.sha256(2d7426ff...c3ddd0)の一致; counts=passed=1, failed=0, skipped=0, not-run=0`
+
+### テストの修正
+
+- 全体テストを実行したところ `正式リリースと開発版とバージョンブランチ運用を文書化` が1件失敗した(1055 checks中)。
+  原因は 2026-08-16 の第2回合成で該当4文字列を `AGENTS.md` から `docs/agent-appendix.md` へ移した際、
+  文書のみの変更を理由に全体テストを実行せず、`AGENTS.md` を読むテストを更新しなかったこと。
+- `test/cases.js` の当該 check が `docs/agent-appendix.md` を読むよう参照先だけを変えた(期待する文字列は不変)。
+  修正後 `ALL PASS (1055 checks)`。教訓: 文書の移動も横断整合の対象で、「文書のみ」を理由に全体テストを省かない。
+
+### 検証(2026-09-05)
+
+- `node --check`: extension/ と test/ の 17ファイル、failed=0。
+- 全体テスト: `python -m http.server 8731` + `http://127.0.0.1:8731/test/index.html`(幅1280px)で `ALL PASS (1055 checks)`。
+  `localhost` で開くと修正前の `cases.js` がブラウザキャッシュから使われ続けたため、別ホスト名で開いて確認した。
+- `validate_handoff.py --root .`: VALID files=4 checks=56 errors=0。
+- `tools/release.ps1` は未実行。配布物に差分が無いため。

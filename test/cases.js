@@ -3965,15 +3965,15 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   const handoffText = await (await fetch("../HANDOFF.md")).text();
   const handoffHistoryText = await (await fetch("../docs/handoff-history.md")).text();
   const versioningText = await (await fetch("../docs/versioning.md")).text();
-  const agentsText = await (await fetch("../AGENTS.md")).text();
+  const appendixText = await (await fetch("../docs/agent-appendix.md")).text();
   check("正式リリースと開発版とバージョンブランチ運用を文書化",
     [readmeText.includes("現在の正式リリースは **v1.1.0**"),
      readmeText.includes("統合ブランチ `1.1.0`"),
      handoffText.includes("[Durable repository instructions](AGENTS.md)"),
-     agentsText.includes("現在の正式リリースは `1.1.0`"),
-     agentsText.includes("正式リリースが確定するまでは、`main`へ直接コミット・マージ・pushしない"),
-     agentsText.includes("正式リリース時は、検証済みバージョンブランチへ`main`をfast-forward"),
-     agentsText.includes("バージョンブランチは削除しない"),
+     appendixText.includes("現在の正式リリースは `1.1.0`"),
+     appendixText.includes("正式リリースが確定するまでは、`main`へ直接コミット・マージ・pushしない"),
+     appendixText.includes("正式リリース時は、検証済みバージョンブランチへ`main`をfast-forward"),
+     appendixText.includes("バージョンブランチは削除しない"),
      versioningText.includes("git merge --ff-only <version>")],
     [true, true, true, true, true, true, true, true]);
   const supportDistributionNotice = "本拡張機能は無料でダウンロード・利用できます。BOOTHには任意の支援版も用意しますが、支援版に含まれる拡張機能は無料版と同一です。支援版の購入およびBOOSTは作者への任意の支援であり、支援の有無や金額による機能・利用条件・サポート内容の違いはありません。";

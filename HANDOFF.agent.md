@@ -1,52 +1,56 @@
 # Agent handoff v1
 
-updated: 2026-08-16
+updated: 2026-09-05
 repo: Kie610/booth_purchase_total_extension
-work_branch: 1.1.0
-upstream: origin/1.1.0@67f206d861f6bbaf633209d00db254526d152d37
-base: 1.0.0@cc090b9ddbd42753522e4c050f939d43ee0a8713
-goal: v1.1.0を正式リリースする(2026-08-10にユーザー指示で実施)。
+work_branch: 1.2.0-dev
+upstream: origin/1.2.0-dev@bc3908d(ローカルが先行、未push)
+base: 1.1.0@67f206d
+goal: `1.2.0-dev`で次版の要件確定と実装を進める。
 
 ## State
 
 complete:
-- C: v1.0.0を正式リリース済み(GitHub Release公開、`main`を同じSHAへff同期済み)。
-- C: `1.1.0`へP1〜P12(A1〜A5・B1〜B4・C1〜C18・D1〜D22・T1)を検品のうえ統合済み。内訳と設計判断は docs/improvement-plan.md と docs/handoff-history.md。
-- C: 運用ルール合成を2026-08-08と2026-08-16に実施。AGENTS.mdをひな形の必須節へそろえ、場面限定ルールを docs/agent-appendix.md へ分離(6文書構成)。採否は docs/handoff-history.md。
+- C: v1.0.0・v1.1.0を正式リリース済み。`main`・`1.1.0`・タグ`v1.1.0`は同一SHA 67f206d。
+- C: `1.1.0`へP1〜P12を検品のうえ統合済み。内訳は docs/improvement-plan.md。
+- C: 運用ルール合成を08-08・08-16・09-05に実施。採否と手順版は docs/handoff-history.md の Migration record。
 
 verified:
-- C: 2026-08-10 — evidence: status=PASS; kind=compile; command=node --check extension/*.js test/*.js; environment=Windows 11 / Node.js; scope=extension/とtest/の全JavaScript構文; counts=passed=17, failed=0, skipped=0, not-run=0
-- C: 2026-08-10 — evidence: status=PASS; kind=runtime; command=python -m http.server 8847 と /test/index.html を幅1280pxで開く; environment=Windows 11 / Chromium系ブラウザ 1280x900; scope=test/cases.js全体 ALL PASS; counts=passed=1055, failed=0, skipped=0, not-run=0
-- C: 2026-08-10 — evidence: status=PASS; kind=compile; command=python hashlib と zipfile で dist/*.zip を照合; environment=Windows 11 / Python; scope=dist/booth-purchase-total-extension-v1.1.0.zip の26 entriesと.sha256(2d7426ff...c3ddd0)の一致; counts=passed=1, failed=0, skipped=0, not-run=0
+- C: 2026-09-05 — evidence: status=PASS; kind=compile; command=node --check extension/*.js test/*.js; environment=Windows 11 / Node.js 24.18.1; scope=extension/とtest/の全JavaScript構文; counts=passed=17, failed=0, skipped=0, not-run=0
+- C: 2026-09-05 — evidence: status=PASS; kind=runtime; command=python -m http.server 8731 と http://127.0.0.1:8731/test/index.html を幅1280pxで開く; environment=Windows 11 / Chromium 1280x900; scope=test/cases.js全体 ALL PASS; counts=passed=1055, failed=0, skipped=0, not-run=0
 
 not-run:
-- U: U1 BOOTHログイン済み実ページの通信・ページング・セレクタ確認。D10のステータス再取得のみ2026-08-07にユーザー実環境で確認済み。
-- U: U2 実拡張として読み込んだブラウザでのD11テーマ切り替え・D14/D17沼レポート(実際のext.storage.local)。プレビュー複製での確認のみ済み。
+- U: U1 BOOTHログイン済み実ページの通信・ページング・セレクタ確認。D10のみ2026-08-07にユーザー実環境で確認済み。
+- U: U2 実拡張として読み込んだブラウザでのD11テーマ切り替え・D14/D17沼レポート。プレビュー複製での確認のみ。
+- U: U4 2026-09-05の `tools/release.ps1`。文書と.gitignoreのみの変更で配布物に差分が無いため未実行。
 
 ## Decisions
 
-- C: 開発中はバージョンブランチへ統合し、正式リリース確定時に`main`を同じSHAへff同期する。
-- C: versionと同名のブランチを作り、削除せず残す。
-- C: 大きな機能追加はマイナー、バグ修正や小さな機能変更はパッチ番号を更新する。
+- C: 開発中はバージョンブランチへ統合し、正式リリース確定時に`main`を同じSHAへff同期する。`main`廃止の提唱は不採用(2026-08-16)。
+- C: versionと同名のブランチを作り、削除せず残す。大きな機能追加はマイナー、修正や小さな変更はパッチ番号。
 - C: 共有カードの幅依存テスト1件は幅521pxで落ちる。検証は幅768px以上で行う。
-- C: 正式対応はChromeのみ。Firefoxは一時読み込みに限定し署名・AMO対応は不採用(2026-08-09)。
-- A: D14の伏せ字共有でもアバター名は出す(素体名は広く共有された呼び名で個人特定性が低い)。利用者からの指摘の有無で検証する。
-- U: U3 次版(1.2.0または1.1.1)の要件が未確定。
+- C: 正式対応はChromeのみ。Firefoxは一時読み込みに限定(2026-08-09)。
+- A: D14の伏せ字共有でもアバター名は出す。利用者からの指摘の有無で検証する。
+- U: U3 次版(1.2.0または1.1.1)の要件が未確定。`manifest.json`は1.1.0のまま。
+- U: U5 作業ブランチ名`1.2.0-dev`は「ブランチ名=manifestのversion」の規則と一致しない。次版確定時に改名か規則更新かを決める。
+- U: U6 バックアップ保存先(別ドライブ)が未決定。mirror未取得、復元未検証。
+- U: U7 `.claude/worktrees/`配下の9 worktreeは移動前のパスを指しprunable。所有者確認までpruneしない。
+- U: U8 pushのユーザー許可が未取得。
 
 ## Next
 
-1. v1.1.0正式リリースの完了確認(main同期・タグ・Release資産の再取得検証) — blocked-by: none
-2. 次版は同期した`main`から`1.2.0`(または`1.1.1`)ブランチを作る — blocked-by: U3
+1. 本合成のコミットと未push分を`origin/1.2.0-dev`へpushする — blocked-by: U8
+2. 次版の要件を確定し`manifest.json`・README・ブランチ名をそろえる — blocked-by: U3
+3. バックアップ保存先を決めて初回mirrorと復元確認を行う — blocked-by: U6
 
 ## Paths
 
-- C: `extension/manifest.json` — 拡張機能と配布物のversion
+- C: `extension/manifest.json` — 拡張機能と配布物のversion(版の正本)
 - C: `tools/release.ps1` — 配布ZIPとSHA-256の生成
 - C: `AGENTS.md` — 毎回有効な永続ルール
-- C: `docs/agent-appendix.md` — 委任・並行実装・リリース・引き継ぎ整備の場面限定ルール
-- C: `docs/versioning.md` — バージョン決定、正式リリース、main同期の詳細手順
-- C: `docs/handoff-history.md` — 旧HANDOFFの詳細手順・調査履歴・縮小前の原文
-- C: `docs/improvement-plan.md` — 2026-08-07レビューの指摘一覧と委任プロンプト
+- C: `docs/agent-appendix.md` — 委任・並行実装・リリース・バックアップの場面限定ルール
+- C: `docs/versioning.md` — バージョン決定、正式リリース、main同期の手順
+- C: `docs/handoff-history.md` — 旧HANDOFF原文・合成の採否・Migration record
+- C: `docs/improvement-plan.md` — 2026-08-07レビューの指摘と委任プロンプト
 
 ## Resume protocol
 
