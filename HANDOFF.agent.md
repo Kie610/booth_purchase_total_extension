@@ -31,7 +31,7 @@ verified:
 - C: 2026-09-05(1.2.0実装後) — evidence: status=PASS; kind=runtime; command=python -m http.server 8731 と http://localhost:8731/test/index.html を幅1280pxで開く; environment=Windows 11 / Chromium 1280x900; scope=test/cases.js全体 ALL PASS; counts=passed=1141, failed=0, skipped=0, not-run=0
 - C: 2026-09-05 — evidence: status=PASS; kind=runtime; command=stub差し込みの dashboard.html 複製を幅1280pxで表示; environment=Windows 11 / Chromium; scope=水平タブ8項目が1行に収まる・ヘッダー右の「作者について」表示・#/gifts の表(URLコピー・メモ列)・範囲指定(月別の表と予定件数・再取得チェック)・集計対象バー非表示; counts=passed=1, failed=0, skipped=0, not-run=0
 - C: 2026-09-05 — evidence: status=PASS; kind=external; command=ログイン済みChromeで accounts.booth.pm/orders/87212632・82903405 と booth.pm/gifts/<UUID>/edit を読み取り; environment=Windows 11 / Chrome; scope=ギフトリンクのhref形式・「状態」「受取日時」「発行日時」のラベル構造(未受取1件・受取済み6件); counts=passed=7, failed=0, skipped=0, not-run=0
-- C: 2026-09-06 — evidence: status=PASS; kind=compile; command=tools/release.ps1(0854fa3); environment=Windows 11 / PowerShell 7; scope=dist/booth-purchase-total-extension-v1.2.0.zip(26ファイル、manifest 1.2.0、optional_host_permissions 確認)とSHA-256 dd3a2aff…; counts=passed=1, failed=0, skipped=0, not-run=0
+- C: 2026-09-06 — evidence: status=PASS; kind=compile; command=tools/release.ps1(aefc35d); environment=Windows 11 / PowerShell 7; scope=dist/booth-purchase-total-extension-v1.2.0.zip(26ファイル、manifest 1.2.0、optional_host_permissions 確認)とSHA-256 a501bfda…; counts=passed=1, failed=0, skipped=0, not-run=0
 - C: 2026-09-05 — evidence: status=PASS; kind=compile; command=git clone -b 1.2.0-dev ../backup/booth_purchase_total_extension-2026-09-05.git と tools/release.ps1; environment=Windows 11 / PowerShell 7; scope=復元cloneで配布ZIPとSHA-256を生成; counts=passed=1, failed=0, skipped=0, not-run=0
 
 not-run:
@@ -55,7 +55,7 @@ not-run:
 
 ## Next
 
-1. テスター配布版 dist/…v1.2.0.zip(0854fa3)でU7の実環境確認を集め、問題なければ docs/versioning.md の手順でリリース — blocked-by: U7
+1. テスター配布版 dist/…v1.2.0.zip(aefc35d)でU7の実環境確認を集め、問題なければ docs/versioning.md の手順でリリース — blocked-by: U7
 2. 年1回(2027-09まで)のmirror更新と復元確認 — blocked-by: none
 
 ## Paths
