@@ -65,6 +65,9 @@ const giftPlannedCount = document.getElementById("giftPlannedCount");
 const giftMonthTableBody = document.getElementById("giftMonthTableBody");
 const giftUnknownArea = document.getElementById("giftUnknownArea");
 const giftUnknownCount = document.getElementById("giftUnknownCount");
+const giftForceRefresh = document.getElementById("giftForceRefresh");
+// D12 集計対象のバー。ギフト・注文の画面ではギフトそのものが対象なので隠す
+const giftFilterBar = document.getElementById("giftFilterBar");
 const authorHeaderBtn = document.getElementById("authorHeaderBtn");
 const footTotal = document.getElementById("footTotal");
 const footTotalCount = document.getElementById("footTotalCount");
@@ -266,6 +269,9 @@ function renderCurrentView() {
     .filter(Boolean)
     .join(" ");
   renderGiftFilter();
+  // ギフト・注文の画面は対象がギフトそのものなので、集計対象の切り替えを出さない
+  // (選択は保ったまま隠すだけ。この画面の描画は絞り込みを掛けない結果を使う)
+  giftFilterBar.hidden = current === "gifts";
   renderPendingBanner(current);
   // 収集はレポート画面で行うので、画面を問わず出す
   renderCollectHealthBanner();
@@ -642,6 +648,7 @@ function renderRunningState(isRunning) {
   rangeTo.disabled = isRunning;
   giftRangeFrom.disabled = isRunning;
   giftRangeTo.disabled = isRunning;
+  giftForceRefresh.disabled = isRunning;
   // 復元は state を丸ごと差し替えるので、収集中に走らせると取得結果と衝突する
   restoreFile.disabled = isRunning;
   abortBtn.disabled = !isRunning;
@@ -712,7 +719,7 @@ function render() {
   renderYearSummary(results);
   renderExportArea(results);
   renderBackupArea(results);
-  renderGiftArea(results);
+  renderGiftArea();
   // 出し分けと共有ボタンは上の描画結果に依るので最後に決める。
   // renderCurrentView が共有ボタンまで更新するので、ここで呼ぶのは1回でよい
   renderCurrentView();
@@ -1332,8 +1339,19 @@ function renderGiftViewFilter() {
   }
 }
 
+// 未受取のギフトには、相手へ渡し直せるようギフト用URLをコピーするボタンを添える
+// (押したときの処理は dashboard.js の giftTableBody のクリックにある)
 function giftStateCell(row) {
-  return td(GIFT_STATE_LABELS[row.state], `gift-state gift-state-${row.state}`);
+  const cell = td(GIFT_STATE_LABELS[row.state], `gift-state gift-state-${row.state}`);
+  const url = row.state === "unreceived" ? giftShareUrl(row.giftId) : null;
+  if (url) {
+    const button = el("button", "secondary small gift-copy-btn", "URLをコピー");
+    button.type = "button";
+    button.dataset.giftUrl = url;
+    button.setAttribute("aria-label", `${row.name} のギフト用URLをコピー`);
+    cell.appendChild(button);
+  }
+  return cell;
 }
 
 function giftNameCell(row) {
@@ -1383,6 +1401,28 @@ const expandedGiftYears = new Set();
 
 // ② 金額の収集の範囲指定と同じ部品。月別の「ギフト数 / 確認済み / 未確認」の表と、
 // 開始/終了の選択肢、予定件数。URL未取得のギフトは確認しようがないので表に入れない
+// 月別の表の1行(期間 / ギフト数 / 受取済み / 未受取 / 未確認 / 範囲)。
+// 未受取と未確認は別の列にする(未受取はURLを渡し直す相手がいる、未確認はまだ見ていない)
+function giftStatRow(stat, { className, toggle, expanded, indent, pick }) {
+  const tr = el("tr", className);
+  if (stat.pending > 0) tr.classList.add("has-pending");
+  tr.appendChild(
+    toggle ? toggleCell(stat.label, expanded) : td(stat.label, indent ? "indent" : null)
+  );
+  tr.appendChild(td(stat.count, "num"));
+  tr.appendChild(td(stat.received > 0 ? stat.received : "—", "num"));
+  tr.appendChild(td(stat.unreceived > 0 ? stat.unreceived : "—", "num"));
+  tr.appendChild(td(stat.unknown > 0 ? stat.unknown : "—", "num"));
+  const pickCell = td("", "pick");
+  if (pick) {
+    const mark = el("span", "range-pick", "選択");
+    mark.setAttribute("aria-hidden", "true");
+    pickCell.appendChild(mark);
+  }
+  tr.appendChild(pickCell);
+  return tr;
+}
+
 function renderGiftRangeArea(rows) {
   const years = buildGiftYearStats(rows);
   renderCollapsibleTable(
@@ -1390,8 +1430,8 @@ function renderGiftRangeArea(rows) {
     years,
     expandedGiftYears,
     (year, expanded) => {
-      if (year.key === null) return statRow(year, { className: "unknown-row" });
-      const row = statRow(year, { className: "year-row", toggle: true, expanded, pick: true });
+      if (year.key === null) return giftStatRow(year, { className: "unknown-row" });
+      const row = giftStatRow(year, { className: "year-row", toggle: true, expanded, pick: true });
       row.dataset.rangeFrom = year.months[year.months.length - 1].key;
       row.dataset.rangeTo = year.months[0].key;
       row.tabIndex = 0;
@@ -1400,7 +1440,7 @@ function renderGiftRangeArea(rows) {
     },
     (month, year) => {
       if (year.key === null) return null;
-      const row = statRow(month, { className: "month-row", indent: true, pick: true });
+      const row = giftStatRow(month, { className: "month-row", indent: true, pick: true });
       row.dataset.monthKey = month.key;
       row.tabIndex = 0;
       row.setAttribute("aria-label", `${month.label}を確認範囲に設定`);
@@ -1411,7 +1451,7 @@ function renderGiftRangeArea(rows) {
   const monthStats = years.flatMap((year) => year.months).filter((s) => s.key !== null);
   giftRangeArea.hidden = monthStats.length === 0;
   if (monthStats.length > 0) {
-    renderRangeOptions(monthStats, giftRangeFrom, giftRangeTo, "未確認");
+    renderRangeOptions(monthStats, giftRangeFrom, giftRangeTo, "要確認");
   } else {
     giftRangeFrom.innerHTML = "";
     giftRangeTo.innerHTML = "";
@@ -1439,12 +1479,12 @@ function highlightGiftRange() {
   highlightRangeRows(giftMonthTableBody, giftRangeFrom.value, giftRangeTo.value);
 }
 
-// 選択範囲で実際に開きにいくギフト(受取済みは外す)
+// 選択範囲で実際に開きにいくギフト。受取済みは外すが、キャッシュ無視なら全部開き直す
 function plannedGiftIds() {
   const from = giftRangeFrom.value;
   const to = giftRangeTo.value;
   if (!from || !to) return [];
-  return giftIdsToCheck(giftRowsInRange(giftRowsMemo, from, to));
+  return giftIdsToCheck(giftRowsInRange(giftRowsMemo, from, to), giftForceRefresh.checked);
 }
 
 function updateGiftPlannedCount() {
@@ -1456,9 +1496,16 @@ function updateGiftPlannedCount() {
   if (!running) checkGiftStatusBtn.disabled = planned === 0;
 }
 
+// ギフト・注文の画面が使う一覧。D12 の集計対象(すべて/自分用/ギフト)は掛けない
+// (この画面では対象がギフトそのもので、切り替えも隠している)
+function giftViewResults() {
+  return buildAllResults();
+}
+
 // 贈ったギフトの表と、レポートから移した「注文ごとの内訳」。
 // どちらも収集済みの注文が元なので、無ければ案内だけを出す
-function renderGiftArea(results = currentResults()) {
+function renderGiftArea() {
+  const results = giftViewResults();
   breakdownSection.hidden = results.length === 0;
   if (results.length > 0) renderOrderTable(results);
 
@@ -1497,6 +1544,7 @@ function renderGiftArea(results = currentResults()) {
       typeof row.amount === "number" ? td(formatYen(row.amount), "num") : td("不明", "num amount-pending")
     );
     tr.appendChild(td(row.receivedAt || "—"));
+    tr.appendChild(td(row.memo || "—", "gift-memo"));
     tr.appendChild(orderIdCell(row.orderId));
     giftTableBody.appendChild(tr);
   }

@@ -175,8 +175,11 @@ function extractGiftId(link) {
 //   発行日時  2026年9月5日 03時15分
 //   受取日時  -            (受取済みなら 2026年7月23日 00時06分)
 //   状態      未受取 / 受取済み
+//   メモ      div[data-comment="..."](同じ要素に data-gift-url と data-gift-uuid。
+//             メモ欄の textarea は React が後から描くので、取得したHTMLには無い)
 // 状態を読めなければ null(不明)。未受取と断定しない
 const GIFT_STATE_TEXTS = { 未受取: "unreceived", 受取済み: "received" };
+const GIFT_MEMO_SELECTOR = "[data-gift-uuid][data-comment]";
 
 function labeledValue(doc, label) {
   const el = Array.from(doc.querySelectorAll("div")).find(
@@ -193,10 +196,13 @@ function parseGiftPage(doc) {
     : null;
   if (!state) return null;
   const receivedAt = labeledValue(doc, "受取日時");
+  const memoEl = doc.querySelector(GIFT_MEMO_SELECTOR);
   return {
     state,
     issuedAt: labeledValue(doc, "発行日時"),
     receivedAt: receivedAt && receivedAt !== "-" ? receivedAt : null,
+    // メモは自分用の自由入力。無ければ空文字(要素ごと無いときも空として扱う)
+    memo: memoEl ? memoEl.getAttribute("data-comment") || "" : "",
   };
 }
 

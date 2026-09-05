@@ -36,6 +36,11 @@ function giftPageUrl(giftId) {
   return GIFT_ID_PATTERN.test(String(giftId)) ? `${GIFT_PAGE_URL}${giftId}/edit` : null;
 }
 
+// 受け取る相手へ渡すギフト用URL(管理ページの data-gift-url と同じ形。/edit を付けない)
+function giftShareUrl(giftId) {
+  return GIFT_ID_PATTERN.test(String(giftId)) ? `${GIFT_PAGE_URL}${giftId}` : null;
+}
+
 function orderDetailUrl(id) {
   return ORDER_ID_PATTERN.test(String(id)) ? `${ORDER_DETAIL_URL}${id}` : null;
 }
@@ -372,6 +377,8 @@ function buildGiftRows(results, giftStatus) {
         issuedAt: status ? status.issuedAt : null,
         receivedAt: status ? status.receivedAt : null,
         checkedAt: status ? status.checkedAt : null,
+        // ギフト管理ページの自分用メモ。確認する前(未確認)は空
+        memo: status && typeof status.memo === "string" ? status.memo : "",
       });
     }
   }
@@ -385,11 +392,12 @@ function compareGiftRows(a, b) {
   return orderSortKey(b) - orderSortKey(a) || String(a.orderId).localeCompare(String(b.orderId));
 }
 
-// 受取状況を確認しにいく対象(giftId ごとに1回)。受取済みは確定なので外す
-function giftIdsToCheck(rows) {
+// 受取状況を確認しにいく対象(giftId ごとに1回)。受取済みは確定なので外すが、
+// force(キャッシュを無視して指定範囲を再取得)ではメモの変更も拾うため受取済みも開く
+function giftIdsToCheck(rows, force = false) {
   const ids = new Set();
   for (const row of rows) {
-    if (row.state === "unreceived" || row.state === "unknown") ids.add(row.giftId);
+    if (row.giftId && (force || giftNeedsCheck(row))) ids.add(row.giftId);
   }
   return Array.from(ids);
 }
@@ -401,15 +409,17 @@ function giftNeedsCheck(row) {
   return row.state === "unreceived" || row.state === "unknown";
 }
 
+// 年ごと・月ごとの「ギフト数 / 受取済み / 未受取 / 未確認」。pending は確認しにいく数
+// (未受取+未確認)で、範囲の選択肢の「要確認」と予定件数の元になる
 function buildGiftYearStats(rows) {
-  const withPending = (row) => ({ ...row, pending: row.count - row.collected });
+  const withPending = (row) => ({ ...row, pending: row.unreceived + row.unknown });
   return groupByPeriod(
     rows.filter((row) => row.state !== "missing"),
     (row) => row.date,
-    () => ({ count: 0, collected: 0 }),
+    () => ({ count: 0, received: 0, unreceived: 0, unknown: 0 }),
     (stat, row) => {
       stat.count++;
-      if (!giftNeedsCheck(row)) stat.collected++;
+      stat[row.state]++;
     }
   ).map((year) => ({ ...withPending(year), months: year.months.map(withPending) }));
 }
@@ -428,9 +438,9 @@ function giftRowsInRange(rows, from, to) {
   });
 }
 
-// 受取状況の絞り込み(すべて / 未受取 / 受取済み)。「すべて」以外では
-// 未確認と URL未取得を出さない(未受取と断定できないため)
-const GIFT_VIEW_FILTERS = ["all", "unreceived", "received"];
+// 受取状況の絞り込み(すべて / 未受取 / 未確認 / 受取済み)。
+// URL未取得は「すべて」でだけ出す(確認しようがないので、どの状態とも言えない)
+const GIFT_VIEW_FILTERS = ["all", "unreceived", "unknown", "received"];
 function filterGiftRows(rows, filter) {
   return filter === "all" ? rows : rows.filter((row) => row.state === filter);
 }

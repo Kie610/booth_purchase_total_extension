@@ -185,17 +185,21 @@ check("giftPageUrl はUUIDだけを許す",
   [`https://booth.pm/gifts/${GIFT_UUID_A}/edit`, null, null]);
 
 // ギフト管理ページ(2026-09-05 実測)。ラベルの div の隣が値
-function giftPageHtml(state, receivedAt) {
+function giftPageHtml(state, receivedAt, memo) {
+  const memoDiv = memo === undefined ? "" : `<div class="mt-24"><div data-comment="${memo}" data-gift-url="https://booth.pm/gifts/${GIFT_UUID_A}" data-gift-uuid="${GIFT_UUID_A}"></div></div>`;
   return `<html><body><main><div class="w-full"><div class="rounded-16 bg-white">
     <div class="mt-24 grid"><div class="typography-14 font-bold text-right">発行日時</div><div class="typography-14 text-left">2026年9月5日 03時15分</div>
     <div class="typography-14 font-bold text-right">受取日時</div><div class="typography-14 text-left">${receivedAt}</div>
-    <div class="typography-14 font-bold text-right">状態</div><div class="typography-14 text-left">${state}</div></div>
+    <div class="typography-14 font-bold text-right">状態</div><div class="typography-14 text-left">${state}</div></div>${memoDiv}
   </div></div></main></body></html>`;
 }
 check("parseGiftPage 未受取", parseGiftPage(parse(giftPageHtml("未受取", "-"))),
-  { state: "unreceived", issuedAt: "2026年9月5日 03時15分", receivedAt: null });
+  { state: "unreceived", issuedAt: "2026年9月5日 03時15分", receivedAt: null, memo: "" });
+// メモは data-comment 属性(textarea は React が後から描くのでHTMLには無い)。HTMLエスケープは属性として解ける
+check("parseGiftPage メモを読む", parseGiftPage(parse(giftPageHtml("未受取", "-", "@booth_pm&amp;さん宛"))).memo, "@booth_pm&さん宛");
+check("parseGiftPage メモが空", parseGiftPage(parse(giftPageHtml("受取済み", "2026年7月23日 00時06分", ""))).memo, "");
 check("parseGiftPage 受取済み", parseGiftPage(parse(giftPageHtml("受取済み", "2026年7月23日 00時06分"))),
-  { state: "received", issuedAt: "2026年9月5日 03時15分", receivedAt: "2026年7月23日 00時06分" });
+  { state: "received", issuedAt: "2026年9月5日 03時15分", receivedAt: "2026年7月23日 00時06分", memo: "" });
 check("parseGiftPage 状態を読めなければ不明", parseGiftPage(parse(giftPageHtml("受け取り待ち", "-"))), null);
 check("parseGiftPage 何も無いページは不明", parseGiftPage(parse("<html><body></body></html>")), null);
 
@@ -504,8 +508,11 @@ check("受取状況が無ければ全部未確認かURL未取得", buildGiftRows
 
 // 受取状況の確認は月の範囲で分ける(② 金額の収集と同じ)。URL未取得は表に入れない
 const giftYearStats = buildGiftYearStats(giftListRows);
-check("ギフトの年別統計(URL未取得は除く)",
-  giftYearStats.map(y => [y.key, y.count, y.collected, y.pending]), [["2026", 3, 1, 2]]);
+check("ギフトの年別統計(URL未取得は除く。未受取と未確認は別に数える)",
+  giftYearStats.map(y => [y.key, y.count, y.received, y.unreceived, y.unknown, y.pending]), [["2026", 3, 1, 1, 1, 2]]);
+check("キャッシュ無視なら受取済みも開き直す", giftIdsToCheck(giftListRows, true).length, 3);
+check("表示の絞り込み(未確認)", filterGiftRows(giftListRows, "unknown").map(r => r.name), ["未確認の贈り物"]);
+check("メモは確認前は空", giftListRows.map(r => r.memo), ["", "", "", ""]);
 check("ギフトの月別統計", buildGiftMonthStats(giftListRows).map(m => [m.key, m.count, m.pending]),
   [["2026-09", 1, 1], ["2026-06", 2, 1]]);
 check("範囲内のギフト(両端を含む・逆順でも同じ)",
@@ -2479,19 +2486,19 @@ check("既定の画面では画面名を出さない", viewTitle.textContent, ""
   state.giftStatus = { "bbbbbbbb-0000-4000-8000-000000000001": { state: "unreceived", issuedAt: "a", receivedAt: null, checkedAt: 1 } };
   render();
   const giftTrs = [...giftTableBody.querySelectorAll("tr")];
-  check("ギフトの表に状態順で並ぶ", giftTrs.map(tr => tr.cells[0].textContent), ["未受取", "URL未取得"]);
+  check("ギフトの表に状態順で並ぶ", giftTrs.map(tr => tr.cells[0].firstChild.textContent), ["未受取", "URL未取得"]);
   check("未受取は目立つclass", giftTrs[0].cells[0].className.includes("gift-state-unreceived"), true);
   check("商品名からギフト管理ページへ飛べる",
     giftTrs[0].cells[1].querySelector("a").href, "https://booth.pm/gifts/bbbbbbbb-0000-4000-8000-000000000001/edit");
   check("URL未取得の商品はリンクにしない", giftTrs[1].cells[1].querySelector("a"), null);
-  check("注文番号から注文詳細へ飛べる", giftTrs[0].cells[6].querySelector("a").href, "https://accounts.booth.pm/orders/910001");
+  check("注文番号から注文詳細へ飛べる", giftTrs[0].cells[7].querySelector("a").href, "https://accounts.booth.pm/orders/910001");
   check("件数の内訳", giftStats.textContent, "ギフト 2件(未受取 1件 / URL未取得 1件)");
   // 確認範囲(② と同じ月別の表と開始/終了)。URL未取得(910002)は表に入らない
   check("月別の表はURL未取得を除いて数える",
     [...giftMonthTableBody.querySelectorAll("tr.year-row")].map(tr => [tr.cells[0].textContent, tr.cells[1].textContent, tr.cells[3].textContent]),
     [["▸2026年", "1", "1"]]);
   check("開始/終了の選択肢は未確認の件数付き",
-    [...giftRangeFrom.options].map(o => [o.value, o.textContent]), [["2026-09", "2026年9月（未確認 1）"]]);
+    [...giftRangeFrom.options].map(o => [o.value, o.textContent]), [["2026-09", "2026年9月（要確認 1）"]]);
   check("確認予定の件数と目安", giftPlannedCount.textContent, "確認予定: 1件 / 目安: 約1秒以上");
   giftMonthTableBody.querySelector("tr.year-row").click();
   check("年の行を押すとその年が範囲になる",
@@ -2500,13 +2507,40 @@ check("既定の画面では画面名を出さない", viewTitle.textContent, ""
   check("URL未取得の注意書き", [giftMissingNote.hidden, giftMissingNote.textContent.includes("1件はギフトのURLを保存していません")], [false, true]);
   check("取り直しと確認のボタンは対象があるときだけ押せる", [refetchGiftUrlsBtn.disabled, checkGiftStatusBtn.disabled], [false, false]);
   check("内訳もこの画面に出る", [breakdownSection.hidden, orderTableBody.querySelectorAll("tr").length], [false, 2]);
+  check("集計対象の切り替えはこの画面では隠す", giftFilterBar.hidden, true);
+  // 集計対象が「自分用」でも、この画面はギフトそのものが対象なので絞り込まない
+  setGiftFilter("self");
+  check("集計対象の絞り込みはこの画面に効かない",
+    [giftTableBody.querySelectorAll("tr").length, orderTableBody.querySelectorAll("tr").length], [2, 2]);
+  setGiftFilter("all");
+  // 未受取の行だけにギフト用URL(/edit 無し)のコピーがある
+  const copyBtns = [...giftTableBody.querySelectorAll("button.gift-copy-btn")];
+  check("未受取の行にURLのコピーがある",
+    copyBtns.map(b => [b.closest("tr").cells[0].firstChild.textContent, b.dataset.giftUrl]),
+    [["未受取", "https://booth.pm/gifts/bbbbbbbb-0000-4000-8000-000000000001"]]);
+  const copied = [];
+  const realCopy = copyTextToClipboard;
+  copyTextToClipboard = (text) => { copied.push(text); return Promise.resolve(); };
+  copyBtns[0].click();
+  // トップレベルでは await できないので、コピー後の表示はマイクロタスクで確かめる
+  // (ハンドラは差し替えた copyTextToClipboard を同期的に呼び、解決後に文字を変える)
+  check("押すとギフト用URLをコピーする", copied, ["https://booth.pm/gifts/bbbbbbbb-0000-4000-8000-000000000001"]);
+  const copyBtn = copyBtns[0];
+  Promise.resolve().then(() => Promise.resolve()).then(() => {
+    check("コピーしたことを知らせる", copyBtn.textContent, "コピーしました");
+    copyTextToClipboard = realCopy;
+  });
+  check("メモの列(確認前は空)", giftTrs.map(tr => tr.cells[6].textContent), ["—", "—"]);
+  state.giftStatus["bbbbbbbb-0000-4000-8000-000000000001"].memo = "Aさん宛";
+  render();
+  check("メモを表示する", giftTableBody.querySelector("tr").cells[6].textContent, "Aさん宛");
 
   // 表示の絞り込み
   giftViewFilterSwitch.querySelector('[data-gift-view-filter="unreceived"]').click();
   check("未受取だけに絞る", [...giftTableBody.querySelectorAll("tr")].map(tr => tr.cells[1].textContent), ["贈り物X"]);
   check("絞り込みの件数", giftFilterCount.textContent, "2件中 1件を表示");
   check("絞り込みの選択が見える",
-    [...giftViewFilterSwitch.querySelectorAll("button")].map(b => b.getAttribute("aria-pressed")), ["false", "true", "false"]);
+    [...giftViewFilterSwitch.querySelectorAll("button")].map(b => b.getAttribute("aria-pressed")), ["false", "true", "false", "false"]);
   giftViewFilterSwitch.querySelector('[data-gift-view-filter="all"]').click();
   check("すべてに戻す", giftTableBody.querySelectorAll("tr").length, 2);
 
@@ -3494,7 +3528,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
     routes = {
       [detailUrl("gt1")]: (path) => { fetched.push(path); return okResponse(path, orderHtml("300", sheetGroup("ギフト", [[300, 0, "贈り物", U1]]))); },
       [detailUrl("gt3")]: (path) => { fetched.push(path); return okResponse(path, detailHtml(100)); },
-      [giftUrl(U1)]: (path) => { fetched.push(path); return okResponse(path, giftPageHtml("未受取", "-")); },
+      [giftUrl(U1)]: (path) => { fetched.push(path); return okResponse(path, giftPageHtml("未受取", "-", "Bさん宛")); },
       [giftUrl(U2)]: (path) => { fetched.push(path); return okResponse(path, giftPageHtml("受取済み", "2026年7月23日 00時06分")); },
       [giftUrl(U3)]: (path) => { fetched.push(path); return okResponse(path, giftPageHtml("受取済み", "2026年8月1日 12時00分")); },
     };
@@ -3521,6 +3555,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
     check("受取状況が保存される",
       [state.giftStatus[U1].state, state.giftStatus[U3].state, state.giftStatus[U3].receivedAt, typeof state.giftStatus[U1].checkedAt],
       ["unreceived", "received", "2026年8月1日 12時00分", "number"]);
+    check("メモも保存される", state.giftStatus[U1].memo, "Bさん宛");
     check("受取済みの記録は残る", state.giftStatus[U2].state, "received");
     check("ストレージにも書く", (await browser.storage.local.get([GIFT_STATUS_KEY]))[GIFT_STATUS_KEY][U3].state, "received");
     check("確認の結果を案内する", noticeBox.textContent.includes("受取状況を確認しました(2件)"), true);
@@ -3529,6 +3564,15 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
     fetched.length = 0;
     await runTask(checkGiftStatusTask);
     check("二度目は未受取だけを見に行く", fetched, [giftUrl(U1)]);
+
+    // キャッシュを無視して指定範囲を再取得: 受取済みも開き直す(メモの変更を拾う)
+    fetched.length = 0;
+    giftForceRefresh.checked = true;
+    updateGiftPlannedCount();
+    check("キャッシュ無視の予定件数", giftPlannedCount.textContent.startsWith("確認予定: 3件"), true);
+    await runTask(checkGiftStatusTask);
+    check("キャッシュ無視なら範囲内の受取済みも開き直す", fetched.sort(), [giftUrl(U1), giftUrl(U2), giftUrl(U3)].sort());
+    giftForceRefresh.checked = false;
 
     // 状態を読めないページは未受取と断定せず、前の記録も消さない
     fetched.length = 0;

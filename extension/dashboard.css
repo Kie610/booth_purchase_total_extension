@@ -1700,6 +1700,22 @@ span.amount-pending {
   font-weight: 400;
 }
 
+/* 未受取の行に添える「URLをコピー」。状態の文字の下に置き、押した結果は文字で返す */
+.gift-copy-btn {
+  display: block;
+  margin-top: 4px;
+  font-weight: 400;
+}
+
+/* メモは長くなりうるので、列を伸ばさず折り返す */
+.gift-memo {
+  max-width: 200px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
 /* ---- 共有カード ---- */
 
 /* ナビの引き出しより手前に出す。共有中はナビを開けない */

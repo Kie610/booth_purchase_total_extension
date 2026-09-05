@@ -331,6 +331,31 @@ giftMonthTableBody.addEventListener("keydown", (event) => {
   if (monthRow) setGiftRange(monthRow.dataset.monthKey, monthRow.dataset.monthKey);
 });
 
+giftForceRefresh.addEventListener("change", updateGiftPlannedCount);
+
+// 未受取のギフトのURLをコピーする。書き込みだけなので clipboardWrite 権限は要らない
+// (拡張ページ上のユーザー操作の中で navigator.clipboard.writeText が使える)。
+// テストでは差し替えられるよう関数宣言にしてある
+function copyTextToClipboard(text) {
+  return navigator.clipboard.writeText(text);
+}
+
+const GIFT_COPY_FEEDBACK_MS = 1500;
+giftTableBody.addEventListener("click", async (event) => {
+  const button = event.target.closest("button.gift-copy-btn");
+  if (!button) return;
+  const label = button.textContent;
+  try {
+    await copyTextToClipboard(button.dataset.giftUrl);
+    button.textContent = "コピーしました";
+  } catch (err) {
+    button.textContent = "コピーできません";
+  }
+  setTimeout(() => {
+    button.textContent = label;
+  }, GIFT_COPY_FEEDBACK_MS);
+});
+
 forceRefreshRange.addEventListener("change", updatePlannedCount);
 forceRefreshAll.addEventListener("change", updatePlannedCount);
 rangeFrom.addEventListener("change", onRangeChanged);
@@ -345,7 +370,7 @@ orderSearch.addEventListener("input", () => {
   if (orderSearchTimer !== null) clearTimeout(orderSearchTimer);
   orderSearchTimer = setTimeout(() => {
     orderSearchTimer = null;
-    renderOrderTable(currentResults());
+    renderOrderTable(giftViewResults());
   }, ORDER_SEARCH_DEBOUNCE_MS);
 });
 // 選び直しは1回で終わる操作なので、待たずにその場で描き直す。
@@ -356,7 +381,7 @@ for (const select of [orderStatusFilter, orderSort]) {
       clearTimeout(orderSearchTimer);
       orderSearchTimer = null;
     }
-    renderOrderTable(currentResults());
+    renderOrderTable(giftViewResults());
   });
 }
 

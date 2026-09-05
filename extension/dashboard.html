@@ -754,19 +754,24 @@
            <div class="step-controls">
              <button id="checkGiftStatusBtn" class="primary">選択範囲の受取状況を確認</button>
              <span class="planned" id="giftPlannedCount"></span>
+             <label class="checkbox">
+               <input type="checkbox" id="giftForceRefresh">
+               キャッシュを無視して指定範囲を再取得
+             </label>
            </div>
          </div>
          <table class="data-table month-table">
            <thead>
-             <tr><th>期間</th><th class="num">ギフト数</th><th class="num">確認済み</th><th class="num">未確認</th><th class="pick">範囲</th></tr>
+             <tr><th>期間</th><th class="num">ギフト数</th><th class="num">受取済み</th><th class="num">未受取</th><th class="num">未確認</th><th class="pick">範囲</th></tr>
            </thead>
            <tbody id="giftMonthTableBody"></tbody>
          </table>
          <p class="hint">
            年の行の ▸ をクリックすると月別を開閉できます。
            年の行をクリックするとその年全体が、月の行をクリックするとその月が範囲に設定されます。
-           右端の「選択」が塗られている行が、いま確認する範囲です。受取済みは確認済みに数え、
-           二度と取りに行きません。URL未取得のギフトはこの表に入れません。
+           右端の「選択」が塗られている行が、いま確認する範囲です。確認するのは未受取と未確認で、
+           受取済みは「キャッシュを無視して指定範囲を再取得」を付けたときだけ開き直します
+           (メモの変更を拾いたいとき)。URL未取得のギフトはこの表に入れません。
          </p>
          <p id="giftUnknownArea" class="unknown-area" hidden><span id="giftUnknownCount"></span></p>
 
@@ -775,6 +780,7 @@
            <div class="segmented" id="giftViewFilterSwitch" role="group" aria-labelledby="giftViewFilterLabel">
              <button type="button" class="segmented-btn current" data-gift-view-filter="all" aria-pressed="true">すべて</button>
              <button type="button" class="segmented-btn" data-gift-view-filter="unreceived" aria-pressed="false">未受取</button>
+             <button type="button" class="segmented-btn" data-gift-view-filter="unknown" aria-pressed="false">未確認</button>
              <button type="button" class="segmented-btn" data-gift-view-filter="received" aria-pressed="false">受取済み</button>
            </div>
            <span class="status" id="giftFilterCount" role="status" aria-live="polite"></span>
@@ -784,7 +790,7 @@
            <table class="data-table">
              <caption class="visually-hidden">贈ったギフト</caption>
              <thead>
-               <tr><th>状態</th><th>商品</th><th>ショップ</th><th>注文日時</th><th class="num">金額</th><th>受取日時</th><th>注文番号</th></tr>
+               <tr><th>状態</th><th>商品</th><th>ショップ</th><th>注文日時</th><th class="num">金額</th><th>受取日時</th><th>メモ</th><th>注文番号</th></tr>
              </thead>
              <tbody id="giftTableBody"></tbody>
            </table>

@@ -191,8 +191,10 @@
     <div class="segmented" id="giftViewFilterSwitch" role="group">
       <button type="button" class="segmented-btn current" data-gift-view-filter="all" aria-pressed="true">すべて</button>
       <button type="button" class="segmented-btn" data-gift-view-filter="unreceived" aria-pressed="false">未受取</button>
+      <button type="button" class="segmented-btn" data-gift-view-filter="unknown" aria-pressed="false">未確認</button>
       <button type="button" class="segmented-btn" data-gift-view-filter="received" aria-pressed="false">受取済み</button>
     </div>
+    <input type="checkbox" id="giftForceRefresh">
     <span class="status" id="giftFilterCount" role="status"></span>
     <table><tbody id="giftTableBody"></tbody></table>
   </div>

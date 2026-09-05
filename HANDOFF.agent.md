@@ -20,17 +20,20 @@ complete:
   optional_host_permissions に https://booth.pm/*。manifest version 1.2.0。
 - C: 2026-09-05 受取状況の確認に「② 金額の収集」と同じ月の範囲指定(開始/終了・未確認のある範囲を選択・
   月別の表・予定件数)を追加(ユーザー要望)。URLの取り直しは①と同じボタン1つのまま。
+- C: 2026-09-06 ギフト・注文の画面で集計対象バーを隠し絞り込みを掛けない。未受取と未確認を月別の表・
+  絞り込みで別に数える。未受取の行にギフト用URL(booth.pm/gifts/<UUID>)のコピー。受取状況の確認で
+  メモ(div[data-comment])も保存・表示。「キャッシュを無視して指定範囲を再取得」で受取済みも開き直す。
 
 verified:
 - C: 2026-09-05(1.2.0実装後) — evidence: status=PASS; kind=compile; command=node --check extension/*.js test/*.js; environment=Windows 11 / Node.js 24.18.1; scope=extension/とtest/の全JavaScript構文; counts=passed=17, failed=0, skipped=0, not-run=0
-- C: 2026-09-05(1.2.0実装後) — evidence: status=PASS; kind=runtime; command=python -m http.server 8731 と http://localhost:8731/test/index.html を幅1280pxで開く; environment=Windows 11 / Chromium 1280x900; scope=test/cases.js全体 ALL PASS; counts=passed=1121, failed=0, skipped=0, not-run=0
-- C: 2026-09-05 — evidence: status=PASS; kind=runtime; command=stub差し込みの dashboard.html 複製を幅1280pxで表示; environment=Windows 11 / Chromium; scope=水平タブ8項目が1行に収まる・ヘッダー右の「作者について」表示・#/gifts の表・範囲指定(月別の表と予定件数)・2ボタンの描画; counts=passed=1, failed=0, skipped=0, not-run=0
+- C: 2026-09-05(1.2.0実装後) — evidence: status=PASS; kind=runtime; command=python -m http.server 8731 と http://localhost:8731/test/index.html を幅1280pxで開く; environment=Windows 11 / Chromium 1280x900; scope=test/cases.js全体 ALL PASS; counts=passed=1136, failed=0, skipped=0, not-run=0
+- C: 2026-09-05 — evidence: status=PASS; kind=runtime; command=stub差し込みの dashboard.html 複製を幅1280pxで表示; environment=Windows 11 / Chromium; scope=水平タブ8項目が1行に収まる・ヘッダー右の「作者について」表示・#/gifts の表(URLコピー・メモ列)・範囲指定(月別の表と予定件数・再取得チェック)・集計対象バー非表示; counts=passed=1, failed=0, skipped=0, not-run=0
 - C: 2026-09-05 — evidence: status=PASS; kind=external; command=ログイン済みChromeで accounts.booth.pm/orders/87212632・82903405 と booth.pm/gifts/<UUID>/edit を読み取り; environment=Windows 11 / Chrome; scope=ギフトリンクのhref形式・「状態」「受取日時」「発行日時」のラベル構造(未受取1件・受取済み6件); counts=passed=7, failed=0, skipped=0, not-run=0
 - C: 2026-09-05 — evidence: status=PASS; kind=compile; command=git clone -b 1.2.0-dev ../backup/booth_purchase_total_extension-2026-09-05.git と tools/release.ps1; environment=Windows 11 / PowerShell 7; scope=復元cloneで配布ZIPとSHA-256を生成; counts=passed=1, failed=0, skipped=0, not-run=0
 
 not-run:
 - U: U1 BOOTHログイン済み実ページの通信・ページング・セレクタ確認。D10のみ2026-08-07にユーザー実環境で確認済み。ギフト関連セレクタは2026-09-05に実測済み(上記)。
-- U: U7 実拡張として読み込んだChromeでの1.2.0動作確認(ギフトURLの取り直し・受取状況の確認・optional権限のプロンプト・表示)。テストとstub複製での確認のみ。
+- U: U7 実拡張として読み込んだChromeでの1.2.0動作確認(ギフトURLの取り直し・受取状況の確認・optional権限のプロンプト・URLコピー・メモ取得・表示)。テストとstub複製での確認のみ。
 - U: U8 1.2.0 の `tools/release.ps1`(配布ZIP)未実行。
 - U: U2 実拡張として読み込んだブラウザでのD11テーマ・D14/D17沼レポート。プレビュー複製での確認のみ。
 - U: U4 2026-09-05の `tools/release.ps1`。文書と.gitignoreのみの変更で配布物に差分が無いため未実行。
