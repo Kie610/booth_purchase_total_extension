@@ -1315,3 +1315,15 @@ procedure: ai-project-management 0.4.0-dev (ADOPT-PROMPT.md, 2026-09-05)
   `localhost` で開くと修正前の `cases.js` がブラウザキャッシュから使われ続けたため、別ホスト名で開いて確認した。
 - `validate_handoff.py --root .`: VALID files=4 checks=56 errors=0。
 - `tools/release.ps1` は未実行。配布物に差分が無いため。
+
+## ユーザー決定の反映(2026-09-05)
+
+第3回合成の未決定事項へのユーザー回答を反映した。
+
+- U5: 開発中の統合ブランチは `<次版>-dev` と名付け、リリース時に承認を得て `<version>` へリネームする新規則へ変更。
+  「ブランチ名 = manifest の version」はリリース済みブランチだけに適用する。`main` の ff 同期は維持する。
+  `docs/agent-appendix.md` と `docs/versioning.md` を更新した。`manifest.json` は次版の要件確定(U3)時に上げる。
+- U6: バックアップ保存先は `D:\GitHub_WorkSpace\BrowserExtensionackup\`(ユーザー指定。手順の「別ドライブ」より
+  ユーザー指定を優先)。
+- U7: 移動前のパスを指していた worktree 9本を `git worktree prune` で整理した。ブランチは残っている。
+- U8: `origin/1.2.0-dev` への push を許可。

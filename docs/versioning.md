@@ -2,23 +2,26 @@
 
 ## バージョン番号
 
-- 統合・配布ブランチの名前は`extension/manifest.json`のversionと完全に一致させる。
+- 開発中の統合ブランチは`<次版のversion>-dev`(例`1.2.0-dev`)と名付け、作成時に`extension/manifest.json`のversionを次版へ上げる。
+- リリース済みブランチの名前は`extension/manifest.json`のversionと完全に一致させる。
 - ある程度大きな機能追加ではマイナー番号を上げて`X.Y.0`とする。
 - バグ修正や小さな機能変更ではパッチ番号を上げる。
 - バージョンブランチは正式リリース後も削除しない。
 
 ## 開発中
 
-1. 同期済み`main`から次のバージョン名ブランチを作る。
-2. 開発ブランチは対象バージョンブランチから分岐する。
-3. 機能、文書、テストを対象バージョンブランチへ統合する。
+1. 同期済み`main`から`<次版>-dev`ブランチを作る。
+2. 開発ブランチは対象の`-dev`ブランチから分岐する。
+3. 機能、文書、テストを対象の`-dev`ブランチへ統合する。
 4. 正式リリースが確定するまで`main`へ直接コミット・マージ・pushしない。
 
 ## 正式リリース
 
-1. バージョンブランチ上で構文、ブラウザ全体テスト、配布ZIP、SHA-256を検証する。
-2. バージョンブランチをpushし、ローカルと`origin/<version>`が同じSHAであることを確認する。
-3. ユーザーが正式リリースを確定したら、`main`をfast-forward限定で同期する。
+1. `-dev`ブランチ上で構文、ブラウザ全体テスト、配布ZIP、SHA-256を検証する。
+2. ユーザーへバージョン名を確認し、承認後に`<version>-dev`を`<version>`へリネームする(`git branch -m <version>-dev <version>`)。
+   リネームは取り消しにくいため、明示承認なしに行わない。
+3. バージョンブランチをpushし、ローカルと`origin/<version>`が同じSHAであることを確認する。
+4. ユーザーが正式リリースを確定したら、`main`をfast-forward限定で同期する。
 
 ```powershell
 git fetch origin --prune --tags
@@ -28,9 +31,9 @@ git merge --ff-only <version>
 git push origin main
 ```
 
-4. `main`、`origin/main`、`<version>`、`origin/<version>`がすべて同じSHAであることを確認する。
-5. 同じSHAに`v<version>`タグを付け、GitHub ReleaseへZIPとSHA-256を添付する。
-6. GitHubから添付資産を再取得して一致を確認する。ローカル成果物が配布元として重複する場合は削除できる。
+5. `main`、`origin/main`、`<version>`、`origin/<version>`がすべて同じSHAであることを確認する。
+6. 同じSHAに注釈付きタグ`v<version>`を付け、GitHub ReleaseへZIPとSHA-256を添付する。
+7. GitHubから添付資産を再取得して一致を確認する。ローカル成果物が配布元として重複する場合は削除できる。
 
 fast-forwardできない場合は、merge commit、rebase、force pushで解決しない。履歴差異を報告し、ユーザーの判断を待つ。
 

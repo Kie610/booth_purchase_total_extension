@@ -3,7 +3,7 @@
 updated: 2026-09-05
 repo: Kie610/booth_purchase_total_extension
 work_branch: 1.2.0-dev
-upstream: origin/1.2.0-dev@bc3908d(ローカルが先行、未push)
+upstream: origin/1.2.0-dev@bc3908d(push前)
 base: 1.1.0@67f206d
 goal: `1.2.0-dev`で次版の要件確定と実装を進める。
 
@@ -30,17 +30,15 @@ not-run:
 - C: 共有カードの幅依存テスト1件は幅521pxで落ちる。検証は幅768px以上で行う。
 - C: 正式対応はChromeのみ。Firefoxは一時読み込みに限定(2026-08-09)。
 - A: D14の伏せ字共有でもアバター名は出す。利用者からの指摘の有無で検証する。
-- U: U3 次版(1.2.0または1.1.1)の要件が未確定。`manifest.json`は1.1.0のまま。
-- U: U5 作業ブランチ名`1.2.0-dev`は「ブランチ名=manifestのversion」の規則と一致しない。次版確定時に改名か規則更新かを決める。
-- U: U6 バックアップ保存先(別ドライブ)が未決定。mirror未取得、復元未検証。
-- U: U7 `.claude/worktrees/`配下の9 worktreeは移動前のパスを指しprunable。所有者確認までpruneしない。
-- U: U8 pushのユーザー許可が未取得。
+- U: U3 次版(1.2.0または1.1.1)の要件が未確定。`manifest.json`は1.1.0のまま(要件確定時に次版へ上げる)。
+- C: 開発中の統合ブランチは`<次版>-dev`、リリース時に承認を得て`<version>`へリネーム(2026-09-05ユーザー決定。U5解消)。
+- C: バックアップ保存先は`D:\GitHub_WorkSpace\BrowserExtensionackup\`(2026-09-05ユーザー指定。U6解消)。
+- U: U6 初回mirrorと復元確認が未実施。
 
 ## Next
 
-1. 本合成のコミットと未push分を`origin/1.2.0-dev`へpushする — blocked-by: U8
-2. 次版の要件を確定し`manifest.json`・README・ブランチ名をそろえる — blocked-by: U3
-3. バックアップ保存先を決めて初回mirrorと復元確認を行う — blocked-by: U6
+1. 初回mirrorを保存先へ作り、別の場所へ復元して`tools/release.ps1`まで確かめる — blocked-by: none
+2. 次版の要件を確定し`manifest.json`のversionを上げる — blocked-by: U3
 
 ## Paths
 
