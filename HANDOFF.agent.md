@@ -16,7 +16,9 @@ complete:
 - C: 配布ZIPはtools/release.ps1で7487a2c以降のコードから再生成。26ファイル、version 1.2.0、SHA256=253b00a0ee5acf0b81b16e8d9a34ad1422f09a3654e45cc7fc0fee2946e1b935。
 - C: BOOTH商品ページ用の画像2点を販売ページ準備/1.2.0画像/へ生成(10_gifts.png・06_data_move_v1.2.0.png)。2048x2048、架空データのためぼかし不要。撮影スクリプトはリポジトリ外の一時領域にあり保存していない。
 - C: Notionの商品ページ仮案を1.2.0へ更新。親ページ(改題・決定事項・未決事項)、00 索引・決定事項、01 商品概要、02 BOOTH本文案。03・05・06は画像の採否が決まっていないため未更新。
-- U: BOOTH商品ページ自体は未編集。manage.booth.pm/items/8667966/edit での差し替えは未実施。
+- U: BOOTH商品ページ自体は未編集。manage.booth.pm/items/8667966/edit での差し替えは未実施。公開ページの現況は2026-09-07に確認済みで、本文はNotion 02の1.1.0時点と一致、添付ZIPはv1.1.0、画像12枚、商品名は「【2026/08/10 沼レポート機能追加！】」。
+- C: 商品名末尾の日付表記はBOOTH側が正しく、Notion 01にあった「2025/08/10」が記載誤りだった。
+- C: v1.2.0で追加する商品画像は10_gifts.pngの1枚のみ採用。06_data_move_v1.2.0.pngは不採用。
 
 verified:
 - C: 2026-09-07 — evidence: status=PASS; kind=runtime; command=node test/migration-check.cjs; environment=Windows/Node24; scope=移行・往復; counts=passed=37, failed=0, skipped=0, not-run=0
@@ -48,7 +50,7 @@ not-run:
 
 ## Next
 
-1. BOOTH商品ページを実際に編集して下書き保存する(画像の採否・掲載順、商品名末尾の日付表記、ZIP差し替え) — blocked-by: ユーザーの判断
+1. BOOTH商品ページを編集する(商品名、本文9か所、10_gifts.pngの追加と掲載順、通常版・支援版へv1.2.0 ZIPを差し替え) — blocked-by: 掲載順の決定
 2. Notionの03・05・06(画像順・公開前チェック・サムネイル)を1.2.0へ更新 — blocked-by: 1の画像採否
 3. EFF-01を1.3.0で実施 — blocked-by: none
 4. 年1回のmirror更新と復元確認(2027-09まで) — blocked-by: none
