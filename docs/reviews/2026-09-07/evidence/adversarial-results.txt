@@ -1,17 +1,8 @@
 PASS control: empty detail document is explicitly unreadable
-FAIL A1: failed forced parse must retain last valid payment: valid amount 1234 was overwritten with null
-
-null !== 1234
-
-FAIL A2: sequential second dashboard must retain first dashboard's completed data: second tab's index-only fetch erased order 1002; remaining ids=1001
-
-undefined !== 200
-
-FAIL A3: accepted duplicate IDs must not double the restored total: accepted=true, total=2468, expected=1234, rows=2
+PASS A1: failed forced parse must retain last valid payment
+PASS A2: sequential second dashboard must retain first dashboard's completed data
+PASS A3: accepted duplicate IDs must not double the restored total
 PASS control: duplicate incoming IDs are deduplicated if an index already exists
-FAIL A4: removing the index must not restore a known cancelled payment to the total: cancelled payment reappeared: total=1234
-
-1234 !== 0
-
-FAIL A5: accepted backup giftId must be safe for the first render: Cannot convert object to primitive value
-{"passed":2,"failed":5,"skipped":0,"notRun":0}
+PASS A4: removing the index must not restore a known cancelled payment to the total
+PASS A5: accepted backup giftId must be safe for the first render
+{"passed":7,"failed":0,"skipped":0,"notRun":0}

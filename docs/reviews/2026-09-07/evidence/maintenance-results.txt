@@ -1,10 +1,10 @@
 PASS full render builds both avatar and gift views unconditionally
 full-render calls: refreshResults, renderFirstRunGuide, renderIndexStatus, renderMonthArea, renderResult, renderSpendingTrends, updatePlannedCount, renderClearArea, renderRankingArea, renderAvatarArea, renderYearSummary, renderExportArea, renderBackupArea, renderGiftArea, renderCurrentView
 PASS force rechecks received gifts despite unconditional exclusion comments
-PASS headingLabel has only its declaration across extension and test JavaScript
+PASS headingLabel no longer exists across extension and test JavaScript
 PASS summary BOOST fields have no production property readers
 PASS flush interval caps at 50, so 10000 successes require 200 periodic full writes
-{"kind":"node-synthetic-aggregation-only","orders":1000,"items":1000,"samples":5,"medianMs":17.3,"minMs":16.2,"maxMs":20.2,"work":"2x aggregateByAvatar + buildYearSummary; all orders same year; excludes DOM and other render work"}
-{"kind":"node-synthetic-aggregation-only","orders":5000,"items":5000,"samples":5,"medianMs":84.7,"minMs":84,"maxMs":86.2,"work":"2x aggregateByAvatar + buildYearSummary; all orders same year; excludes DOM and other render work"}
-{"kind":"node-synthetic-aggregation-only","orders":10000,"items":10000,"samples":5,"medianMs":167.2,"minMs":162.2,"maxMs":168.7,"work":"2x aggregateByAvatar + buildYearSummary; all orders same year; excludes DOM and other render work"}
+{"kind":"node-synthetic-aggregation-only","orders":1000,"items":1000,"samples":5,"medianMs":21.2,"minMs":20.2,"maxMs":24.4,"work":"2x aggregateByAvatar + buildYearSummary; all orders same year; excludes DOM and other render work"}
+{"kind":"node-synthetic-aggregation-only","orders":5000,"items":5000,"samples":5,"medianMs":106.9,"minMs":101.8,"maxMs":109.2,"work":"2x aggregateByAvatar + buildYearSummary; all orders same year; excludes DOM and other render work"}
+{"kind":"node-synthetic-aggregation-only","orders":10000,"items":10000,"samples":5,"medianMs":201,"minMs":197.5,"maxMs":204.6,"work":"2x aggregateByAvatar + buildYearSummary; all orders same year; excludes DOM and other render work"}
 {"passed":5,"failed":0,"skipped":0,"notRun":["browser render timing","live BOOTH","real extension"]}
