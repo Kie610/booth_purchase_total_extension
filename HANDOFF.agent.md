@@ -2,16 +2,18 @@
 
 updated: 2026-09-07
 repo: Kie610/booth_purchase_total_extension
-work_branch: 1.2.0-dev
-upstream: origin/1.2.0-dev
+work_branch: 1.2.0
+upstream: origin/1.2.0@5b74920
 base: 1.1.0@67f206d
-goal: 1.2.0を確定し、承認後にリリースする。
+goal: 1.2.0はリリース済み。BOOTH商品ページとNotionの更新、次版1.3.0の準備。
 
 ## State
 
 complete:
 - C: 先行レビュー13件に加えDATA-04・UX-01・02・05・AVATAR-01を修正。EFF-01は次版。
 - C: docs/reviews/2026-09-07/evidence を修正後の期待値へ更新。
+- C: 1.2.0を正式リリース。ブランチ1.2.0へリネーム、main・origin/main・1.2.0・origin/1.2.0はすべて5b74920。注釈付きタグv1.2.0(タグオブジェクト29030ff)。GitHub Release v1.2.0にZIPとSHA-256を添付。origin/1.2.0-devは削除。
+- C: 配布ZIPはtools/release.ps1で7487a2c以降のコードから再生成。26ファイル、version 1.2.0、SHA256=253b00a0ee5acf0b81b16e8d9a34ad1422f09a3654e45cc7fc0fee2946e1b935。
 
 verified:
 - C: 2026-09-07 — evidence: status=PASS; kind=runtime; command=node test/migration-check.cjs; environment=Windows/Node24; scope=移行・往復; counts=passed=37, failed=0, skipped=0, not-run=0
@@ -22,11 +24,13 @@ verified:
 - C: 2026-09-07 — evidence: status=PASS; kind=runtime; command=node docs/reviews/2026-09-07/evidence/{adversarial,maintenance,security}.cjs; environment=Node24; scope=adversarial7・maintenance5・security11; counts=passed=23, failed=0, skipped=0, not-run=0
 - C: 2026-09-07 — evidence: status=PASS; kind=runtime; command=Playwright getComputedStyle; environment=Chrome light/dark; scope=主ボタン・選択中の白文字/塗り4.98:1; counts=passed=4, failed=0, skipped=0, not-run=0
 - C: 2026-09-07 — evidence: status=PASS; kind=hardware; command=実BOOTHでの手動確認(U7); environment=実ブラウザ; scope=ページング・明細・受取権限・外部通信0(ユーザー報告); counts=passed=5, failed=0, skipped=0, not-run=0
+- C: 2026-09-07 — evidence: status=PASS; kind=hardware; command=修正版を実拡張で表示(AVATAR-01); environment=実ブラウザ/実購入履歴; scope=沼レポートの「ヴェルノ」表記が正しいこと(ユーザー報告); counts=passed=1, failed=0, skipped=0, not-run=0
+- C: 2026-09-07 — evidence: status=PASS; kind=compile; command=tools/release.ps1 -Force; environment=PowerShell7; scope=ZIP26ファイル/version1.2.0/SHA256同梱; counts=passed=1, failed=0, skipped=0, not-run=0
+- C: 2026-09-07 — evidence: status=PASS; kind=runtime; command=gh release download v1.2.0 後にSHA-256照合; environment=GitHub; scope=公開資産とローカル成果物と同梱.sha256の三者一致; counts=passed=3, failed=0, skipped=0, not-run=0
 
 not-run:
-- U: U1 修正5件の実BOOTH実データでの確認。
+- U: U1 DATA-04・UX-01・UX-05の実BOOTH実データでの確認。AVATAR-01は確認済み。
 - U: U2 実拡張でのテーマ確認。hover色は計算値のみ。
-- U: U3 AVATAR-01の実データ再現。「ヴェルノ」「ライカ」の商品名文字列が未取得。
 - U: U8 Excel再保存CSV往復。
 
 ## Decisions
@@ -36,14 +40,14 @@ not-run:
 - C: UX-02 1.2.0。白文字の塗りだけ--accent-solid。ブランド色は据え置き。
 - C: UX-05 1.2.0。比較年が無ければ選択欄を無効にし記録なしを明示。
 - C: EFF-01 1.3.0。描画分割は共有状態・フッターを跨ぐ構造変更のため。
-- C: AVATAR-01 1.2.0。原因はキー(ひらがな化)の直接表示。表示名だけ題名の綴りへ。キー不変。
+- C: AVATAR-01 1.2.0。原因はキー(ひらがな化)の直接表示。表示名だけ題名の綴りへ。キー不変。実拡張で修正を確認済みのためU3は解消。
 - C: 再取得で移行を代替しない。正式対応はChrome。共有カード幅チェックは768px以上。
 
 ## Next
 
-1. 1.2.0を報告し、U3の商品名文字列と承認を得る — blocked-by: U3
-2. docs/versioning.md の手順でリリース — blocked-by: U1
-3. EFF-01を1.3.0で実施 — blocked-by: none
+1. BOOTH商品ページの画像とNotionの商品ページ仮案を1.2.0へ更新 — blocked-by: none
+2. EFF-01を1.3.0で実施 — blocked-by: none
+3. 年1回のmirror更新と復元確認(2027-09まで) — blocked-by: none
 
 ## Paths
 
