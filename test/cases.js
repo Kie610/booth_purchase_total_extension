@@ -4208,12 +4208,14 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   const mediaActionsStyle = getComputedStyle(colorFixture.querySelector(".share-media-actions"));
   check("手順番号は背景を付けずアクセント色で表示",
     [stepNoStyle.color, stepNoStyle.backgroundColor], ["rgb(252, 77, 80)", "rgba(0, 0, 0, 0)"]);
-  // UX-02 白文字を載せる塗りはブランド色より濃い赤(白文字と4.5:1以上)。ブランド色のままだと3.3:1
-  check("主ボタンは濃いアクセント背景に白文字",
+  // 白文字を載せる塗りは画面全体と同じブランド色にそろえる。白文字との比は3.3:1で
+  // 14px通常ウェイトの基準4.5:1に届かないため、太字にして読みやすさを補う
+  check("主ボタンはブランド色の背景に白の太字",
     [primaryStyle.backgroundColor, primaryStyle.color, primaryStyle.fontWeight],
-    ["rgb(211, 47, 47)", "rgb(255, 255, 255)", "400"]);
-  check("選択中の切り替えは濃いアクセント背景に白文字",
-    [segmentedStyle.backgroundColor, segmentedStyle.color], ["rgb(211, 47, 47)", "rgb(255, 255, 255)"]);
+    ["rgb(252, 77, 80)", "rgb(255, 255, 255)", "700"]);
+  check("選択中の切り替えはブランド色の背景に白の太字",
+    [segmentedStyle.backgroundColor, segmentedStyle.color, segmentedStyle.fontWeight],
+    ["rgb(252, 77, 80)", "rgb(255, 255, 255)", "700"]);
   check("共有画像ボタンの背面に枠や背景を付けない",
     [mediaActionsStyle.borderTopWidth, mediaActionsStyle.backgroundColor, mediaActionsStyle.paddingTop],
     ["0px", "rgba(0, 0, 0, 0)", "0px"]);

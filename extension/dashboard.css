@@ -21,12 +21,6 @@
   /* ブランド色は維持し、白背景上の小さな文字だけ読みやすい濃色を使う */
   --accent-text: #b42326;
   --accent-hover: #e03f42;
-  /* 白い文字を載せる塗りつぶしの操作部品(主要ボタン・選択中の切り替え)。
-     ブランド色の上では白文字が3.3:1しかなく、14px通常ウェイトの基準4.5:1に
-     届かないので、塗りだけ一段濃い赤にする(通常5.0:1、hover 6.5:1)。
-     見出しの帯は22px太字の大きな文字なのでブランド色のまま */
-  --accent-solid: #d32f2f;
-  --accent-solid-hover: #b42326;
   /* 選ばれているものに敷く淡い光。アクセント色と同系でそろえる */
   --accent-glow: rgba(252, 77, 80, 0.35);
   /* アクセント色の上に載せる文字 */
@@ -91,10 +85,6 @@
     /* 暗い地色の上ではブランド色そのままで5.4:1あるが、リンクは一段明るくする */
     --accent-text: #ff8f91;
     --accent-hover: #ff6f71;
-    /* 暗い地色でも白文字の比は塗りの色だけで決まるので同じ濃さ。hoverは地色との
-       3:1(部品の輪郭)を保てる範囲で少しだけ濃くする(白文字5.6:1) */
-    --accent-solid: #d32f2f;
-    --accent-solid-hover: #c62a2d;
     --accent-glow: rgba(252, 77, 80, 0.5);
     --on-accent: #fff;
     --bg-soft: #1c2026;
@@ -155,8 +145,6 @@
   /* 暗い地色の上ではブランド色そのままで5.4:1あるが、リンクは一段明るくする */
   --accent-text: #ff8f91;
   --accent-hover: #ff6f71;
-  --accent-solid: #d32f2f;
-  --accent-solid-hover: #c62a2d;
   --accent-glow: rgba(252, 77, 80, 0.5);
   --on-accent: #fff;
   --bg-soft: #1c2026;
@@ -720,13 +708,18 @@ button.small {
   padding: 5px 12px;
 }
 
+/* ブランド色の上の白文字はコントラスト比3.3:1で、14px通常ウェイトに求められる
+   4.5:1に届かない。ブランド色は画面全体の統一のため変えないので、字を太らせて
+   読みやすさを補う。文字を大きくして大きな文字の基準3:1へ移す案は、
+   ボタンだけが浮くため採らない */
 button.primary {
-  background: var(--accent-solid);
+  background: var(--accent);
   color: var(--on-accent);
+  font-weight: 700;
 }
 
 button.primary:hover:not(:disabled) {
-  background: var(--accent-solid-hover);
+  background: var(--accent-hover);
 }
 
 button.secondary {
@@ -1508,8 +1501,8 @@ button.banner-close:hover:not(:disabled) {
 
 /* 範囲に入っている行。背景色(.in-range)だけでは範囲の端が分かりにくい */
 .month-table .in-range .range-pick {
-  border-color: var(--accent-solid);
-  background: var(--accent-solid);
+  border-color: var(--accent);
+  background: var(--accent);
   color: var(--on-accent);
 }
 
@@ -2207,7 +2200,7 @@ button.segmented-btn:hover:not(.current) {
 
 /* 選ばれている側。表のどの列で並べているかと色をそろえる */
 button.segmented-btn.current {
-  background: var(--accent-solid);
+  background: var(--accent);
   color: var(--on-accent);
   font-weight: 700;
 }
@@ -2307,7 +2300,7 @@ tr.shop-row {
 }
 
 tr.shop-row:hover .toggle {
-  background: var(--accent-solid);
+  background: var(--accent);
   color: var(--on-accent);
 }
 

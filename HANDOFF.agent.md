@@ -27,7 +27,8 @@ verified:
 - C: 2026-09-07 — evidence: status=PASS; kind=compile; command=node --check extension/*.js test/*.js test/*.cjs; environment=Node24; scope=全JS構文; counts=passed=19, failed=0, skipped=0, not-run=0
 - C: 2026-09-07 — evidence: status=PASS; kind=runtime; command=node .local/review-ux/browser.cjs --screens-only; environment=Chrome/合成; scope=8画面例外0・外部要求0; counts=passed=8, failed=0, skipped=0, not-run=0
 - C: 2026-09-07 — evidence: status=PASS; kind=runtime; command=node docs/reviews/2026-09-07/evidence/{adversarial,maintenance,security}.cjs; environment=Node24; scope=adversarial7・maintenance5・security11; counts=passed=23, failed=0, skipped=0, not-run=0
-- C: 2026-09-07 — evidence: status=PASS; kind=runtime; command=Playwright getComputedStyle; environment=Chrome light/dark; scope=主ボタン・選択中の白文字/塗り4.98:1; counts=passed=4, failed=0, skipped=0, not-run=0
+- C: 2026-09-07 — evidence: status=FAIL; kind=runtime; command=Playwright getComputedStyle; environment=Chrome light/dark; scope=主ボタン・選択中の白文字/塗り3.3246:1(14px太字)。WCAG 4.5:1 未達をユーザー判断で受容; counts=passed=0, failed=2, skipped=0, not-run=0
+- C: 2026-09-07 — evidence: status=PASS; kind=runtime; command=Playwright getComputedStyle; environment=Chrome light/dark; scope=塗りがブランド色rgb(252,77,80)・白文字・font-weight 700、濃い赤の残存0要素; counts=passed=6, failed=0, skipped=0, not-run=0
 - C: 2026-09-07 — evidence: status=PASS; kind=hardware; command=実BOOTHでの手動確認(U7); environment=実ブラウザ; scope=ページング・明細・受取権限・外部通信0(ユーザー報告); counts=passed=5, failed=0, skipped=0, not-run=0
 - C: 2026-09-07 — evidence: status=PASS; kind=hardware; command=修正版を実拡張で表示(AVATAR-01); environment=実ブラウザ/実購入履歴; scope=沼レポートの「ヴェルノ」表記が正しいこと(ユーザー報告); counts=passed=1, failed=0, skipped=0, not-run=0
 - C: 2026-09-07 — evidence: status=PASS; kind=compile; command=tools/release.ps1 -Force; environment=PowerShell7; scope=ZIP26ファイル/version1.2.0/SHA256同梱; counts=passed=1, failed=0, skipped=0, not-run=0
@@ -42,7 +43,7 @@ not-run:
 
 - C: DATA-04 1.2.0。索引無し経路もキャンセル除外(状態不明は残す)。
 - C: UX-01 1.2.0。ギフト画面見出しは印なし、フッターに範囲の印。
-- C: UX-02 1.2.0。白文字の塗りだけ--accent-solid。ブランド色は据え置き。
+- C: UX-02 塗りはブランド色のまま。1.2.0で導入した濃い赤--accent-solidは、画面全体の色の統一が崩れるためユーザー判断で撤回(2026-09-07)。白文字は太字にして可読性を補う。ブランド色の上の白文字は3.3246:1で、14px通常ウェイトの基準4.5:1に届かない。太字は14pxのままなのでWCAGの大きな文字(18.66px太字以上)の基準3:1にも当たらず、基準未達を承知で見た目を優先している。文字を大きくして3:1へ移す案はボタンだけが浮くため不採用。
 - C: UX-05 1.2.0。比較年が無ければ選択欄を無効にし記録なしを明示。
 - C: EFF-01 1.3.0。描画分割は共有状態・フッターを跨ぐ構造変更のため。
 - C: AVATAR-01 1.2.0。原因はキー(ひらがな化)の直接表示。表示名だけ題名の綴りへ。キー不変。実拡張で修正を確認済みのためU3は解消。
