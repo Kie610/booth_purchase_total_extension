@@ -12,8 +12,10 @@ goal: 1.2.0はリリース済み。BOOTH商品ページとNotionの更新、次�
 complete:
 - C: 先行レビュー13件に加えDATA-04・UX-01・02・05・AVATAR-01を修正。EFF-01は次版。
 - C: docs/reviews/2026-09-07/evidence を修正後の期待値へ更新。
-- C: 1.2.0を正式リリース。ブランチ1.2.0へリネーム、main・origin/main・1.2.0・origin/1.2.0はすべて5b74920。注釈付きタグv1.2.0(タグオブジェクト29030ff)。GitHub Release v1.2.0にZIPとSHA-256を添付。origin/1.2.0-devは削除。
-- C: 配布ZIPはtools/release.ps1で7487a2c以降のコードから再生成。26ファイル、version 1.2.0、SHA256=253b00a0ee5acf0b81b16e8d9a34ad1422f09a3654e45cc7fc0fee2946e1b935。
+- C: 1.2.0を正式リリース。ブランチ1.2.0へリネーム、origin/1.2.0-devは削除。
+- C: ボタン色の撤回(912305f)を1.2.0へ含めるため、2026-09-07にタグと配布物を作り直した。ユーザーの明示指示による。タグv1.2.0を912305f(タグオブジェクト1d5a268)へ付け直してforce push、GitHub Releaseの添付2件を差し替え、リリース本文のコントラストの記述を訂正。main・origin/main・1.2.0・origin/1.2.0・タグの参照先はすべて912305f。
+- C: 配布ZIPはtools/release.ps1で912305fから再生成。26ファイル、version 1.2.0、SHA256=52a4c6ffdb01951389d19f4ad10b7def09bd0c8864d016c9ecd87daebd2bc4f8。旧SHA256=253b00a0…は無効。
+- U: 付け替え前のタグを取得済みの環境があると次のfetchで衝突する。BOOTHでの正式公開前だったため、影響は無いと判断した。
 - C: BOOTH商品ページ用の画像2点を販売ページ準備/1.2.0画像/へ生成(10_gifts.png・06_data_move_v1.2.0.png)。2048x2048、架空データのためぼかし不要。撮影スクリプトはリポジトリ外の一時領域にあり保存していない。
 - C: Notionの商品ページ仮案を1.2.0へ更新。親ページ(改題・決定事項・未決事項)、00 索引・決定事項、01 商品概要、02 BOOTH本文案。03・05・06は画像の採否が決まっていないため未更新。
 - U: BOOTH商品ページ自体は未編集。manage.booth.pm/items/8667966/edit での差し替えは未実施。公開ページの現況は2026-09-07に確認済みで、本文はNotion 02の1.1.0時点と一致、添付ZIPはv1.1.0、画像12枚、商品名は「【2026/08/10 沼レポート機能追加！】」。
@@ -32,7 +34,7 @@ verified:
 - C: 2026-09-07 — evidence: status=PASS; kind=hardware; command=実BOOTHでの手動確認(U7); environment=実ブラウザ; scope=ページング・明細・受取権限・外部通信0(ユーザー報告); counts=passed=5, failed=0, skipped=0, not-run=0
 - C: 2026-09-07 — evidence: status=PASS; kind=hardware; command=修正版を実拡張で表示(AVATAR-01); environment=実ブラウザ/実購入履歴; scope=沼レポートの「ヴェルノ」表記が正しいこと(ユーザー報告); counts=passed=1, failed=0, skipped=0, not-run=0
 - C: 2026-09-07 — evidence: status=PASS; kind=compile; command=tools/release.ps1 -Force; environment=PowerShell7; scope=ZIP26ファイル/version1.2.0/SHA256同梱; counts=passed=1, failed=0, skipped=0, not-run=0
-- C: 2026-09-07 — evidence: status=PASS; kind=runtime; command=gh release download v1.2.0 後にSHA-256照合; environment=GitHub; scope=公開資産とローカル成果物と同梱.sha256の三者一致; counts=passed=3, failed=0, skipped=0, not-run=0
+- C: 2026-09-07 — evidence: status=PASS; kind=runtime; command=gh release download v1.2.0 後にSHA-256照合とZIP内dashboard.cssの検査; environment=GitHub; scope=差し替え後の公開資産・ローカル成果物・同梱.sha256の三者一致(52a4c6ff…)、ZIP内にaccent-solid 0件・button.primaryはvar(--accent)と font-weight 700; counts=passed=5, failed=0, skipped=0, not-run=0
 
 not-run:
 - U: U1 DATA-04・UX-01・UX-05の実BOOTH実データでの確認。AVATAR-01は確認済み。
