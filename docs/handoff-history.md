@@ -1333,3 +1333,173 @@ procedure: ai-project-management 0.4.0-dev (ADOPT-PROMPT.md, 2026-09-05)
 - 2026-09-05 初回 mirror: `git clone --mirror` → `D:\GitHub_WorkSpace\BrowserExtensionackupooth_purchase_total_extension-2026-09-05.git`
   (5.8MB、ブランチ46、タグ2、`1.2.0-dev`=18085a2、`main`=67f206d)。復元確認: mirror から scratchpad へ clone し、
   `node --check` 17ファイル failed=0、`tools/release.ps1` で配布ZIPと SHA-256 の生成に成功。検証後の復元コピーは削除した。
+
+
+## 2026-09-07 データ移行機能の追加前のHANDOFF原文
+
+既存の現在状態・検証履歴・判断を下へ原文のまま保存し、現在の要点をHANDOFF.agent.mdへ集約した。
+
+```markdown
+# Agent handoff v1
+
+updated: 2026-09-07
+repo: Kie610/booth_purchase_total_extension
+work_branch: 1.2.0-dev
+upstream: origin/1.2.0-dev@bff7836
+base: 1.1.0@67f206d
+goal: `1.2.0-dev`で1.2.0(ギフト受取状況の画面と注文内訳の移設)を仕上げ、実環境確認を経てリリースする。
+
+## State
+
+complete:
+- C: 2026-09-07 レビュー後の保守修正を適用。COM-01〜04・EFF-02〜03・UX-03〜04の8件が対象。ギフト・分類・保存間隔の説明を現仕様へ合わせ、未使用の年間BOOST2フィールドとheadingLabelを削除。テスト側のdata-no-auto-initに値を設定。商品BOOSTの加算、保存形式、CSV、通常利用の機能は維持。利用者に見える変更は沼レポート・バックアップ・キャッシュ削除の説明とPRIVACYの削除案内。復元・削除処理は変更していない。DATA-01〜05、SEC-01、UX-01・02・05、EFF-01の10件は未修正。
+- C: 2026-09-07 レビュー資料を docs/reviews/2026-09-07/README.md へ保存。対象HEAD ed324dfd93dc22aa1dffc74df4b412bb8f88ec4a、1.2.0-dev、manifest 1.2.0。18件(P1=2/P2=6/P3=10)を5カテゴリー・8画面で説明。製品・既存テスト・配布物は変更せず、修正・公開は未実施。
+- C: v1.0.0・v1.1.0を正式リリース済み。`main`・`1.1.0`・タグ`v1.1.0`は同一SHA 67f206d。
+- C: `1.1.0`へP1〜P12を統合済み。内訳は docs/improvement-plan.md。
+- C: 運用ルール合成を08-08・08-16・09-05に実施。採否と手順版は docs/handoff-history.md の Migration record。
+- C: 2026-09-05 1.2.0 の実装を完了(仕様: docs/superpowers/specs/2026-09-05-gift-status-view-design.md)。
+  「ギフト・注文」画面(#/gifts)を追加し、贈ったギフトの受取状況(booth.pm/gifts/<UUID>/edit)を
+  2ボタン(URL取り直し / 受取状況の確認)で取得。「注文ごとの内訳」をレポートからこの画面へ移設。
+  CACHE_SCHEMA_VERSION=2(取り直し対象はギフトを含む v1 注文のみ)。新キー boothGiftStatus。
+  optional_host_permissions に https://booth.pm/*。manifest version 1.2.0。
+- C: 2026-09-05 受取状況の確認に「② 金額の収集」と同じ月の範囲指定(開始/終了・未確認のある範囲を選択・
+  月別の表・予定件数)を追加(ユーザー要望)。URLの取り直しは①と同じボタン1つのまま。
+- C: 2026-09-06 ギフト・注文の画面で集計対象バーを隠し絞り込みを掛けない。未受取と未確認を月別の表・
+  絞り込みで別に数える。未受取の行にギフト用URL(booth.pm/gifts/<UUID>)のコピー。受取状況の確認で
+  メモ(div[data-comment])も保存・表示。「キャッシュを無視して指定範囲を再取得」で受取済みも開き直す。
+- C: 2026-09-06 ギフト表の列順を 状態・商品・注文日時・メモ・注文番号・ショップ・金額・受取日時 にしメモ列を
+  160〜240pxに。「ギフトのURLを取り直す」に「キャッシュを無視してギフトを含む注文を全件再取得」を追加。
+
+verified:
+- C: 2026-09-07(説明修正後) — evidence: status=PASS; kind=runtime; command=node .local/review-ux/browser.cjs --screens-only; environment=Windows / Chrome 152.0.7977.76 / synthetic data; scope=8画面の表示例外0・外部要求0・沼とバックアップの説明を目視確認; counts=passed=8, failed=0, skipped=0, not-run=0。画像: docs/reviews/2026-09-07/evidence/maintenance-fix-avatars.png・maintenance-fix-backup.png。
+- C: 2026-09-07(保守修正後) — evidence: status=PASS; kind=compile; command=node --check extension/*.js test/*.js; environment=Windows / Node.js 24.18.1; scope=全JavaScript構文; counts=passed=17, failed=0, skipped=0, not-run=0
+- C: 2026-09-07(保守修正後) — evidence: status=PASS; kind=runtime; command=node .local/check-maintenance-fix.cjs final; environment=Windows / Chrome 152.0.7977.76 / 1280x900; scope=test/cases.js全体; counts=passed=1140, failed=0, skipped=0, not-run=0。1141から未使用フィールド専用2チェックを削除し、自動初期化によるstorage読取りが無いことの1チェックを追加。追加チェックは修正前に5キーの読取りで失敗、修正後に成功。修正後ログ: docs/reviews/2026-09-07/evidence/maintenance-fix-baseline.txt。
+- C: 2026-09-07(保守修正後) — evidence: status=PASS; kind=compile; command=tools/release.ps1 -OutputDirectory .local/maintenance-fix-package-final; environment=Windows / PowerShell; scope=ZIP生成・26ファイル・manifest 1.2.0・test/docs非同梱・SHA-256一致; counts=passed=1, failed=0, skipped=0, not-run=0。SHA-256 e6d8258bf369e781d4b5ffcfcca79a2f8b2d5f375b8b7c5dca3cf5da8c306d4e。既存distは未更新、公開・commit・pushは未実施。
+- C: 2026-09-07(レビュー) — evidence: status=PASS; kind=compile; command=node --check extension/*.js test/*.js; environment=Windows / Node.js 24.18.1; scope=全JavaScript構文; counts=passed=17, failed=0, skipped=0, not-run=0
+- C: 2026-09-07(レビュー) — evidence: status=PASS; kind=runtime; command=node docs/reviews/2026-09-07/evidence/browser.cjs; environment=Windows / Chrome 152.0.7977.76 / 1280x900; scope=既存test/cases.js; counts=passed=1141, failed=0, skipped=0, not-run=0。合成データの8画面も表示例外0。実BOOTH・実拡張操作は未検証。
+- C: 2026-09-07(レビュー) — evidence: status=FAIL; kind=runtime; command=node docs/reviews/2026-09-07/evidence/adversarial.cjs; environment=Windows / Node.js 24.18.1 / synthetic VM; scope=DATA-01〜05の欠陥再現; counts=passed=2, failed=5, skipped=0, not-run=0。正常値消失・古いタブの上書き・重複復元・キャンセル復活・giftId型不整合を再現。
+- C: 2026-09-07 Codex Security標準スキャンa7ee0ead-e497-4442-baf6-4376638a13fcはcomplete、Low 1件、coverage partial。公式取得結果と制約は docs/reviews/2026-09-07/02-security.md・06-verification.md。スキャン完了を安全性保証と扱わない。
+- C: 2026-09-05(1.2.0実装後) — evidence: status=PASS; kind=compile; command=node --check extension/*.js test/*.js; environment=Windows 11 / Node.js 24.18.1; scope=extension/とtest/の全JavaScript構文; counts=passed=17, failed=0, skipped=0, not-run=0
+- C: 2026-09-05(1.2.0実装後) — evidence: status=PASS; kind=runtime; command=python -m http.server 8731 と http://localhost:8731/test/index.html を幅1280pxで開く; environment=Windows 11 / Chromium 1280x900; scope=test/cases.js全体 ALL PASS; counts=passed=1141, failed=0, skipped=0, not-run=0
+- C: 2026-09-05 — evidence: status=PASS; kind=runtime; command=stub差し込みの dashboard.html 複製を幅1280pxで表示; environment=Windows 11 / Chromium; scope=水平タブ8項目が1行に収まる・ヘッダー右の「作者について」表示・#/gifts の表(URLコピー・メモ列)・範囲指定(月別の表と予定件数・再取得チェック)・集計対象バー非表示; counts=passed=1, failed=0, skipped=0, not-run=0
+- C: 2026-09-05 — evidence: status=PASS; kind=external; command=ログイン済みChromeで accounts.booth.pm/orders/87212632・82903405 と booth.pm/gifts/<UUID>/edit を読み取り; environment=Windows 11 / Chrome; scope=ギフトリンクのhref形式・「状態」「受取日時」「発行日時」のラベル構造(未受取1件・受取済み6件); counts=passed=7, failed=0, skipped=0, not-run=0
+- C: 2026-09-06 — evidence: status=PASS; kind=compile; command=tools/release.ps1(aefc35d); environment=Windows 11 / PowerShell 7; scope=dist/booth-purchase-total-extension-v1.2.0.zip(26ファイル、manifest 1.2.0、optional_host_permissions 確認)とSHA-256 a501bfda…; counts=passed=1, failed=0, skipped=0, not-run=0
+- C: 2026-09-05 — evidence: status=PASS; kind=compile; command=git clone -b 1.2.0-dev ../backup/booth_purchase_total_extension-2026-09-05.git と tools/release.ps1; environment=Windows 11 / PowerShell 7; scope=復元cloneで配布ZIPとSHA-256を生成; counts=passed=1, failed=0, skipped=0, not-run=0
+
+not-run:
+- U: U1 BOOTHログイン済み実ページの通信・ページング・セレクタ確認。D10のみ2026-08-07にユーザー実環境で確認済み。ギフト関連セレクタは2026-09-05に実測済み(上記)。
+- U: U7 実拡張として読み込んだChromeでの1.2.0動作確認(ギフトURLの取り直し・受取状況の確認・optional権限のプロンプト・URLコピー・メモ取得・表示)。テストとstub複製での確認のみ。
+- U: U2 実拡張として読み込んだブラウザでのD11テーマ・D14/D17沼レポート。プレビュー複製での確認のみ。
+- U: U4 2026-09-05の `tools/release.ps1`。文書と.gitignoreのみの変更で配布物に差分が無いため未実行。
+
+## Decisions
+
+- C: 開発中はバージョンブランチへ統合し、正式リリース確定時に`main`を同じSHAへff同期する。`main`廃止の提唱は不採用(2026-08-16)。
+- C: versionと同名のブランチを作り、削除せず残す。大きな機能追加はマイナー、修正や小さな変更はパッチ番号。
+- C: 共有カードの幅依存テスト1件は幅521pxで落ちる。検証は幅768px以上で。
+- C: 正式対応はChromeのみ。Firefoxは一時読み込みに限定(2026-08-09)。
+- A: D14の伏せ字共有でもアバター名は出す。利用者からの指摘の有無で検証する。
+- C: U3解消(2026-09-05): 次版は1.2.0(ギフト受取状況の画面)。`manifest.json`を1.2.0へ上げた。テストの固定版数も1.2.0。README/appendixの「正式リリースは1.1.0」はリリースまで据え置く。
+- C: 受取状況(booth.pm)の取得は「ギフト・注文」画面のボタンからのみ。通常の収集では booth.pm へアクセスしない(2026-09-05ユーザー決定)。(a)URL取り直しと(b)受取状況確認は別ボタン(同上)。
+- C: 開発中の統合ブランチは`<次版>-dev`、リリース時に承認を得て`<version>`へリネーム(2026-09-05ユーザー決定。U5解消)。
+- C: バックアップ保存先は`D:\GitHub_WorkSpace\BrowserExtensionackup\`(2026-09-05ユーザー指定。U6解消)。
+- C: 初回mirror取得と復元確認済み(2026-09-05、U6解消)。
+
+## Next
+
+1. レビュー資料のDATA-01・02を優先して修正範囲を決める。レビュー依頼は修正・リリースの許可を含まない — blocked-by: 修正範囲の決定
+2. テスター配布版 dist/…v1.2.0.zip(aefc35d)でU7の実環境確認を集め、レビュー結果も踏まえて docs/versioning.md の手順でリリース — blocked-by: U7・指摘の扱いの決定
+3. 年1回(2027-09まで)のmirror更新と復元確認 — blocked-by: none
+
+## Paths
+
+- C: `extension/manifest.json` — 拡張機能と配布物のversion(版の正本)
+- C: `tools/release.ps1` — 配布ZIPとSHA-256の生成
+- C: `AGENTS.md` — 毎回有効な永続ルール
+- C: `docs/agent-appendix.md` — 場面限定ルール(委任・リリース・バックアップ)
+- C: `docs/versioning.md` — リリースとmain同期の手順
+- C: `docs/handoff-history.md` — 旧HANDOFF原文・合成の採否・Migration record
+- C: `docs/improvement-plan.md` — 2026-08-07レビューの指摘と委任プロンプト
+- C: `docs/reviews/2026-09-07/README.md` — 敵対的検証・Codex Security・UX・コメント・効率のレビュー資料と画面別の案内
+- C: `docs/superpowers/specs/2026-09-05-gift-status-view-design.md` — 1.2.0 の仕様(実測したBOOTHの構造を含む)
+
+## Resume protocol
+
+1. Read `AGENTS.md` and this file.
+2. Verify live Git/external state; live evidence overrides recorded metadata.
+3. Read only paths needed for the first unblocked action.
+4. Run the smallest relevant baseline checks.
+5. Execute the highest-priority unblocked action.
+6. Update evidence; never convert `not-run` to PASS without execution.
+
+```
+
+## 2026-09-07 1.2.0 レビュー判断前の HANDOFF.agent.md(原文)
+
+```markdown
+# Agent handoff v1
+
+updated: 2026-09-07
+repo: Kie610/booth_purchase_total_extension
+work_branch: 1.2.0-dev
+upstream: origin/1.2.0-dev@bff7836
+base: 1.1.0@67f206d
+goal: 1.2.0の実環境確認と承認後のリリース。
+
+## State
+
+complete:
+- C: HEAD ed324df。保守修正・移行機能は未コミット。commit/push/公開は未実施。
+- C: ヘッダー末尾を「ギフト・注文」「データの引っ越し」に変更。内部データ・JSON・CSVの1.0.0→1.1.0→1.2.0変換、版付きファイル名、複数CSV取込を実装。全件出力は明細・割当・ギフト情報も保持。
+- C: 併合は既知値を補完し相違も保持。未完了保存の復旧、容量不足時のJSON出力、再取得失敗時の既知値保持を実装。永続ルールと形式仕様はAGENTS.md・docs/data-migration.md。
+- C: 先行レビュー18件中、COM-01〜04・EFF-02〜03・UX-03〜04の保守修正に加え、移行機能でDATA-01・02・03・05、SEC-01の出力処理を修正。残件はDATA-04、UX-01・02・05、EFF-01。元レビューは当時の履歴。
+- C: 正式リリース1.1.0は67f206d。既存distは変更せず、検証用ZIPを.local/migration-package-verifiedへ生成。
+
+verified:
+- C: PASS; runtime; node test/migration-check.cjs; Windows/Node24; 新旧形式の移行・往復; passed=37, failed=0, skipped=0, not-run=0
+- C: PASS; runtime; node test/migration-browser-check.cjs; Chrome152/合成storage; 保存失敗・復旧・容量・実2タブ・出力UI; passed=16, failed=0, skipped=0, not-run=0
+- C: PASS; runtime; node .local/check-maintenance-fix.cjs migration-final; Chrome152/1280px; test/cases.js ALL PASS; passed=1140, failed=0, skipped=0, not-run=0
+- C: PASS; compile; node --check extension/*.js test/*.js test/*.cjs; Node24; 全JS構文; passed=19, failed=0, skipped=0, not-run=0
+- C: PASS; runtime; node .local/review-ux/browser.cjs --screens-only; Chrome152/合成; 8画面例外0・外部要求0、案内目視; passed=8, failed=0, skipped=0, not-run=0
+- C: PASS; compile; tools/release.ps1 -OutputDirectory .local/migration-package-verified; PowerShell7; ZIP26ファイル/version1.2.0/SHA256=同梱.sha256; passed=1, failed=0, skipped=0, not-run=0
+
+- C: PASS; 実環境; 実BOOTHログイン済みプロファイルでの手動確認(U1・U7); 2026-09-07; 一覧ページングの順次取得、セレクタ生存と件数一致、注文明細の突き合わせ、ギフト受取状況の任意権限とbooth.pm限定アクセス、外部通信0件; ユーザー報告による合否(観測ログ・スクリーンショットは未保存)
+
+not-run:
+- U: U2 実拡張プロファイルでのテーマ確認。沼レポートは実環境で表示し、AVATAR-01の表記ゆれを検出。テーマ別の確認は未実施。
+- U: U8 Excel本体で開いて再保存したCSVの往復。移行には出力した原本を使う。
+
+## Decisions
+
+- C: データを捨てる再取得で形式移行を代替しない。版を照合し、登録済み変換を順に適用する。
+- C: 開発は1.2.0-dev。正式リリース時の版確認・ブランチ固定・mainのff同期はdocs/versioning.mdとユーザー承認に従う。
+- C: 正式対応はChrome。booth.pmの受取状況取得はギフト画面の明示操作のみ。
+- C: 共有カードの既存幅依存チェックは768px以上で実行する。
+
+## Next
+
+1. 残るレビュー5件(DATA-04・UX-01・UX-02・UX-05・EFF-01)とAVATAR-01の扱いを高難度セッションが決める — blocked-by: 高難度セッションの回答
+2. 上記の判断を受けて1.2.0の内容を確定し、コミットとリリース手順を実施 — blocked-by: 1
+3. 年1回のmirror更新と復元確認(2027-09まで) — blocked-by: none
+
+## Open
+
+- U: AVATAR-01 沼レポートの表示名が素体商品の表記と一致しない。実環境で「ヴェルノ」が「ヴぇるの」、「ライカ」も同様の別表記で出た。どちらもAVATAR_MASTER未登録で、buildAvatarIndexが購入明細から拾った表記を使う。ユーザー指定の規則は「素体商品(アバター本体)の表記を正とする」。原因箇所と修正方針は未確定。
+
+## Paths
+
+- C: docs/data-migration.md — 移行規則・形式・検証方法
+- C: docs/reviews/2026-09-07/README.md — カテゴリー別・8画面別レビュー
+- C: docs/handoff-history.md — 過去の状態・検証・判断の原文
+- C: docs/agent-appendix.md — 委任・リリース・保守ルール
+- C: tools/release.ps1 / extension/manifest.json — パッケージ生成 / 版の正本
+
+## Resume protocol
+
+1. Read AGENTS.md and this file.
+2. Verify live Git/external state; live evidence overrides recorded metadata.
+3. Read only paths needed for the first unblocked action.
+4. Run the smallest relevant baseline checks.
+5. Execute the highest-priority unblocked action.
+6. Update evidence; never convert not-run to PASS without execution.
+```

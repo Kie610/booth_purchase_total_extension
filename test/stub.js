@@ -3,7 +3,9 @@ var browser = {
   storage: {
     local: {
       _data: {},
+      _getCalls: [],
       get(keys) {
+        this._getCalls.push(keys);
         const r = {};
         for (const k of [].concat(keys)) if (k in this._data) r[k] = this._data[k];
         return Promise.resolve(r);

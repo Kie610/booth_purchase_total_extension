@@ -8,7 +8,7 @@
 </head>
 <!-- dashboard.js の init() は保存データを非同期で state へ読み込む。
      テストは state を直接差し替えるので、走らせると競合する -->
-<body data-no-auto-init>
+<body data-no-auto-init="1">
 <!-- エラー拾いは harness.js に置く。index.html は拡張と同じ script-src 'self' を
      宣言しているため、インラインの <script> は実行されずに黙って捨てられる -->
 <script src="harness.js"></script>
@@ -34,8 +34,8 @@
 <a class="nav-link" href="#/trends" data-view="trends">支出推移・前年比較</a>
 <a class="nav-link" href="#/summary" data-view="summary">今年のまとめ</a>
 <a class="nav-link" href="#/export" data-view="export">データ出力</a>
-<a class="nav-link" href="#/backup" data-view="backup">データの引っ越し</a>
 <a class="nav-link" href="#/gifts" data-view="gifts">ギフト・注文</a>
+<a class="nav-link" href="#/backup" data-view="backup">データの引っ越し</a>
 <button id="authorBtn" class="nav-author-btn">作者について</button>
 </nav>
 </div>
@@ -266,7 +266,7 @@
 </div>
 
 <div>
-  <span class="foot-value" id="footTotal"></span><span class="foot-sub" id="footTotalCount"></span><span class="gift" id="footTotalGift"></span>
+  <span class="foot-label" id="footTotalLabel"></span><span class="foot-value" id="footTotal"></span><span class="foot-sub" id="footTotalCount"></span><span class="gift" id="footTotalGift"></span>
   <span class="foot-label" id="footYearLabel"></span><span class="foot-value" id="footYearTotal"></span><span class="foot-sub" id="footYearCount"></span><span class="gift" id="footYearGift"></span>
   <button id="shareBtn" class="share-btn" disabled>𝕏で共有</button>
 </div>

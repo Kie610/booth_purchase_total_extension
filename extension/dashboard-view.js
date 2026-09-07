@@ -71,6 +71,7 @@ const giftUrlForceRefresh = document.getElementById("giftUrlForceRefresh");
 const giftFilterBar = document.getElementById("giftFilterBar");
 const authorHeaderBtn = document.getElementById("authorHeaderBtn");
 const footTotal = document.getElementById("footTotal");
+const footTotalLabel = document.getElementById("footTotalLabel");
 const footTotalCount = document.getElementById("footTotalCount");
 const footYearLabel = document.getElementById("footYearLabel");
 const footYearTotal = document.getElementById("footYearTotal");
@@ -231,7 +232,7 @@ const ACTION_BUTTONS = [
 // (ポップアップではなく専用タブで処理しているのと同じ理由)。
 // 現在の画面はURLのハッシュに持たせるので、再読み込みしても同じ画面に戻る。
 
-const VIEW_NAMES = ["report", "ranking", "avatars", "trends", "summary", "export", "backup", "gifts"];
+const VIEW_NAMES = ["report", "ranking", "avatars", "trends", "summary", "export", "gifts", "backup"];
 const DEFAULT_VIEW = "report";
 // 見出しの右に添える画面名。既定の画面では何も足さない
 const VIEW_TITLES = {
@@ -265,8 +266,9 @@ function renderCurrentView() {
       link.removeAttribute("aria-current");
     }
   });
-  // 絞り込み中はどの画面の見出しにもその旨を添える(部分集計を全体に見せない)
-  viewTitle.textContent = [VIEW_TITLES[current], giftFilterTitleSuffix()]
+  // 絞り込み中はどの画面の見出しにもその旨を添える(部分集計を全体に見せない)。
+  // ギフト・注文の画面は絞り込みを掛けない結果を出すので、印を付けると表と食い違う
+  viewTitle.textContent = [VIEW_TITLES[current], current === "gifts" ? "" : giftFilterTitleSuffix()]
     .filter(Boolean)
     .join(" ");
   renderGiftFilter();
@@ -745,9 +747,10 @@ function renderBackupArea(results = currentResults()) {
     .sort((a, b) => a.sortKey - b.sortKey);
 
   // 実行中の無効化を上書きしないよう、待機中だけ件数で決める(renderClearArea と同じ)
-  if (!running) backupSaveBtn.disabled = results.length === 0;
+  if (!running) backupSaveBtn.disabled = !migrationBlocked && !hasSavedData();
   if (results.length === 0) {
-    backupStats.textContent = "保存できるデータがありません";
+    backupStats.textContent = migrationBlocked ? "移行を完了できませんでした。保存データをJSONへ書き出せます。" :
+      hasSavedData() ? "表示対象の注文は0件です。保存済みの情報をバックアップできます。" : "保存できるデータがありません";
     backupCoverage.hidden = true;
     return;
   }
@@ -772,6 +775,12 @@ function dateLabel(d) {
   return d.day > 0 ? `${d.year}年${d.month}月${d.day}日` : `${d.year}年${d.month}月`;
 }
 
+// 表示対象が0件でも、取消注文・索引外の明細・手動割り当て・メモは持ち出せる。
+function hasSavedData() {
+  return Boolean(state.index) || [state.cache, state.avatarAssign, state.giftStatus, state.migrationConflicts]
+    .some((data) => Object.keys(data || {}).length > 0);
+}
+
 // データ出力の画面。CSVそのものは押されたときに組み立てるが、
 // 何件書き出せるのかと、お支払金額と商品合計にずれがあるかはここで示す
 function renderExportArea(results = currentResults()) {
@@ -786,11 +795,14 @@ function renderExportArea(results = currentResults()) {
       : `このCSVは集計対象「${GIFT_FILTER_LABELS[giftFilter]}」で絞り込んだ部分集計です。` +
         "ファイル名と「集計対象」列にも同じ内容が入ります。";
 
-  exportEmpty.hidden = results.length > 0;
-  exportArea.hidden = results.length === 0;
-  exportOrdersBtn.disabled = results.length === 0;
-  exportItemsBtn.disabled = results.length === 0;
+  const available = results.length > 0 || (giftFilter === "all" && hasSavedData());
+  exportEmpty.hidden = available;
+  exportArea.hidden = !available;
+  exportOrdersBtn.disabled = running || !available;
+  exportItemsBtn.disabled = running || !available;
   if (results.length === 0) {
+    exportStats.textContent = available ? "表示対象の注文は0件です。保存済みの情報を復元用データへ含めます。" : "";
+    exportGap.hidden = true;
     exportPreviewBody.innerHTML = "";
     return;
   }
@@ -1104,6 +1116,9 @@ function renderFooter(results) {
   const sum = (rows) => rows.reduce((total, r) => total + r.amount, 0);
   const sumGift = (rows) => rows.reduce((total, r) => total + giftAmount(r), 0);
 
+  // フッターは絞り込んだ結果の合計なので、絞り込みを掛けない画面(ギフト・注文)と
+  // 並んだときに別の範囲だと分かるよう、見出しと同じ印を付ける
+  footTotalLabel.textContent = `合計額${giftFilterTitleSuffix()}`;
   footTotal.textContent = formatYen(sum(valid));
   footTotalGift.textContent = giftText(sumGift(valid));
   footTotalCount.textContent = `収集済み ${valid.length}件`;

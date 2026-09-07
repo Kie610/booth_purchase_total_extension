@@ -1,0 +1,55 @@
+{
+  "scope": "Synthetic Node VM checks; passes confirm observed behavior, including defects",
+  "counts": {
+    "passed": 11,
+    "failed": 0,
+    "skipped": 0,
+    "notRun": 0
+  },
+  "results": [
+    {
+      "name": "CSV formula prefix survives shared csvField",
+      "status": "passed"
+    },
+    {
+      "name": "CSV formula is neutralized in actual item export",
+      "status": "passed"
+    },
+    {
+      "name": "CSV quote escaping does not neutralize formulas",
+      "status": "passed"
+    },
+    {
+      "name": "Unsafe shop origins are rejected",
+      "status": "passed"
+    },
+    {
+      "name": "Order traversal rejected at shared URL builder",
+      "status": "passed"
+    },
+    {
+      "name": "Gift traversal rejected at both URL builders",
+      "status": "passed"
+    },
+    {
+      "name": "Valid URLs retain fixed origins",
+      "status": "passed"
+    },
+    {
+      "name": "Backup preserves redeemable gift ID",
+      "status": "passed"
+    },
+    {
+      "name": "Both delete actions clear index and amount cache",
+      "status": "passed"
+    },
+    {
+      "name": "Both delete actions retain gift UUID and memo",
+      "status": "passed"
+    },
+    {
+      "name": "Both delete actions retain product assignment",
+      "status": "passed"
+    }
+  ]
+}

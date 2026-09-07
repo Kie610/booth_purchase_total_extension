@@ -115,11 +115,6 @@ function valueAfterHeading(element, heading) {
   return label && text.startsWith(label) ? text.slice(label.length) : text;
 }
 
-function headingLabel(element) {
-  const heading = element.querySelector(".particulars-heading");
-  return heading ? heading.textContent.trim() : "";
-}
-
 // 商品1件分。価格や数量を読めなかった場合は0や1と断定せず null(不明)にする
 function parseItemSheet(sheet, shop, gift) {
   const link = sheet.querySelector(ITEM_LINK_SELECTOR);

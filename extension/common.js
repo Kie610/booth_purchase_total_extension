@@ -11,12 +11,17 @@ const RUN_STATE_KEY = "boothRunState"; // 実行中の進捗(ポップアップ�
 const RUN_LOCK_KEY = "boothRunLock"; // 複数タブから同時に収集しないための期限付きロック
 const DASHBOARD_TAB_KEY = "boothDashboardTab"; // 集計ページのタブID
 const THEME_KEY = "boothTheme"; // 配色テーマの選択("light" | "dark" | "system")
-// D14 沼レポートの手動割り当て { [商品キー]: "アバターkey" | "__multi__" }
+// 沼レポートの手動割り当て { [商品キー]: "アバターkey" | "予約キー" }
 const AVATAR_ASSIGN_KEY = "boothAvatarAssign";
-// 贈ったギフトの受取状況 { [giftId]: { state, issuedAt, receivedAt, checkedAt } }
-// state: "received" | "unreceived"。注文キャッシュとは分けて持つ
-// (注文の取り直しで消えず、受取済みは確定なので二度と取りに行かない)
+// 贈ったギフトの受取状況とメモ { [giftId]: { state, issuedAt, receivedAt, checkedAt, memo } }
+// state: "received" | "unreceived"。注文キャッシュとは分け、注文の取り直しでは消さない。
+// 通常確認では受取済みを除外し、force指定ではメモの変更も拾うため受取済みを含めて再確認する。
 const GIFT_STATUS_KEY = "boothGiftStatus";
+// 保存形式の版。注文ごとの取得項目を表す CACHE_SCHEMA_VERSION とは別に管理する。
+const DATA_VERSION = "1.2.0";
+const DATA_VERSION_KEY = "boothDataVersion";
+const MIGRATION_CONFLICTS_KEY = "boothMigrationConflicts";
+const MIGRATION_JOURNAL_KEY = "boothDataMigration";
 
 // 注文詳細ページ。取得(dashboard.js)と内訳のリンク(dashboard-view.js)の両方で使うので
 // 共通側に置く
@@ -224,6 +229,8 @@ function filterResultsByGift(results, filter) {
 function needsCollect(entry) {
   return (
     !entry ||
+    entry.collectionFailed === true ||
+    entry.partialItems === true ||
     entry.amount === null ||
     !hasItems(entry) ||
     isOutdatedEntry(entry)
@@ -797,12 +804,11 @@ function parseItemName(name) {
   return { base: text, variation: null };
 }
 
-// ---- D17-a 辞書レスのトークン照合 --------------------------------------
+// ---- 購入明細からのアバター候補の組み立て ------------------------------
 //
-// D14 は固定辞書へ当てにいく方式だったが、アバターは数万体あり毎日増えるので原理的に
-// 網羅できない(実測: 辞書33体で金額の15.5%しか特定できず、辞書に無い「凪」は全滅)。
-// D17 では**買った商品どうしを突き合わせて**アバターのまとまりを見つける。
-// 名簿(avatar-master.js)は表記ゆれの統合と表示名のためのヒントに降格した。
+// 名簿の表記ゆれ・表示名と、購入商品のバリエーション名・素体商品の題名を使い、
+// 分類に使う候補を buildAvatarIndex で組み立てる。
+// 名簿外の名前も条件を満たせば採用するが、網羅性や分類の正確さを保証するものではない。
 
 // カタカナはひらがなへ寄せる。「シナノ」と「しなの」を別のアバターにしないため
 function kanaToHira(text) {
@@ -915,6 +921,30 @@ function avatarRawTokens(text) {
     if (!out.includes(token)) out.push(token);
   }
   return out;
+}
+
+// 題名に書かれていた綴りを、avatarRawTokens が返すトークンごとに引けるようにしたもの。
+// トークンはカタカナ→ひらがな・大文字→小文字へそろえた形で、そのまま表示名に使うと
+// 「ライカ」が「らいか」になる。バケツのキーはそろえた形のまま変えず(保存済みの
+// 手動割り当てが指す先なので)、表示名だけ元の綴りへ戻すために使う。
+// 区間の切り方は AVATAR_TOKEN_RUN と同じで、そろえる前のカタカナ・大文字も同じ区間に含める
+const AVATAR_SPELLING_RUN = /[a-zA-Z0-9]+|[ぁ-ゖゝゞーァ-ヶヽヾ]+|[一-鿿々]+/g;
+
+function avatarTokenSpellings(text) {
+  const spellings = new Map();
+  if (!text) return spellings;
+  for (const run of String(text).normalize("NFKC").match(AVATAR_SPELLING_RUN) || []) {
+    let token = kanaToHira(run.toLowerCase());
+    for (;;) {
+      const next = token.replace(AVATAR_TOKEN_SUFFIX, "");
+      if (!next || next === token) break;
+      token = next;
+    }
+    if (isAvatarNoiseToken(token) || spellings.has(token)) continue;
+    // そろえる処理は1文字を1文字へ写すので、剥がした飾りのぶんだけ末尾を落とせば元の綴りになる
+    spellings.set(token, run.slice(0, token.length));
+  }
+  return spellings;
 }
 
 // 照合に使うトークン。名簿に載っている語はストップ語・漢字1文字の判定より優先する
@@ -1063,10 +1093,14 @@ function buildAvatarIndex(results) {
   for (const result of results || []) {
     if (!Array.isArray(result.items)) continue;
     for (const item of result.items) {
-      // 素体商品は1商品でも昇格させる。バリエーションの有無に関係なく見る
+      // 素体商品は1商品でも昇格させる。バリエーションの有無に関係なく見る。
+      // 表示名は素体商品の題名の綴りを正とし、バリエーション名から先に入った表示名より優先する
       const solo = avatarSoloTokens(item && item.name);
-      if (solo.length === 1) buckets.add(solo[0]);
-      else if (solo.length >= 2) {
+      const soloSpellings = solo.length > 0 ? avatarTokenSpellings(avatarSoloResidue(item.name)) : null;
+      if (solo.length === 1) {
+        buckets.add(solo[0]);
+        names.set(solo[0], soloSpellings.get(solo[0]) || solo[0]);
+      } else if (solo.length >= 2) {
         const latin = solo.filter(isAvatarLatinToken);
         const japanese = solo.filter((token) => !isAvatarLatinToken(token));
         // 素体商品の題名で「日本語名 ローマ字名」が並ぶのは同じアバターの併記。
@@ -1075,7 +1109,7 @@ function buildAvatarIndex(results) {
           const key = avatarAliasMap().get(japanese[0]) || avatarAliasMap().get(latin[0]) || latin[0];
           aliases.set(japanese[0], key);
           aliases.set(latin[0], key);
-          if (!names.has(key)) names.set(key, japanese[0]);
+          names.set(key, soloSpellings.get(japanese[0]) || japanese[0]);
         } else if (latin.length === 0) {
           // 「ラビ先輩」「幽狐族のお姉様」のように日本語だけで何語かに割れる名前。
           // 語ごとに分けると「先輩」だけが残って名前が壊れるので、飾りを落とした
@@ -1105,7 +1139,12 @@ function buildAvatarIndex(results) {
       const tokens = avatarTokens(variation);
       if (tokens.length === 0) continue;
       const productKey = itemProductKey(item);
-      for (const token of tokens) add(tokenProducts, token, productKey);
+      // 昇格したバケツの表示名。最初に見た綴りを使い、素体商品の題名があれば上で置き換わる
+      const variationSpellings = avatarTokenSpellings(variation);
+      for (const token of tokens) {
+        add(tokenProducts, token, productKey);
+        if (!names.has(token)) names.set(token, variationSpellings.get(token) || token);
+      }
       // 併記とみなすのは「和文1語＋英字1語」だけ。3語以上並ぶものは
       // 複数アバター対応の列挙でありうるので、共起として数えない
       const latin = tokens.filter(isAvatarLatinToken);
@@ -1238,17 +1277,19 @@ function avatarSlotKey(verdict, item) {
   return avatarVocabSlot(item && item.name);
 }
 
-// アバター別の合計・点数。
+// 保存済みの注文明細をアバター・商品種別ごとに分類し、金額と点数を集計する。
+// results の明細から候補を組み、assignments の商品別手動割り当てを優先する。
+// 特定アバターを確定できない場合は、種別・複数対応・品名の分類語彙の順に判定する。
+// 判定規則は classifyItemAvatar と avatarSlotKey にあり、商品ページへの通信は行わない。
 //
-// **ショップ別ランキングと同じく、注文単位のお支払金額は使えない。**1つの注文が
-// 複数のアバター向け商品にまたがるため、商品の合計(単価×数量+BOOST)で集計する。
-// 送料やクーポンは入らないので、全部足しても全体の合計額とは一致しない。画面で断ること。
+// 注文が複数のアバター向け商品にまたがるため、商品の合計(単価×数量+BOOST)を使う。
+// 送料やクーポンは含まれず、全体の支払合計とは一致しないことを画面で説明する。
 //
-// D20 分類は排他。rows(特定アバター)・予約キーの4行・none(未分類)の点数を足すと、
-// 明細のある商品の総点数になる。
-//
-// 返り値の products は手動割り当てUIの受け皿。未分類のものと、手動で割り当て済みの
-// ものだけを載せる(割り当て済みを外すと、間違えたときに戻せなくなる)
+// 分類は排他。rows(特定アバター)・予約キーの4行・none(未分類)へ各商品を1回だけ数える。
+// 数量不明は点数へ加算せず、金額不明は各行の unknown へ記録する。
+// rows は sortBy の基準で並べる。
+// products は手動割り当てUI用で、未分類と手動割り当て済みの商品だけを返す。
+// 割り当て済みの商品も残し、利用者が指定を変更・解除できるようにする。
 function aggregateByAvatar(results, assignments = {}, sortBy = DEFAULT_SHOP_SORT) {
   const rows = new Map();
   const buckets = new Map(
@@ -1284,7 +1325,7 @@ function aggregateByAvatar(results, assignments = {}, sortBy = DEFAULT_SHOP_SORT
 
       // 手動で直せる対象は「どの分類にも当たらなかったもの」と「手動割り当て済みのもの」
       // だけ。アバター・複数対応・種別のどれかに自動で当たったものまで並べると
-      // 一覧が長くなりすぎる(2026-08-09 ユーザーフィードバック)
+      // 一覧が長くなりすぎる
       if (!verdict.manual && slot !== "") continue;
       const productKey = itemProductKey(item);
       if (!products.has(productKey)) {
@@ -1516,7 +1557,7 @@ function orderYears(results) {
 // 「その年にはじめて出会った作者」を数えるには、その年より前に買っているかを
 // 知る必要がある。年で絞った結果だけでは判定できないので、全期間を受け取る。
 //
-// 合計金額は他の画面と同じく注文単位のお支払金額から出す。作者数・点数・BOOSTは
+// 合計金額は他の画面と同じく注文単位のお支払金額から出す。作者数・点数は
 // 商品明細からしか出せないため、ここでも「ショップ別の合計を足しても total には
 // ならない」というランキングと同じずれが残る。画面に断りを出すこと。
 function buildYearSummary(results, year) {
@@ -1550,8 +1591,6 @@ function buildYearSummary(results, year) {
   const newShops = new Set();
   let itemCount = 0;
   let giftItemCount = 0;
-  let boost = 0;
-  let boostItemCount = 0;
   for (const result of valid) {
     if (!Array.isArray(result.items)) continue;
     for (const item of result.items) {
@@ -1563,13 +1602,6 @@ function buildYearSummary(results, year) {
       const count = typeof quantity === "number" ? quantity : 0;
       itemCount += count;
       if (item.gift) giftItemCount += count;
-      // BOOSTは今のところ画面にも共有文面にも出していない(使う人が少なく、
-      // 「支援した作者」と語がぶつかるため一旦外した)。集計だけは残してある。
-      // 0円のBOOSTは「応援した」と数えない。金額の行は常に出るため
-      if (typeof item.boost === "number" && item.boost > 0) {
-        boost += item.boost;
-        boostItemCount += 1;
-      }
     }
   }
 
@@ -1599,8 +1631,6 @@ function buildYearSummary(results, year) {
     detailPendingCount,
     itemCount,
     giftItemCount,
-    boost,
-    boostItemCount,
     shopCount: shops.size,
     newShopCount: newShops.size,
     beforePending,

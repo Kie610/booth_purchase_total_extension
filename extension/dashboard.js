@@ -10,13 +10,11 @@ const REQUEST_INTERVAL_MIN_MS = 250;
 const REQUEST_INTERVAL_MAX_MS = 350;
 const REQUEST_INTERVAL_AVERAGE_MS =
   (REQUEST_INTERVAL_MIN_MS + REQUEST_INTERVAL_MAX_MS) / 2;
-// 取得途中で中断されても失わないよう小まめに保存する。ただし saveCache() は
-// キャッシュ全体を書き直すので、間隔を固定にするとn件の収集で書き込み量が
-// O(n²/間隔)になる。間隔を件数に比例させると全体の書き込み量が件数に対して
-// 線形に近づく(20回前後の保存に収まる)。
-// 上限を50件で切るのは、中断時に取り直しになる範囲を抑えるため。
-// 1件あたり約0.3秒なので、最悪でも15秒ぶんの取得をやり直すだけで済む。
-// 下限の5件は、件数が少ないときに従来と同じ細かさを保つための値
+// 取得途中の中断で取り直す範囲を抑えるため、5〜50件ごとに保存を開始する。
+// saveCache() は全量を書き直す。間隔は件数に比例させるが50件で頭打ちになるため、
+// 大規模収集の累積書込み量は O(n²/間隔)。1万件の正常取得では定期保存が200回になる。
+// 未保存の範囲は書込み完了状況に依存する。要求間の待機は平均0.3秒だが、
+// 通信・解析・再試行もあるため、失う取得時間の上限は保証しない。
 const CACHE_FLUSH_MIN = 5;
 const CACHE_FLUSH_MAX = 50;
 
@@ -33,14 +31,18 @@ const RUN_LOCK_OWNER_ID =
     : `${Date.now()}-${Math.random()}`;
 
 let running = false;
+let migrationBlocked = false;
 let abortController = null;
 let lastRunStateWrite = 0;
 let runLockHeartbeatTimer = null;
-// avatarAssign は D14 沼レポートの手動割り当て。集計結果ではなく本人の指定なので、
+// avatarAssign は沼レポートの手動割り当て。集計結果ではなく本人の指定なので、
 // キャッシュ削除や再収集では消さない(消すと割り当て直しになる)
-// giftStatus は贈ったギフトの受取状況。注文キャッシュとは別に保存し、注文の
-// 取り直しや金額の削除では消さない(受取済みは確定した事実なので取り直す理由が無い)
-const state = { index: null, cache: {}, avatarAssign: {}, giftStatus: {} };
+// giftStatus は贈ったギフトの受取状況とメモ。注文キャッシュとは別に保存し、
+// 注文の取り直しや金額の削除では消さない。通常確認では受取済みを除外するが、
+// キャッシュを無視する再取得では受取済みを含めてメモも取り直す。
+const state = { index: null, cache: {}, avatarAssign: {}, giftStatus: {}, migrationConflicts: {} };
+const DATA_STORAGE_KEYS = [INDEX_KEY, CACHE_KEY, AVATAR_ASSIGN_KEY, GIFT_STATUS_KEY,
+  DATA_VERSION_KEY, MIGRATION_CONFLICTS_KEY];
 
 // 描画1回のあいだ使い回す buildResults() の結果。
 // buildResults() は注文数に比例して新しい配列を組み立てるため、各描画関数が
@@ -159,38 +161,41 @@ window.addEventListener("hashchange", () => {
 // 一瞬だけレポート画面が見えてしまう
 renderCurrentView();
 
-// D16 絞り込み中は、CSVの中身(集計対象の列)にもファイル名にも同じ印を付ける
+// 出力時にもロック内で最新データを読み、別タブで更新された注文やメモを含める。
+function currentBackup() {
+  return buildBackup(state.index, state.cache, undefined, state.avatarAssign,
+    state.giftStatus, state.migrationConflicts);
+}
 exportOrdersBtn.addEventListener("click", () =>
-  downloadCsv(
-    buildOrdersCsv(currentResults(), giftFilter),
+  runTask(() => downloadCsv(
+    buildOrdersCsv(currentResults(), giftFilter, currentBackup()),
     csvFileName("orders", undefined, giftFilter)
-  )
+  ), { persistCache: false })
 );
 
 exportItemsBtn.addEventListener("click", () =>
-  downloadCsv(
-    buildItemsCsv(currentResults(), giftFilter),
+  runTask(() => downloadCsv(
+    buildItemsCsv(currentResults(), giftFilter, currentBackup()),
     csvFileName("items", undefined, giftFilter)
-  )
+  ), { persistCache: false })
 );
 
-backupSaveBtn.addEventListener("click", () =>
-  downloadFile(
-    JSON.stringify(
-      buildBackup(state.index, state.cache, undefined, state.avatarAssign),
-      null,
-      1
-    ),
-    backupFileName(),
-    "application/json"
-  )
-);
+backupSaveBtn.addEventListener("click", async () => {
+  if (running) return;
+  try {
+    const data = await readExportDomain();
+    downloadFile(JSON.stringify(buildBackup(data.index, data.cache, undefined,
+      data.avatarAssign, data.giftStatus, data.migrationConflicts), null, 1), backupFileName(), "application/json");
+  } catch (err) {
+    showError(`バックアップを書き出せませんでした: ${err.message || String(err)}`);
+  }
+});
 
 // 読み込みは、形を確かめてから今のデータと併合する。入れ替えにすると、
 // 古いバックアップを読んだときに今あるものを失う
 restoreFile.addEventListener("change", async () => {
-  const file = restoreFile.files && restoreFile.files[0];
-  if (!file) return;
+  const files = Array.from(restoreFile.files || []);
+  if (!files.length) return;
   if (running) {
     restoreStatus.classList.add("warn");
     restoreStatus.textContent = "収集の実行中は復元できません。終わってからもう一度選択してください。";
@@ -200,34 +205,32 @@ restoreFile.addEventListener("change", async () => {
   restoreStatus.classList.remove("warn");
   restoreStatus.textContent = "読み込んでいます...";
 
-  let parsed;
+  const parsedFiles = [];
   try {
-    parsed = parseBackup(await file.text());
+    for (const file of files) {
+      const parsed = parseImportFile(await file.text(), file.name);
+      if (!parsed.ok) throw new Error(`${file.name}: ${parsed.message}`);
+      parsedFiles.push(parsed);
+    }
   } catch (err) {
-    parsed = { ok: false, message: "ファイルを開けませんでした。" };
-  }
-  if (!parsed.ok) {
     restoreStatus.classList.add("warn");
-    restoreStatus.textContent = parsed.message;
+    restoreStatus.textContent = err.message || "ファイルを開けませんでした。";
     restoreFile.value = "";
     return;
   }
 
-  const merged = mergeBackup(state, parsed);
-  state.index = merged.index;
-  state.cache = merged.cache;
-  state.avatarAssign = merged.avatarAssign;
-  if (state.index) await saveIndex(state.index);
-  await saveCache(state.cache);
-  await saveAvatarAssign(state.avatarAssign);
-  await saveSummary(buildSummary(false));
-  render();
-
-  restoreStatus.textContent =
-    `復元しました。注文が${merged.addedOrders}件、収集済みの金額が${merged.addedAmounts}件増えました` +
-    (merged.addedAssign > 0 ? `(アバターの割り当ても${merged.addedAssign}件増えました)` : "") +
-    (parsed.exportedAt ? `(バックアップ日時: ${formatTimestamp(parsed.exportedAt)})` : "") +
-    "。";
+  const result = await runTask(async () => {
+    let merged = state;
+    for (const parsed of parsedFiles) merged = mergeBackup(merged, parsed);
+    await persistDomainData(domainStorage(state), merged);
+    applyDomainData(merged);
+  }, { persistCache: false });
+  const warnings = [...new Set(parsedFiles.flatMap((parsed) => parsed.warnings))];
+  restoreStatus.classList.toggle("warn", result.failed || warnings.length > 0);
+  restoreStatus.textContent = result.failed ?
+    (result.locked ? "別の集計ページが処理中です。完了後にもう一度選択してください。" :
+      "復元を完了できませんでした。上のエラーを確認してください。保存途中のデータは次回起動時に復旧します。") :
+    `${files.length}ファイルを復元しました。既存のデータと併合しました。` + warnings.join(" ");
   restoreFile.value = "";
 });
 
@@ -745,12 +748,11 @@ avatarSortToggle.addEventListener("click", (event) => {
   if (btn) setAvatarSort(btn.dataset.sort);
 });
 
-// D14 未分類の手動割り当て。保存を待たずに描き直す(待つと選んでから
-// 反映まで間が空き、効かなかったように見える)。保存に失敗してもその場の表示は残る
+// 手動割り当ても復元・収集と直列化し、最新の保存値へ選んだ商品だけを反映する。
 // D22 区分(select)と特定アバター(datalist付きの入力欄)のどちらからでも決められる。
 // 片方を決めたらもう片方は空へ戻す。両方に値が残ると、どちらが効いているのか
 // 画面から読めなくなる(保存できるのは商品ごとに1つだけ)
-avatarAssignBody.addEventListener("change", (event) => {
+avatarAssignBody.addEventListener("change", async (event) => {
   const control = event.target.closest("[data-product-key]");
   if (!control) return;
   const row = control.closest("tr");
@@ -770,10 +772,13 @@ avatarAssignBody.addEventListener("change", (event) => {
   const key = control.dataset.productKey;
   // 「未分類のまま」は指定を持たない状態そのもの。空文字を保存すると
   // 「未分類だと明示した」という別の状態が増えてしまうので、項目ごと消す
-  if (value) state.avatarAssign[key] = value;
-  else delete state.avatarAssign[key];
-  render();
-  saveAvatarAssign(state.avatarAssign);
+  await runTask(async () => {
+    const next = { ...state.avatarAssign };
+    if (value) next[key] = value;
+    else delete next[key];
+    await saveAvatarAssign(next);
+    state.avatarAssign = next;
+  }, { persistCache: false });
 });
 
 // D18 沼レポートの「再集計」。**BOOTHへは通信しない。**保存済みのデータを読み直して
@@ -783,10 +788,7 @@ avatarAssignBody.addEventListener("change", (event) => {
 avatarRecountBtn.addEventListener("click", async () => {
   avatarRecountBtn.disabled = true;
   try {
-    state.index = await loadIndex();
-    state.cache = await loadCache();
-    state.avatarAssign = await loadAvatarAssign();
-    render();
+    await runTask(() => {}, { persistCache: false });
   } finally {
     avatarRecountBtn.disabled = false;
     avatarRecountBtn.focus();
@@ -824,8 +826,8 @@ clearIndexBtn.addEventListener("click", async () => {
     "削除する"
   );
   if (!ok) return;
-  await clearIndexData();
-  showNotice(`注文履歴のキャッシュを削除しました(${count}件)。`);
+  const result = await runTask(clearIndexData, { persistCache: false });
+  if (!result.failed) showNotice(`注文履歴のキャッシュを削除しました(${count}件)。`);
 });
 
 clearAmountsBtn.addEventListener("click", async () => {
@@ -837,8 +839,8 @@ clearAmountsBtn.addEventListener("click", async () => {
     "削除する"
   );
   if (!ok) return;
-  await clearAmountsData();
-  showNotice(`収集した金額のキャッシュを削除しました(${count}件)。`);
+  const result = await runTask(clearAmountsData, { persistCache: false });
+  if (!result.failed) showNotice(`収集した金額のキャッシュを削除しました(${count}件)。`);
 });
 
 abortBtn.addEventListener("click", () => {
@@ -938,14 +940,83 @@ async function init() {
     if (running) clearRunState();
   });
 
-  state.index = await loadIndex();
-  state.cache = await loadCache();
-  state.avatarAssign = await loadAvatarAssign();
-  state.giftStatus = await loadGiftStatus();
-  render();
+  await runTask(() => {}, { persistCache: false });
 }
 
 // ---- 保存データの操作 --------------------------------------------------
+
+function domainStorage(data) {
+  return { [INDEX_KEY]: data.index, [CACHE_KEY]: data.cache,
+    [AVATAR_ASSIGN_KEY]: data.avatarAssign || {}, [GIFT_STATUS_KEY]: data.giftStatus || {},
+    [DATA_VERSION_KEY]: DATA_VERSION, [MIGRATION_CONFLICTS_KEY]: data.migrationConflicts || {} };
+}
+
+function parseStoredDomain(raw) {
+  const parsed = parseBackup(JSON.stringify({ ...raw,
+    [INDEX_KEY]: raw[INDEX_KEY] ?? null, [CACHE_KEY]: raw[CACHE_KEY] ?? {} }));
+  if (!parsed.ok) throw new Error(`保存データを読み込めません: ${parsed.message}`);
+  return parsed;
+}
+
+function applyDomainData(data) {
+  for (const key of ["index", "cache", "avatarAssign", "giftStatus", "migrationConflicts"]) {
+    state[key] = data[key] ?? (key === "index" ? null : {});
+  }
+  refreshResults();
+}
+
+// 原本と適用先を先に記録する。容量不足などで失敗したら、この記録を残して停止する。
+// 再起動では同じ適用先で完了させるため、途中の原本を上書きしない。
+async function finishPendingMigration(pending) {
+  if (!isObject(pending) || !isObject(pending.before) || !isObject(pending.after)) {
+    throw new Error("復旧用の保存データが壊れています。バックアップを保管してから確認してください。");
+  }
+  const after = parseStoredDomain(pending.after);
+  await ext.storage.local.set(domainStorage(after));
+  // 完了後は同じキー内に原本だけを残す。別キーへの原本複製による容量増加を避ける。
+  await ext.storage.local.set({ [MIGRATION_JOURNAL_KEY]: { before: pending.before, complete: true } });
+  return after;
+}
+
+async function persistDomainData(before, after) {
+  // 保存する側も検証する。復元ファイル群を併合した結果に不正値があれば原本へ触れない。
+  const validated = parseStoredDomain(domainStorage(after));
+  const pending = { before, after: domainStorage(validated) };
+  await ext.storage.local.set({ [MIGRATION_JOURNAL_KEY]: pending });
+  return finishPendingMigration(pending);
+}
+
+async function loadCurrentDomain() {
+  const raw = await ext.storage.local.get([...DATA_STORAGE_KEYS, MIGRATION_JOURNAL_KEY]);
+  if (raw[MIGRATION_JOURNAL_KEY] && !raw[MIGRATION_JOURNAL_KEY].complete) return finishPendingMigration(raw[MIGRATION_JOURNAL_KEY]);
+  const data = parseStoredDomain(raw);
+  if (raw[DATA_VERSION_KEY] !== DATA_VERSION) {
+    const before = Object.fromEntries(DATA_STORAGE_KEYS.filter((key) => Object.hasOwn(raw, key)).map((key) => [key, raw[key]]));
+    const after = domainStorage(data);
+    // 版の記録と省略項目の追加だけなら取得値は変更しない。原本を丸ごと複製すると、
+    // 容量上限近くの既存利用者が内容の変わらない移行さえ完了できなくなる。
+    const changesExisting = Object.keys(before).some((key) => key !== DATA_VERSION_KEY &&
+      JSON.stringify(before[key]) !== JSON.stringify(after[key]));
+    if (!changesExisting) {
+      await ext.storage.local.set(Object.fromEntries(Object.entries(after)
+        .filter(([key]) => key === DATA_VERSION_KEY || !Object.hasOwn(before, key))));
+      return data;
+    }
+    return persistDomainData(before, data);
+  }
+  return data;
+}
+
+// 保存容量不足でもJSONを持ち出せる。未完了の両側も純粋変換で併合し、保存はしない。
+async function readExportDomain() {
+  const raw = await ext.storage.local.get([...DATA_STORAGE_KEYS, MIGRATION_JOURNAL_KEY]);
+  let data = parseStoredDomain(raw);
+  const pending = raw[MIGRATION_JOURNAL_KEY];
+  if (pending && !pending.complete) {
+    for (const values of [pending.before, pending.after]) data = mergeBackup(data, parseStoredDomain(values));
+  }
+  return data;
+}
 
 async function clearIndexData() {
   state.index = null;
@@ -1049,8 +1120,9 @@ function buildAllResults() {
       };
     });
   }
-  // 索引が無い場合はキャッシュだけで表示する
-  return Object.entries(state.cache).map(([id, entry]) => ({
+  // 索引が無い場合はキャッシュだけで表示する。キャンセルの除外は索引がある経路
+  // (targetOrders)と同じ規則で掛ける。状態が不明な注文はキャンセル扱いにしない
+  return Object.entries(state.cache).filter(([, entry]) => !EXCLUDED_STATUSES.has(entry.status)).map(([id, entry]) => ({
     id,
     date: entry.date,
     status: entry.status,
@@ -1093,10 +1165,10 @@ function buildSummary(partial) {
 
 // 呼び出し側が「やり切れたか」で分岐できるよう結果を返す
 // (共有は、中断や失敗のあとに投稿画面を開かないようにするために使う)
-async function runTask(task) {
+async function runTask(task, options = {}) {
   if (running) return { aborted: false, failed: true };
 
-  const execute = () => runTaskWithLease(task);
+  const execute = () => runTaskWithLease(task, options);
   if (
     globalThis.navigator &&
     globalThis.navigator.locks &&
@@ -1123,8 +1195,15 @@ function lockedRunResult() {
   return { aborted: false, failed: true, locked: true };
 }
 
-async function runTaskWithLease(task) {
-  if (!(await acquireRunLock(RUN_LOCK_OWNER_ID))) return lockedRunResult();
+async function runTaskWithLease(task, { persistCache = true } = {}) {
+  try {
+    if (!(await acquireRunLock(RUN_LOCK_OWNER_ID))) return lockedRunResult();
+  } catch (err) {
+    migrationBlocked = true;
+    showError(`保存データへアクセスできません: ${err.message || String(err)}`);
+    render();
+    return { aborted: false, failed: true };
+  }
   setRunning(true);
   clearError();
   clearNotice();
@@ -1138,10 +1217,15 @@ async function runTaskWithLease(task) {
   }, RUN_LOCK_HEARTBEAT_MS);
   let aborted = false;
   let failed = false;
+  let loaded = false;
 
   try {
+    applyDomainData(await loadCurrentDomain());
+    loaded = true;
+    migrationBlocked = false;
     await task(abortController.signal);
   } catch (err) {
+    if (!loaded) migrationBlocked = true;
     if (err.name === "AbortError") {
       aborted = true;
     } else {
@@ -1150,7 +1234,10 @@ async function runTaskWithLease(task) {
     }
   } finally {
     try {
-      await saveCache(state.cache);
+      if (loaded && persistCache) await saveCache(state.cache);
+    } catch (err) {
+      failed = true;
+      showError(`保存できませんでした: ${err.message || String(err)}`);
     } finally {
       if (runLockHeartbeatTimer !== null) clearInterval(runLockHeartbeatTimer);
       runLockHeartbeatTimer = null;
@@ -1166,7 +1253,14 @@ async function runTaskWithLease(task) {
   }
 
   render();
-  await saveSummary(buildSummary(aborted));
+  if (loaded && !failed) {
+    try {
+      await saveSummary(buildSummary(aborted));
+    } catch (err) {
+      failed = true;
+      showError(`集計結果を保存できませんでした: ${err.message || String(err)}`);
+    }
+  }
 
   if (aborted) {
     // 一括集計で①まで終わっている場合は、その結果も残したいので書き足す
@@ -1439,6 +1533,15 @@ async function pruneCacheAfterFullIndexRefresh() {
     Object.entries(state.cache).filter(([id]) => activeIds.has(id))
   );
   if (Object.keys(kept).length === Object.keys(state.cache).length) return;
+  // 集計対象から外れても、復元した原票や明細は出力可能な相違データへ残す。
+  // 退避が保存できるまではcacheを削らない。
+  const archived = { ...state.migrationConflicts?.cache };
+  for (const [id, entry] of Object.entries(state.cache)) {
+    if (!activeIds.has(id)) archived[id] = mergeOccurrences(archived[id], [entry]);
+  }
+  const conflicts = { ...state.migrationConflicts, cache: archived };
+  await writeStored(MIGRATION_CONFLICTS_KEY, conflicts);
+  state.migrationConflicts = conflicts;
   state.cache = kept;
   await saveCache(state.cache);
 }
@@ -1642,15 +1745,22 @@ async function collectAmounts(orders, force, signal) {
       try {
         const doc = await fetchDocWithRetry(`${ORDER_DETAIL_URL}${order.id}`, signal);
         const detail = parseDetailPage(doc);
-        state.cache[order.id] = {
-          v: CACHE_SCHEMA_VERSION,
+        const previous = state.cache[order.id];
+        const collectionFailed = detail.amount === null || detail.items === null;
+        state.cache[order.id] = mergeCacheEntry({
+          v: collectionFailed ? entrySchemaVersion(previous) : CACHE_SCHEMA_VERSION,
           amount: detail.amount,
           gift: detail.gift,
           status: order.status,
           date: order.date,
           items: detail.items,
-          shipping: detail.shipping,
-        };
+          shipping: detail.items === null ? null : detail.shipping,
+          collectionFailed,
+          partialItems: false,
+        }, previous);
+        // 読み取り失敗を既知値で補っても、取得済みにはせず再試行対象に残す。
+        state.cache[order.id].collectionFailed = collectionFailed;
+        if (collectionFailed && previous?.partialItems) state.cache[order.id].partialItems = true;
         done++;
         attempted++;
         // 取得できたのに読み取れていない注文。セレクタ漂流はここに固まって出る
@@ -1735,9 +1845,9 @@ function requestGiftPagePermission() {
   return ext.permissions.request({ origins: [GIFT_PAGE_ORIGIN] });
 }
 
-// (b) 選択した月の範囲にある未確認・未受取のギフトについてギフト管理ページを読み、
-// 受取状況を保存する。受取済みは確定なので対象に入らない(giftIdsToCheck)。
-// 対象は画面の予定件数と同じ plannedGiftIds() から取る(表示と実際の件数をずらさない)
+// 選択範囲のギフト管理ページを読み、受取状況とメモを保存する。
+// 通常確認は未確認・未受取を対象とし、キャッシュ無視では受取済みも含める。
+// 対象は画面の予定件数と同じ plannedGiftIds() から取る。
 async function checkGiftStatusTask(signal) {
   if (!giftRangeFrom.value || !giftRangeTo.value) {
     showNotice("確認する範囲を選択してください。");

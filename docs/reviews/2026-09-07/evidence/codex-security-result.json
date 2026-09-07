@@ -1,0 +1,408 @@
+{
+  "scanId": "a7ee0ead-e497-4442-baf6-4376638a13fc",
+  "manifest": {
+    "documentType": "codex-security.scan-manifest",
+    "scan": {
+      "artifacts": [
+        {
+          "mediaType": "application/json",
+          "path": "findings.json",
+          "sha256": "c7ea0987da6dd23561ec14e427564c8980cae447cca2ace3e8283fc57a97f315"
+        },
+        {
+          "mediaType": "application/json",
+          "path": "coverage.json",
+          "sha256": "9af3868e9bb4542ff029a871c48f274cdadeebb86f3bc00b97de458caca2f16b"
+        }
+      ],
+      "completedAt": "2026-09-06T16:34:51.919318Z",
+      "coverageRef": "coverage.json",
+      "findingsRef": "findings.json",
+      "id": "a7ee0ead-e497-4442-baf6-4376638a13fc",
+      "preservedSources": {
+        "checkpoints/01074974eb5248fee8e9f5a7dc57de61da9e5ccf9cd35008a0591285d5c4b5dd.json": "28c1fb1d486f0c20d6127301dc5b5643df90277f6c652438ef8a1348bf285cf9",
+        "checkpoints/3e18ec10f2d196ba443f042d7ea4693608fd349a8c0c5cbd6759469d168dca7f.json": "cfcaf0d6640e3407f73328a47019447ba332415bb953ba2f377bcd446007df05",
+        "checkpoints/5a97f805444b2b60e40c52c3d742b87f32300290b5225c149001b3dd62b7c972.json": "96a464b7a22ab4a60af2d21bc9122e52d143b575b01860d3ed73ac7bd07d8150",
+        "checkpoints/61a225d7c917d9d73c73c146fea9a047d08318a16c0b791562b919a6538baee4.json": "cc733c935eb8253e1009d6eaa57122133572e55d11eaf41dfd0bf0d695d1ef7c",
+        "checkpoints/6f790cc1d0e1800cd791139d2ebfba70050d96515e37b2d6c2ae89d5024bd8c1.json": "6f790cc1d0e1800cd791139d2ebfba70050d96515e37b2d6c2ae89d5024bd8c1"
+      },
+      "producer": {
+        "name": "codex-security-plugin",
+        "version": "0.1.23"
+      },
+      "scope": {
+        "excludePaths": [],
+        "includePaths": [
+          "."
+        ],
+        "limitations": [
+          "新規fresh-context baseline起動はagent thread limit reachedで失敗。既存の独立担当と親のソース検品を継続。",
+          "TAC status not_granted、grantsなし。",
+          "自動初期化停止フラグは空属性判定の不整合があり、テストの購入データ隔離はAPIスタブによる。",
+          "同一originの注文取得URLの影響に未解決点があるためcoverageはpartial。"
+        ],
+        "runtimeStatus": "Chrome152のローカルHTTPスタブのみ。実拡張・実BOOTH・実Excel未実行。",
+        "summary": "BOOTHお買いものレポート v1.2.0 の現在の製品・テスト・開発ツール。実行ソース25ファイルを全文で静的監査し、別のローカル合成検証を親が検品した。",
+        "validationMode": "static-source-and-local-synthetic-checks"
+      },
+      "sealedAt": "2026-09-06T16:34:51.919318Z",
+      "startedAt": "2026-09-06T16:15:59.393155Z",
+      "status": "completed",
+      "target": {
+        "displayName": "booth_purchase_total_extension",
+        "kind": "git_revision",
+        "revision": "ed324dfd93dc22aa1dffc74df4b412bb8f88ec4a",
+        "targetId": "target_sha256_ef2ceb25dde5d2b53c49a01720c2b93c8faaf6e2cd897c950c292ed0d26cdadf"
+      },
+      "threatModel": {
+        "assets": [
+          "C: 注文ID・日時・金額・商品・ショップ、手動分類、ギフトUUID・受取状況・メモ、実行状態。extension/common.js:7、extension/dashboard.js:1644、extension/dashboard.js:1764",
+          "C: BOOTHへの資格情報付き通信権限、ユーザーが出力する購入履歴・共有内容。extension/manifest.json:25、extension/dashboard.js:1308、extension/dashboard.js:177"
+        ],
+        "assumptions": [
+          "C: アーキテクチャはソース読解。fresh-context独立性、実拡張の境界保証、BOOTH通信は未検証。通常起動はinit。テストはstubで購入データを隔離するが、data-no-auto-initの空属性は真偽値ガードを止めない。extension/dashboard.js:112,906、test/index.html:11,331",
+          "C: 注文通信は必須権限accounts.booth.pm、ギフト通信はoptional booth.pm、credentials:include。通常の宛先は/orders[?page=N|/ID]と/gifts/UUID/edit。extension/manifest.json:25、extension/dashboard.js:1308,1643,1761",
+          "C: storage.localはboothOrderCache/boothOrderIndex/boothSummary/boothRunState/boothRunLock/boothDashboardTab/boothTheme/boothAvatarAssign/boothGiftStatus。localStorageにはboothThemeMirror。同じ拡張のdashboard/popupが消費する。extension/common.js:7,1613,1642、extension/popup.js:26",
+          "C: バックアップv1はindex/cache/avatarAssignを含み、giftStatus/メモを含まない。画面の『金額だけ』説明より範囲が広い。CSVはBOM付き、Xはintent/post?text。extension/backup.js:16、extension/csv.js:16、extension/dashboard.html:676、extension/dashboard.js:796",
+          "C: 配布ZIPの出力先は既定repo/dist、OutputDirectoryで相対/絶対指定可。既存出力はForceなしで拒否しSHA-256を作る。ユーザーOS権限のローカル処理でありブラウザ入力の境界ではない。tools/release.ps1:3,9,23,43,76",
+          "U: DOMParserのサブリソース抑止は全ブラウザの保証とは断定しない。親のChrome152 headlessでは700ms中0要求。extension/dashboard.js:1316"
+        ],
+        "attackerCapabilities": [
+          "A: 商品情報等の外部文字列、利用者に選択させたJSON/画像を制御できる相手を想定。入力経路は存在するが、実際の制御者・到達条件は別途確認が必要。extension/dashboard-parse.js:124、extension/dashboard.js:191、extension/dashboard.js:587",
+          "A: 通常のウェブ閲覧者にstorage編集・拡張コード実行・リリース権限は与えない前提。OS/ブラウザ/拡張自体の侵害は別脅威。extension/manifest.json:22、tools/release.ps1:76"
+        ],
+        "securityObjectives": [
+          "購入データの正確性・保存形式の互換性を保ち、不完全な結果を完全と見せない。",
+          "外部入力を実行権限へ昇格させず、共有・復元・取得の対象と利用者の操作を対応させる。extension/backup.js:86、extension/dashboard.js:1735、extension/dashboard.js:696"
+        ],
+        "summary": "C: MV3拡張。popupからdashboardを開き、BOOTH HTMLを取得・解析してローカル保存し、集計・CSV/JSON/共有画像を作る。外部サーバー部品は構成されていない。extension/manifest.json:1、extension/common.js:1818、extension/dashboard.js:1307、extension/dashboard.html:995",
+        "trustBoundaries": [
+          "C: BOOTH HTML→拡張の解析DOM→表示/保存。fetchとDOMParserを使用し、通常の文字表示はtextContent。extension/dashboard.js:1307、extension/dashboard-parse.js:3、extension/dashboard-view.js:556",
+          "C: ユーザー選択JSON→形式・型検証→既存データとの併合→storage。画像ファイル→createImageBitmap→タブ内共有背景。extension/dashboard.js:191、extension/backup.js:86、extension/dashboard.js:587",
+          "C: 拡張→ダウンロード先・クリップボード・X。出力後の処理は別アプリ/サービスの権限に属する。extension/dashboard.js:245、extension/dashboard.js:341、extension/dashboard.js:686、extension/dashboard.js:796",
+          "C: 製品のブラウザ権限と、開発者がPowerShellでZIPを生成するOS権限は別。testはAPIスタブを使う別起動経路。tools/release.ps1:9、test/index.html:331"
+        ]
+      }
+    },
+    "schemaVersion": "1.0"
+  },
+  "findings": {
+    "documentType": "codex-security.findings",
+    "findings": [
+      {
+        "attackPath": {
+          "dataflow": {
+            "evidenceRefs": [
+              "input",
+              "shop",
+              "propagation",
+              "root"
+            ],
+            "outcome": "表示用の名称が式として扱われ得る。拡張内でのコード実行はない。",
+            "sink": "表計算アプリのCSVセル解釈",
+            "source": "BOOTHの商品名・ショップ名文字列",
+            "summary": "BOOTH HTMLの商品名/ショップ名→item→state.cache→buildItemsCsv→csvField→CSV→表計算アプリ"
+          },
+          "impact": {
+            "level": "medium",
+            "why": "第三者の文字列が下流アプリの式として処理される可能性。具体的な情報流出は未検証。"
+          },
+          "likelihood": {
+            "level": "medium",
+            "why": "Excel利用は画面で案内されるが、BOOTHの名称制約と利用者の操作を要する。"
+          },
+          "limitations": [
+            "CSV引用処理は存在する。",
+            "テキスト読込やアプリ側の保護設定が影響を制限し得る。"
+          ],
+          "reachability": {
+            "attacker": "商品名またはショップ名を制御できる相手",
+            "entrypoint": "BOOTH注文HTMLと商品CSV出力",
+            "outcome": "名称を式の構文へ渡せる。",
+            "summary": "販売者由来の名称が命名制約を通り、利用者がCSVを数式として読むアプリで開くことが前提。"
+          },
+          "summary": "商品情報を制御できる相手の名称を利用者が収集し、商品CSVを保存して表計算アプリで開く場合に発生し得る。利用者の操作と対象アプリの数式解釈が必要。"
+        },
+        "codeEvidence": [
+          {
+            "code": "  const item = {\n    shop: shop.name,\n    shopUrl: shop.url,\n    name: link.textContent.trim(),\n    price,",
+            "endLine": 155,
+            "explanation": "取得した商品名を文字列としてitem.nameへ保存する。",
+            "id": "input",
+            "label": "外部の商品名",
+            "language": "javascript",
+            "path": "extension/dashboard-parse.js",
+            "role": "user_input",
+            "startLine": 151
+          },
+          {
+            "code": "  for (const section of doc.querySelectorAll(SHOP_SECTION_SELECTOR)) {\n    const link = section.querySelector(SHOP_NAME_SELECTOR);\n    const shop = {\n      name: link ? link.textContent.trim() : \"\",\n      // 表示名は変わることがあるので、集計の同一性はURLで判断できるようにしておく\n      url: link ? link.getAttribute(\"href\") || \"\" : \"\",",
+            "endLine": 219,
+            "explanation": "ショップ表示名をHTMLから取得し、商品明細のshopフィールドへ渡す。",
+            "id": "shop",
+            "label": "外部のショップ名",
+            "language": "javascript",
+            "path": "extension/dashboard-parse.js",
+            "role": "user_input",
+            "startLine": 214
+          },
+          {
+            "code": "    for (const item of r.items) {\n      rows.push([\n        ...head,\n        item.shop,\n        item.shopUrl,\n        item.name,\n        csvNumber(item.price),\n        csvNumber(itemQuantity(item)),\n        csvNumber(item.boost),",
+            "endLine": 100,
+            "explanation": "商品名とショップ名を文字列列として共通CSV変換へ渡す。",
+            "id": "propagation",
+            "label": "CSV文字列列への受け渡し",
+            "language": "javascript",
+            "path": "extension/csv.js",
+            "role": "propagation",
+            "startLine": 92
+          },
+          {
+            "code": "function csvField(value) {\n  const text = value === null || value === undefined ? \"\" : String(value);\n  return /[\",\\r\\n]/.test(text) ? `\"${text.replace(/\"/g, '\"\"')}\"` : text;\n}\n\nfunction toCsv(rows) {\n  return CSV_BOM + rows.map((row) => row.map(csvField).join(\",\")).join(\"\\r\\n\");",
+            "endLine": 17,
+            "explanation": "区切りと引用符は保護するが、等号で始まる内容はそのまま下流の表計算アプリへ渡る。",
+            "id": "root",
+            "label": "CSV引用だけを行う共通関数",
+            "language": "javascript",
+            "path": "extension/csv.js",
+            "role": "root_control",
+            "startLine": 11
+          }
+        ],
+        "confidence": {
+          "level": "medium",
+          "rationale": "ソースの値の流れと合成CSVで未変換を確認。実BOOTHの入力制約と表計算アプリの実行は未確認。"
+        },
+        "findingId": "csf_633c8caa901d7592a4593214",
+        "fingerprints": {
+          "algorithm": "codex-security/v1",
+          "primary": "codex-security/v1:sha256:89c68d13b9bde8e9d2479a79c1851083f24267880cf3cffd87b2695d8fda8e39"
+        },
+        "identity": {
+          "anchor": "csv"
+        },
+        "locations": [
+          {
+            "endLine": 13,
+            "path": "extension/csv.js",
+            "role": "root_control",
+            "startLine": 11
+          },
+          {
+            "endLine": 100,
+            "path": "extension/csv.js",
+            "role": "sink",
+            "startLine": 92
+          },
+          {
+            "endLine": 155,
+            "path": "extension/dashboard-parse.js",
+            "role": "source",
+            "startLine": 151
+          },
+          {
+            "endLine": 219,
+            "path": "extension/dashboard-parse.js",
+            "role": "source",
+            "startLine": 214
+          }
+        ],
+        "occurrenceId": "occ_38f9ee67af63dba69f0b8639",
+        "preventiveControls": [
+          "CSVの構文エスケープと数式対策を別の境界として検証する。"
+        ],
+        "provenance": {
+          "candidateId": "csv-formula-export",
+          "originalCandidates": [
+            {
+              "candidateId": "csv-formula-export",
+              "confidence": "medium",
+              "controls": [
+                "明示操作で出力",
+                "CSV列構造の引用",
+                "第三者共有禁止注意"
+              ],
+              "counterevidence": [
+                "BOOTH名称制約は未検証",
+                "テキスト読込なら数式不実行",
+                "表計算の保護設定は効果があり得る",
+                "任意コード実行/情報流出は未確認"
+              ],
+              "cwe": "CWE-1236",
+              "evidence": "合成ショップ名=1+1と商品名=2+2が未変換。=SUM(1,2)はCSV引用だけ。dashboard.html:635がExcel用途を明示。",
+              "impact": "medium",
+              "likelihood": "medium",
+              "recommendation": "文字列列へ対象アプリで検証した対策を適用し、数値列は保持。",
+              "severity": "low",
+              "sourceToSink": [
+                "dashboard-parse.js:154,217 textContent.trim()",
+                "dashboard.js:1643-1652 cache",
+                "dashboard.js:170 CSV保存操作",
+                "csv.js:83-108 buildItemsCsv",
+                "csv.js:11-17 csvField/toCsv",
+                "dashboard.js:236-245 Blob",
+                "表計算アプリ"
+              ],
+              "title": "商品名・ショップ名の数式を無害化せずCSVへ出力する"
+            },
+            {
+              "counterevidence": "表計算アプリ実行・BOOTH命名制約は未検証。列構造は引用で保護される。",
+              "evidence": "extension/csv.js:11-17 は引用だけを行う。商品名/ショップ名→buildItemsCsv:93-99→csvField。合成文字列=1+1が未変換で出力される。",
+              "title": "文字列列のCSV出力に数式対策がない"
+            }
+          ],
+          "source": "local_plugin"
+        },
+        "remediation": "文字列列と数値列を区別し、文字列列を数式として解釈させない出力規則を対象アプリで検証して適用する。数値列の集計可能性と既存CSV利用者への互換性を維持する。",
+        "remediationTests": [
+          "通常名、等号等の開始文字、制御文字、引用符、改行を含む名称で文字列解釈を確認する。",
+          "数値列が数値のままであることを確認する。",
+          "対象表計算アプリで初回開封・保存・再開封を検証する。"
+        ],
+        "rootCause": {
+          "evidenceRefs": [
+            "input",
+            "shop",
+            "propagation",
+            "root"
+          ],
+          "summary": "商品名とショップ名はBOOTH HTMLのtextContentから保存され、buildItemsCsvが文字列列へ渡す。toCsvは全列をcsvFieldへ渡し、csvFieldは区切り・引用符・改行を引用するだけなので、名称の先頭が数式開始文字でもその意味を変更しない。CSVの列構造保護と下流の数式解釈対策は別の責務である。"
+        },
+        "ruleId": "csv-injection.untrusted-text-export",
+        "severity": {
+          "level": "low",
+          "rationale": "medium impact × medium likelihoodをlowと評価。CSVの明示出力と下流アプリでの開封を要し、BOOTHの名称制約・下流保護設定に左右される。任意コード実行や情報流出は実証していない。"
+        },
+        "summary": "「商品単位のCSVを保存」は、取得した商品名とショップ名を数式対策せず書き出す。CSVを数式対応の表計算アプリで開くと、第三者由来の文字列が式として扱われ得る。拡張からの出力は確認済みで、現行BOOTHの命名制約と実Excelでの実行は未検証。",
+        "taxonomy": {
+          "category": "csv-injection",
+          "cwe": [
+            "CWE-1236"
+          ]
+        },
+        "title": "商品名・ショップ名をCSVで開くと数式として解釈され得る",
+        "validation": {
+          "assertions": [
+            "名称フィールドに専用の数式対策がない。",
+            "CSV引用は列を分離するが、値の等号を無効化しない。"
+          ],
+          "evidenceRefs": [
+            "input",
+            "shop",
+            "propagation",
+            "root"
+          ],
+          "limitations": [
+            "実BOOTHでその名前が許可されるか未確認。",
+            "実Excelで数式の実行・外部要求・情報取得は検証していない。"
+          ],
+          "method": "親によるソース追跡と、実関数をNode vmへ読み込んだ合成データの観測",
+          "summary": "ショップ名と商品名に算術式の文字列を与えると、出力CSVに等号開始文字列が残った。カンマを含む式もCSV引用だけである。"
+        }
+      }
+    ],
+    "scanId": "a7ee0ead-e497-4442-baf6-4376638a13fc",
+    "schemaVersion": "1.0"
+  },
+  "coverage": {
+    "completeness": "partial",
+    "deferred": [
+      {
+        "id": "order-fetch-path-impact",
+        "paths": [
+          "extension/dashboard.js",
+          "extension/backup.js"
+        ],
+        "reason": "Malformed imported order IDs can select another same-origin path, but no harmful endpoint or new authority has been established. No live BOOTH requests were made."
+      }
+    ],
+    "documentType": "codex-security.coverage",
+    "excludePaths": [],
+    "explicitExclusions": [
+      {
+        "pattern": "extension/icons/*.png",
+        "reason": "固定画像バイナリのデコーダ監査は対象外。参照元と生成コードを確認。"
+      },
+      {
+        "pattern": ".local/**",
+        "reason": "個人データ・ローカル成果物を除外。合成検証結果は別資料として明示。"
+      },
+      {
+        "pattern": "docs/handoff-history.md",
+        "reason": "過去の作業履歴は現在の実装の証拠に代用しない。"
+      }
+    ],
+    "includePaths": [
+      "."
+    ],
+    "inventoryStrategy": "repository",
+    "mode": "repository",
+    "openQuestions": [
+      {
+        "question": "BOOTHの商品名・ショップ名の命名制約と実Excelの数式解釈は未確認。"
+      },
+      {
+        "question": "実拡張での認証済み通信、optional権限、2タブstorage、Firefoxの挙動は未実測。"
+      },
+      {
+        "question": "test/cases.js:175-176のUUID定数が合成値か実測値かは不明。外部照会していない。"
+      },
+      {
+        "question": "新規fresh-context baselineは枠制限で起動失敗。既存reviewerと親検品を用いた。"
+      }
+    ],
+    "scanId": "a7ee0ead-e497-4442-baf6-4376638a13fc",
+    "schemaVersion": "1.0",
+    "surfaces": [
+      {
+        "disposition": "reported",
+        "id": "surface_csv",
+        "label": "CSVの文字列出力",
+        "notes": "商品名・ショップ名の文字列が式の開始文字を保持する。csv.js:11-17,92-100。SEC-01、low。",
+        "receiptRefs": []
+      },
+      {
+        "disposition": "no_issue_found",
+        "id": "surface_html-dom",
+        "label": "HTML解析・DOM描画・リンク",
+        "notes": "製品JS/HTML/CSS全体を監査。外部文字列の描画はtextContent/canvas、innerHTMLは消去。ショップURLはdashboard-insights-view.js:89、ギフトURLはcommon.js:35,40で制限。DOMParserの無通信は普遍的に保証しない。",
+        "receiptRefs": []
+      },
+      {
+        "disposition": "needs_follow_up",
+        "id": "surface_url",
+        "label": "注文取得URLの境界",
+        "notes": "dashboard.js:1643はIDを固定prefixへ直接連結し、表示用orderDetailUrlの検証を通らない。backup.js:44は非空文字列を許容。同一originの有害GET先や権限逸脱の根拠がなく、正式脆弱性には数えない。",
+        "receiptRefs": []
+      },
+      {
+        "disposition": "no_issue_found",
+        "id": "surface_4",
+        "label": "保存・バックアップ・削除",
+        "notes": "所有者データの型不整合、削除残留、引越し対象説明は通常レビューに記録。未認可アクセスや新しい権限の取得は確認していない。backup.js、dashboard.js:191-224,950-964。",
+        "receiptRefs": []
+      },
+      {
+        "disposition": "no_issue_found",
+        "id": "surface_5",
+        "label": "共有・画像・拡張公開面",
+        "notes": "画像は利用者選択Fileをタブ内で描画。Xは固定intent URLの明示操作。manifestにcontent script、background、externally_connectable、web_accessible_resourcesはない。local script/CSSを使用。",
+        "receiptRefs": []
+      },
+      {
+        "disposition": "no_issue_found",
+        "id": "surface_6",
+        "label": "テストと開発ツール",
+        "notes": "test全5実行ファイルとtools2本を全文監査。storage.localはstub、BOOTH fetch/X/copyはテストで置換。localStorageのテーマ写しは専用originで変更される。noAutoInit空属性は停止条件として無効で通常レビューに記録。releaseはextensionと配布文書のみをコピー。",
+        "receiptRefs": []
+      },
+      {
+        "disposition": "no_issue_found",
+        "id": "surface_2",
+        "label": "保存情報の削除と移行",
+        "notes": "ギフトメモと割当の削除残留は仕様。未認可アクセスの新規経路はなく、UX説明不足へ分類。",
+        "receiptRefs": []
+      }
+    ]
+  }
+}

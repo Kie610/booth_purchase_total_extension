@@ -10,6 +10,9 @@ function parse(html) {
   return new DOMParser().parseFromString(html, "text/html");
 }
 
+// テストが状態を設定する前に、非同期の自動初期化が保存データを読んでいないこと。
+check("テストページでは自動初期化でストレージを読まない", ext.storage.local._getCalls, []);
+
 // 要素が実際に見えているか(hidden属性が効いているか)を実表示で確かめるための道具。
 // `.hidden` プロパティだけを見ると、CSSのクラス側で display を指定した要素が
 // hidden属性を無視して出っぱなしになる不具合(P6の共有パネル)を見逃す
@@ -549,6 +552,19 @@ check("ポップアップの要約は絞り込みの影響を受けない", buil
 setGiftFilter("all");
 check("すべてに戻すと注記を畳む", [giftFilterNote.hidden, viewTitle.textContent.includes("のみ")], [true, false]);
 
+// UX-01 ギフト・注文の画面は絞り込みを掛けない結果を出すので、見出しに印を付けない。
+// 代わりにフッター(絞り込んだ合計)の側へ範囲の印を付け、表と別の範囲だと分かるようにする
+setGiftFilter("self");
+location.hash = "#/gifts";
+renderCurrentView();
+check("ギフト・注文の見出しには絞り込みの印を付けない", viewTitle.textContent, "ギフト・注文");
+check("絞り込み中のフッターには範囲を出す", footTotalLabel.textContent, "合計額（自分用のみ）");
+location.hash = "#/report";
+renderCurrentView();
+check("レポートの見出しには印を付ける", viewTitle.textContent.includes("自分用のみ"), true);
+setGiftFilter("all");
+check("すべてに戻すとフッターの印も消える", footTotalLabel.textContent, "合計額");
+
 // --- 支出推移・前年比較の集計 ---
 const trend = buildSpendingTrend([
   { amount: 100, date: "2026年1月5日" },
@@ -722,6 +738,18 @@ renderSpendingTrends(new Date(2026, 11, 1));
 check("支出推移は収集済みデータがあれば表示", [trendsEmpty.hidden, trendsArea.hidden], [true, false]);
 check("支出推移の要約", [...trendSummary.querySelectorAll(".stat-value")].map(e => e.textContent),
   ["¥1,000", "¥3,000", "-¥2,000"]);
+// UX-05 1年分しか無いときは比較年を選べない。空の選択欄ではなく、前年を0円として
+// 比べていることを選択欄とカードに出す
+renderSpendingTrends(new Date(2026, 11, 1),
+  currentResults().filter(r => { const d = parseOrderDate(r.date); return d && d.year === 2026; }));
+check("比較年が無いときは選択欄を無効にして理由を出す",
+  [trendBaseYear.disabled, [...trendBaseYear.options].map(o => o.textContent), trendBaseYear.value],
+  [true, ["2025年（購入記録なし）"], "2025"]);
+check("比較年が無いときはカードにも記録なしと出す",
+  [...trendSummary.querySelectorAll(".stat-note")][1].textContent, "購入記録なし（0円として比較）");
+renderSpendingTrends(new Date(2026, 11, 1));
+check("比較年が戻れば選択欄も戻る",
+  [trendBaseYear.disabled, [...trendBaseYear.options].map(o => o.textContent)], [false, ["2025年"]]);
 check("月別比較は12か月分", monthlyTrendChart.querySelectorAll(".trend-month").length, 12);
 check("月別比較の棒は今年と前年", monthlyTrendChart.querySelectorAll(".trend-bar").length, 24);
 // 棒グラフにも累計グラフと同じ 0 / 50% / 最大値 の目盛を出す。
@@ -1094,6 +1122,19 @@ check("その年に明細が無くても期間を選び直せる",
 state.cache = savedPeriodCache;
 setRankingYear("all");
 render();
+
+// DATA-04 索引を消してキャッシュだけで集計する経路でも、キャンセルした注文は合計へ戻さない。
+// 状態が不明な注文をキャンセル扱いにはしない
+const savedCancelIndex = state.index;
+const savedCancelCache = state.cache;
+state.index = null;
+const cancelEntry = (amount, status) =>
+  ({ v: CACHE_SCHEMA_VERSION, amount, gift: 0, shipping: 0, status, date: "2026/01/05", items: [] });
+state.cache = { keep1: cancelEntry(1000, "completed"), gone1: cancelEntry(1234, "cancelled"), unknown1: cancelEntry(50, undefined) };
+check("索引が無くてもキャンセルは集計しない(状態不明は残す)",
+  [buildAllResults().map(r => r.id).sort(), buildSummary(false).total], [["keep1", "unknown1"], 1050]);
+state.index = savedCancelIndex;
+state.cache = savedCancelCache;
 
 // 共有ボタンはランキングを開いている間だけランキングを共有する
 location.hash = "#/ranking";
@@ -1591,6 +1632,24 @@ check("助詞の入った長い名前もそのまま1つになる",
   aggregateByAvatar([{ id: "s8", items: [
     soloItem("オリジナル3Dモデル 幽狐族のお姉様", 9000)] }], {})
     .rows.map((r) => r.name), ["幽狐族のお姉様"]);
+// AVATAR-01 表示名は題名の綴りのまま出す。バケツのキーはそろえた形(ひらがな・小文字)で
+// 保存済みの手動割り当てが指すので変えないが、そのまま表示すると「ライカ」が「らいか」になる
+check("素体商品の表示名は題名の綴りを使う",
+  [aggregateByAvatar([{ id: "n1", items: [soloItem("ライカ -Laika-【オリジナル3Dモデル】", 6000)] }], {})
+     .rows.map((r) => [r.key, r.name]),
+   aggregateByAvatar([{ id: "n2", items: [soloItem("オリジナル3Dモデル「ヴェルノ」", 6000)] }], {})
+     .rows.map((r) => [r.key, r.name])],
+  [[["laika", "ライカ"]], [["ゔぇるの", "ヴェルノ"]]]);
+check("素体商品の綴りはバリエーション名の綴りより優先する",
+  aggregateByAvatar([{ id: "n3", items: [
+    soloItem("パーカー (ヴぇるの)", 100), soloItem("スカート (ヴぇるの)", 100),
+    soloItem("オリジナル3Dモデル「ヴェルノ」", 6000)] }], {})
+    .rows.map((r) => [r.key, r.name, r.count]), [["ゔぇるの", "ヴェルノ", 3]]);
+check("昇格したバケツの表示名もバリエーション名の綴りを使う",
+  aggregateByAvatar([{ id: "n4", items: [
+    soloItem("パーカー (ルキフ)", 100), soloItem("スカート (Rukifu)", 200),
+    soloItem("くつ (ルキフ)", 300), soloItem("てぶくろ (Rukifu)", 400)] }], {})
+    .rows.map((r) => [r.key, r.name]), [["rukifu", "Rukifu"], ["るきふ", "ルキフ"]]);
 // 先頭の語を手掛かりにするので、名前が語として切り出せる関連商品は同じバケツへ寄る
 check("素体商品の名前の先頭語で関連商品も寄る",
   aggregateByAvatar([{ id: "s9", items: [
@@ -1840,18 +1899,14 @@ check("点数は数量ぶん数える", [yearSummary.itemCount, yearSummary.gift
 check("支援した作者の数", yearSummary.shopCount, 2);
 // 2024年にも買っている SOUR FLAVOR は「はじめて」に入らない
 check("その年にはじめて買った作者だけ数える", yearSummary.newShopCount, 1);
-check("BOOSTの上乗せを合計する", [yearSummary.boost, yearSummary.boostItemCount], [300, 1]);
 check("いちばん買った月", [yearSummary.busiestMonth.key, yearSummary.busiestMonth.total], ["2026-02", 3300]);
 check("この年の推し作者は3件まで", yearSummary.topShops.map(s => s.name), ["SOUR FLAVOR", "べつのショップ"]);
-// 0円のBOOSTは「応援した」と数えない(金額の行自体は常にあるため)
-check("0円のBOOSTは数えない",
-  buildYearSummary([{ id: "z", date: "2026年1月1日 00:00", amount: 100, items: [item("A", 100)] }], 2026).boostItemCount, 0);
 // 過去の注文が未収集だと明細が無く、その作者を「はじめて」に数えてしまう
 check("過去の未収集は件数として返す",
   buildYearSummary([{ id: "p", date: "2024年1月1日 00:00", amount: null, items: null }, summaryRows[1]], 2026).beforePending, 1);
 check("注文のある年を新しい順に返す", orderYears(summaryRows), [2026, 2024]);
 
-// 表示(年を選べる。カードはBOOSTの有無で数が変わる)
+// 表示(年を選び、合計・点数・作者数・購入が多い月を確認する)
 const savedSummaryIndex = state.index;
 const savedSummaryCache = state.cache;
 state.index = { updatedAt: "x", complete: true, orders: summaryRows.map(r => ({ id: r.id, status: "completed", date: r.date })) };
@@ -1898,9 +1953,9 @@ check("まとめの共有 はじめてが0人なら過去の未収集を断ら�
   summaryShareIssues({ ...summaryShareStats, pendingCount: 0, beforePending: 3, newShopCount: 0 }), []);
 location.hash = "#/report";
 renderCurrentView();
-// BOOSTを使っていない年に空の数字を並べない
+// 年間まとめにはBOOSTカードを表示しない
 setSummaryYear(2024);
-check("BOOSTが無ければカードごと出さない",
+check("年間まとめにはBOOSTカードを出さない",
   [...summaryCards.querySelectorAll(".stat-label")].map(e => e.textContent).includes("BOOSTの上乗せ"), false);
 setSummaryYear(2026);
 state.index = savedSummaryIndex;
@@ -2360,6 +2415,8 @@ check("閉じると元のボタンへ戻る", document.activeElement === shareBt
 check("閉じると後ろを操作できる", document.getElementById("view-report").inert, false);
 
 // --- CSV出力(データ出力の画面) ---
+// 従来列の内容を比較する。追加した復元列の往復はmigration-check.cjsで検証する。
+const displayCsv = (csv) => toCsv(parseCsv(csv).map((row) => row.slice(0, -2)));
 check("csvField そのまま", csvField("髪型A"), "髪型A");
 check("csvField カンマを含む値は囲む", csvField("帽子, 赤"), '"帽子, 赤"');
 check("csvField 引用符は重ねる", csvField('「"特"」'), '"「""特""」"');
@@ -2368,7 +2425,7 @@ check("csvField 値なしは空欄", [csvField(null), csvField(undefined)], ["",
 // Excelで文字化けしないようBOMを付け、行はCRLFで区切る(RFC 4180)
 check("toCsv はBOM付きのCRLF区切り", toCsv([["a", "b"], ["c", "d"]]), "\uFEFFa,b\r\nc,d");
 
-const ordersLines = buildOrdersCsv(buildResults()).replace(/^\uFEFF/, "").split("\r\n");
+const ordersLines = displayCsv(buildOrdersCsv(buildResults())).replace(/^\uFEFF/, "").split("\r\n");
 check("注文CSVの見出し", ordersLines[0], "注文番号,注文日時,ステータス,お支払金額,ギフト額,商品合計,送料,差額,商品点数");
 check("注文CSVは1注文1行", ordersLines.length, 1 + 6);
 check("注文CSV 収集済みの行", ordersLines[1], "a1,2026年5月3日 12:34,発送完了,1000,400,1000,0,0,2");
@@ -2377,13 +2434,13 @@ check("注文CSV 未収集は空欄", ordersLines[2], "a2,2026年5月20日 09:00
 check("注文CSV 取得失敗も空欄", ordersLines[5], "c2,2025年12月25日 10:00,未払い,,,,,,");
 
 // \u9001\u6599\u306E\u3042\u308B\u6CE8\u6587\u306F\u3001\u5546\u54C1\u5408\u8A08\u3068\u9001\u6599\u306B\u5206\u3051\u3066\u66F8\u304D\u51FA\u3059
-const shippedCsv = buildOrdersCsv([{
+const shippedCsv = displayCsv(buildOrdersCsv([{
   id: "s1", date: "2026\u5E747\u670820\u65E5 17:01", status: "completed",
   amount: 4060, gift: 0, items: shipped.items, shipping: shipped.shipping,
-}]).replace(/^\uFEFF/, "").split("\r\n");
+}])).replace(/^\uFEFF/, "").split("\r\n");
 check("\u6CE8\u6587CSV \u9001\u6599\u3092\u5206\u3051\u3066\u51FA\u3059", shippedCsv[1], "s1,2026\u5E747\u670820\u65E5 17:01,\u767A\u9001\u5B8C\u4E86,4060,0,3560,500,0,1");
 
-const itemsLines = buildItemsCsv(buildResults()).replace(/^\uFEFF/, "").split("\r\n");
+const itemsLines = displayCsv(buildItemsCsv(buildResults())).replace(/^\uFEFF/, "").split("\r\n");
 check("商品CSVの見出し", itemsLines[0], "注文番号,注文日時,ステータス,ショップ名,ショップURL,商品名,単価,数量,BOOST,ギフト");
 check("商品CSVは1商品1行", itemsLines.length, 1 + 2 + 1 + 1 + 1 + 1 + 1);
 check("商品CSV 商品の行", itemsLines[1],
@@ -2391,41 +2448,41 @@ check("商品CSV 商品の行", itemsLines[1],
 check("商品CSV ギフトの印", itemsLines[2].endsWith("髪型B,400,1,0,はい"), true);
 // 黙って落とすと、その注文を買っていないように見えてしまう
 check("商品CSV 明細の無い注文も行を残す", itemsLines[3], "a2,2026年5月20日 09:00,支払済み,,,(明細なし),,,,");
-check("CSVのファイル名に書き出した日を入れる", csvFileName("orders", new Date(2026, 6, 5)), "booth-orders-20260705.csv");
+check("CSVのファイル名に書き出した日を入れる", csvFileName("orders", new Date(2026, 6, 5)), "booth-orders-1.2.0-20260705.csv");
 
 // --- D16 CSVへの集計対象(ギフトフィルタ)注記 ---
-const stripBom = (csv) => csv.slice(CSV_BOM.length);
+const stripBom = (csv) => displayCsv(csv).slice(CSV_BOM.length);
 //
-// 「すべて」のCSVは公開契約なので1バイトも変えない。絞り込み中だけ末尾に列を足す
-check("すべてのCSVは現行と同一(注文)",
+// 既定・すべて・未知のフィルタ指定は同じ表示列を出す。復元列は別に検証する。
+check("すべてのCSV表示列は既定と同一(注文)",
   [buildOrdersCsv(buildResults(), "all"), buildOrdersCsv(buildResults(), undefined), buildOrdersCsv(buildResults(), "unknown")]
-    .every(csv => csv === buildOrdersCsv(buildResults())),
+    .every(csv => displayCsv(csv) === displayCsv(buildOrdersCsv(buildResults()))),
   true);
-check("すべてのCSVは現行と同一(商品)",
-  buildItemsCsv(buildResults(), "all") === buildItemsCsv(buildResults()), true);
-check("すべてのCSVのファイル名は現行と同一",
+check("すべてのCSV表示列は既定と同一(商品)",
+  displayCsv(buildItemsCsv(buildResults(), "all")) === displayCsv(buildItemsCsv(buildResults())), true);
+check("すべてのCSVのファイル名は既定と同一",
   [csvFileName("orders", new Date(2026, 6, 5), "all"), csvFileName("items", new Date(2026, 6, 5))],
-  ["booth-orders-20260705.csv", "booth-items-20260705.csv"]);
+  ["booth-orders-1.2.0-20260705.csv", "booth-items-1.2.0-20260705.csv"]);
 
 const giftOrdersLines = stripBom(buildOrdersCsv(buildResults(), "gift")).split("\r\n");
 check("絞り込み中の注文CSVは集計対象の列を足す", giftOrdersLines[0],
   "注文番号,注文日時,ステータス,お支払金額,ギフト額,商品合計,送料,差額,商品点数,集計対象");
 check("絞り込み中の注文CSVは全データ行に集計対象を入れる",
   giftOrdersLines.slice(1).every(line => line.endsWith(",ギフト")), true);
-check("絞り込み中の注文CSVは行数が変わらない", giftOrdersLines.length, ordersLines.length);
+check("絞り込み中の注文CSVは対象注文だけを出す", giftOrdersLines.length, 1 + filterResultsByGift(buildResults(), "gift").rows.length);
 
 const selfItemsLines = stripBom(buildItemsCsv(buildResults(), "self")).split("\r\n");
 check("絞り込み中の商品CSVは集計対象の列を足す", selfItemsLines[0],
   "注文番号,注文日時,ステータス,ショップ名,ショップURL,商品名,単価,数量,BOOST,ギフト,集計対象");
 check("絞り込み中の商品CSVは全データ行に集計対象を入れる",
   selfItemsLines.slice(1).every(line => line.endsWith(",自分用")), true);
-// 明細を取れていない注文の1行にも入れる(部分集計だと分かる印を欠かさない)
-check("明細なしの行にも集計対象を入れる", selfItemsLines[3],
-  "a2,2026年5月20日 09:00,支払済み,,,(明細なし),,,,,自分用");
+// 対象を判別できない明細なし注文や、ギフトの明細を部分CSVへ混ぜない。
+check("自分用CSVに対象外のギフト明細を含めない",
+  selfItemsLines.slice(1).some((line) => line.includes(",はい,")), false);
 
 check("絞り込み中はファイル名にも集計対象を入れる",
   [csvFileName("orders", new Date(2026, 6, 5), "gift"), csvFileName("items", new Date(2026, 6, 5), "self")],
-  ["booth-orders-gift-20260705.csv", "booth-items-self-20260705.csv"]);
+  ["booth-orders-gift-1.2.0-20260705.csv", "booth-items-self-1.2.0-20260705.csv"]);
 
 // --- 画面の切り替え ---
 // 別ページにするとJSのコンテキストごと破棄され、数分かかる収集が止まってしまうため、
@@ -2466,8 +2523,8 @@ check("既定の画面では画面名を出さない", viewTitle.textContent, ""
   check("ギフト・注文へ切り替わる",
     [document.getElementById("view-report").hidden, document.getElementById("view-gifts").hidden], [true, false]);
   check("ギフト・注文の画面名", viewTitle.textContent, "ギフト・注文");
-  check("メニューの末尾がギフト・注文",
-    [...navDrawer.querySelectorAll(".nav-link")].at(-1).dataset.view, "gifts");
+  check("メニューの末尾がデータの引っ越し",
+    [...navDrawer.querySelectorAll(".nav-link")].at(-1).dataset.view, "backup");
 
   // 何も無ければ案内だけ
   state.index = null;
@@ -2741,7 +2798,7 @@ const backup = buildBackup(state.index, state.cache, new Date(2026, 6, 5));
 check("バックアップの形式", [backup.format, backup.version], ["booth-purchase-report", 1]);
 check("バックアップに注文履歴と金額が入る",
   [backup.index.orders.length, Object.keys(backup.cache).length], [7, 3]);
-check("バックアップのファイル名", backupFileName(new Date(2026, 6, 5)), "booth-backup-20260705.json");
+check("バックアップのファイル名", backupFileName(new Date(2026, 6, 5)), "booth-backup-1.2.0-20260705.json");
 
 // 壊れたファイルでストレージを上書きしないよう、形を確かめてから使う
 check("読み込み JSONでない", parseBackup("これはJSONではない").ok, false);
@@ -2789,7 +2846,7 @@ check("読み込み 書き出したものを読み戻せる",
 const stamp = new Date(2026, 6, 5);
 const idxA = { updatedAt: "x", complete: true, orders: [{ id: "m1", status: "completed", date: "2026年1月1日 00:00" }] };
 const idxB = { updatedAt: "y", complete: true, orders: [{ id: "m2", status: "completed", date: "2025年1月1日 00:00" }] };
-check("併合で両方の注文が残る", mergeOrderIndex(idxA, idxB, stamp).orders.map(o => o.id), ["m2", "m1"]);
+check("併合で両方の注文が残る", mergeOrderIndex(idxA, idxB, stamp).orders.map(o => o.id).sort(), ["m1", "m2"]);
 check("両方が全期間なら全期間のまま", mergeOrderIndex(idxA, idxB, stamp).complete, true);
 // 片方でも途中までだと、つないだ結果に抜けが無いとは言い切れない
 check("片方が途中までなら未完了にする",
@@ -3170,19 +3227,31 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
     <div class="badge mx-0 align-top order-state completed">発送完了</div>
     <div class="u-tpg-caption2">注文日時: ${date}</div></a>`;
 
+  // 取得テストのstateを保存値として用意する。runTaskはロック後に必ず最新値を読む。
+  async function waitUntil(predicate) {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    for (let attempt = 0; attempt < 100 && !predicate(); attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    if (!predicate()) throw new Error("非同期保存が完了しませんでした");
+  }
+  async function runFixtureTask(task) {
+    await ext.storage.local.set(domainStorage(state));
+    return runTask(task);
+  }
   const resetIndex = () => { state.index = null; state.cache = {}; };
 
   // ページ送りが無く注文も読めた ＝ 最古まで辿れたので全期間
   resetIndex();
   routes = { [ORDERS_URL]: `<html><body>${orderLink("p1", "2026年5月3日 12:34")}</body></html>` };
-  await runTask((signal) => fetchIndexTask(signal, false));
+  await runFixtureTask((signal) => fetchIndexTask(signal, false));
   check("1ページだけの履歴は全期間として記録", state.index.complete, true);
   check("1ページだけの履歴は注文を取り込む", state.index.orders.map(o => o.id), ["p1"]);
 
   // ページ送りの枠はあるのにページ番号を読めない ＝ 構造変更の疑い
   resetIndex();
   routes = { [ORDERS_URL]: `<html><body>${orderLink("p1", "2026年5月3日 12:34")}<div class="pager"><span>1</span></div></body></html>` };
-  await runTask((signal) => fetchIndexTask(signal, false));
+  await runFixtureTask((signal) => fetchIndexTask(signal, false));
   check("ページ番号を読めなければ全期間扱いにしない", state.index.complete, false);
   check("読み取り失敗は警告する", noticeBox.textContent.includes("読み取れませんでした"), true);
   render();
@@ -3191,13 +3260,13 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   // 行を1件も読めない ＝ セレクタが効いていない(または履歴が空)
   resetIndex();
   routes = { [ORDERS_URL]: "<html><body></body></html>" };
-  await runTask((signal) => fetchIndexTask(signal, false));
+  await runFixtureTask((signal) => fetchIndexTask(signal, false));
   check("1件も読めなければ全期間扱いにしない", state.index.complete, false);
 
   // BOOTHが明示した購入0件は、構造変更による読み取り失敗とは分ける
   resetIndex();
   routes = { [ORDERS_URL]: "<html><body><p>購入履歴はありません</p></body></html>" };
-  await runTask((signal) => fetchIndexTask(signal, false));
+  await runFixtureTask((signal) => fetchIndexTask(signal, false));
   check("購入0件は全期間を確認済みとして記録", [state.index.complete, state.index.orders.length], [true, 0]);
   check("購入0件は空状態として案内", noticeBox.textContent.includes("集計する注文はありません"), true);
   render();
@@ -3211,7 +3280,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
       <div class="pager"><a href="/orders?page=2">2</a></div></body></html>`,
     [`${ORDERS_URL}?page=2`]: "<html><body></body></html>",
   };
-  await runTask((signal) => fetchIndexTask(signal, false));
+  await runFixtureTask((signal) => fetchIndexTask(signal, false));
   check("後続ページを読めなければ全期間扱いにしない", state.index.complete, false);
   check("後続ページより前に読めた注文は残す", state.index.orders.map(o => o.id), ["p1"]);
   check("後続ページの読み取り失敗も警告する",
@@ -3240,7 +3309,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   const seenWhenPartial = [];
   routes = pagedRoutes(seenWhenPartial);
   state.index = partialIndex(false);
-  await runTask((signal) => fetchIndexTask(signal, false));
+  await runFixtureTask((signal) => fetchIndexTask(signal, false));
   check("未完了の索引は既知で止まらず最古まで辿る", state.index.orders.map(o => o.id), ["g1", "g2", "g3", "g4"]);
   check("未完了なら2ページ目まで見に行く", seenWhenPartial.length, 1);
   check("抜けを埋めたら全期間として記録", state.index.complete, true);
@@ -3251,7 +3320,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   const seenWhenComplete = [];
   routes = pagedRoutes(seenWhenComplete);
   state.index = partialIndex(true);
-  await runTask((signal) => fetchIndexTask(signal, false));
+  await runFixtureTask((signal) => fetchIndexTask(signal, false));
   check("揃っていれば既知で停止する", noticeBox.textContent.includes("取得済みの注文に到達したため"), true);
   check("新しい注文が無ければ0件と伝える", noticeBox.textContent.includes("新しく追加された注文: 0件"), true);
   check("揃っていれば2ページ目は見に行かない", seenWhenComplete.length, 0);
@@ -3269,7 +3338,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
     [ORDERS_URL]: `<html><body>${orderLink("keep", "2026年5月3日 12:34")}` +
       `${orderLink("cancelled", "2026年4月3日 12:34").replace("completed", "cancelled")}</body></html>`,
   };
-  await runTask((signal) => fetchIndexTask(signal, true));
+  await runFixtureTask((signal) => fetchIndexTask(signal, true));
   check("全件再取得ではキャンセル状態を索引に反映する",
     state.index.orders.map(o => [o.id, o.status]), [["keep", "completed"], ["cancelled", "cancelled"]]);
   check("全件再取得の完了時だけ集計対象外のキャッシュを消す",
@@ -3323,7 +3392,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   routes = statusRoutes(seenWithoutRefresh);
   state.index = statusIndex();
   state.cache = statusCache();
-  await runTask((signal) => fetchIndexTask(signal, false));
+  await runFixtureTask((signal) => fetchIndexTask(signal, false));
   check("再取得しなければステータスは古いまま", statusOf("a1"), "paid");
   check("再取得しなければ2ページ目以降は見に行かない", seenWithoutRefresh.length, 0);
 
@@ -3333,7 +3402,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   routes = statusRoutes(seenWithRefresh);
   state.index = statusIndex();
   state.cache = statusCache();
-  await runTask((signal) => fetchIndexTask(signal, false, true));
+  await runFixtureTask((signal) => fetchIndexTask(signal, false, true));
   check("ステータス再取得で既知注文の状態が新しくなる",
     [statusOf("a1"), statusOf("a2")], ["completed", "completed"]);
   check("ステータス再取得でも金額キャッシュは残る",
@@ -3358,7 +3427,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   settledIndex.orders[0].status = "completed";
   state.index = settledIndex;
   state.cache = statusCache();
-  await runTask((signal) => fetchIndexTask(signal, false, true));
+  await runFixtureTask((signal) => fetchIndexTask(signal, false, true));
   check("変わりうる注文が無ければ巡回を伸ばさない",
     [seenWhenSettled.length, noticeBox.textContent.includes("ステータスが変わりうる注文はありませんでした")],
     [0, true]);
@@ -3369,7 +3438,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   routes = statusRoutes(seenWhenForced);
   state.index = statusIndex();
   state.cache = statusCache();
-  await runTask((signal) => fetchIndexTask(signal, true, true));
+  await runFixtureTask((signal) => fetchIndexTask(signal, true, true));
   check("全件再取得が指定されていればそちらを優先する",
     [state.index.orders.length, state.index.complete, seenWhenForced.length], [5, true, 2]);
   check("全件再取得の完了時は今までどおりキャッシュを整理する",
@@ -3381,7 +3450,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   state.cache = { keep: { amount: 555, gift: 0, status: "completed", date: "2025年1月1日 00:00" } };
   forceRefreshAll.checked = true;
   routes = { [ORDERS_URL]: () => Promise.reject(abortError()) };
-  await runTask(runAllTask);
+  await runFixtureTask(runAllTask);
   check("全件再取得を中断しても収集済みの金額は残る", state.cache.keep && state.cache.keep.amount, 555);
   check("中断は中断として扱われる", noticeBox.textContent.includes("中断しました"), true);
   // 進捗を出したタイトルは、中断で終わっても必ず元へ戻す
@@ -3421,7 +3490,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
         : okResponse(path, detailHtml(2000));
     },
   };
-  await runTask((signal) => collectAmounts(targetOrders(), false, signal));
+  await runFixtureTask((signal) => collectAmounts(targetOrders(), false, signal));
   check("一時的な通信エラーは試し直す", flakyTries, 2);
   check("試し直して収集できる", [cachedAmount("ok1"), cachedAmount("flaky")], [1000, 2000]);
   check("収集を終えるとタイトルは元へ戻る", document.title, BASE_DOCUMENT_TITLE);
@@ -3443,7 +3512,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
     if (typeof ratio === "number") progressRatios.push(ratio);
     realSetProgress(text, ratio);
   };
-  await runTask((signal) => collectAmounts(targetOrders(), false, signal));
+  await runFixtureTask((signal) => collectAmounts(targetOrders(), false, signal));
   setProgress = realSetProgress;
   check("進捗バーはテキストと同じ1始まりで進む", progressRatios, [0.5, 1]);
   check("最終件の収集中に進捗バーが100%へ達する", progressRatios[progressRatios.length - 1], 1);
@@ -3460,7 +3529,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
         : okResponse(path, detailHtml(2100));
     },
   };
-  await runTask((signal) => collectAmounts(targetOrders(), false, signal));
+  await runFixtureTask((signal) => collectAmounts(targetOrders(), false, signal));
   check("HTTP 429はRetry-After後に試し直す", rateLimitTries, 2);
   check("HTTP 429の再試行で収集できる", cachedAmount("rate"), 2100);
 
@@ -3474,7 +3543,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
       return errorResponse(path, 404, null);
     },
   };
-  await runTask((signal) => collectAmounts(targetOrders(), false, signal));
+  await runFixtureTask((signal) => collectAmounts(targetOrders(), false, signal));
   check("HTTP 404は再試行しない", notFoundTries, 1);
   check("HTTP 404の注文は未収集のまま残す", cachedAmount("missing-detail"), undefined);
 
@@ -3489,7 +3558,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
       return Promise.reject(new TypeError("Failed to fetch"));
     },
   };
-  await runTask((signal) => collectAmounts(targetOrders(), false, signal));
+  await runFixtureTask((signal) => collectAmounts(targetOrders(), false, signal));
   check("諦めるまでの試行回数", brokenTries, fetchRetryCount + 1);
   check("失敗しても他の注文の収集は続く", cachedAmount("ok2"), 3000);
   check("失敗した注文はキャッシュに残さない(未収集のまま拾い直せる)", state.cache.broken, undefined);
@@ -3507,7 +3576,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
     },
     [detailUrl("s2")]: detailHtml(4000),
   };
-  await runTask((signal) => collectAmounts(targetOrders(), false, signal));
+  await runFixtureTask((signal) => collectAmounts(targetOrders(), false, signal));
   check("ログイン切れは試し直さない", signInTries, 1);
   check("ログイン切れはその場で止める", state.cache.s2, undefined);
   check("ログイン切れは理由を出す", errorBox.textContent.includes("ログインが必要です"), true);
@@ -3544,7 +3613,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
     };
 
     // (a) URLの取り直し: v1 でギフトを含む注文だけ。booth.pm には触れない
-    await runTask(refetchGiftUrlsTask);
+    await runFixtureTask(refetchGiftUrlsTask);
     check("URLの取り直しはギフトを含む v1 の注文だけ", fetched, [detailUrl("gt1")]);
     check("取り直した注文に giftId が入り v2 になる", [state.cache.gt1.items[0].giftId, state.cache.gt1.v], [U1, CACHE_SCHEMA_VERSION]);
     check("ギフトの無い v1 の注文はそのまま", state.cache.gt3.v, 1);
@@ -3552,7 +3621,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
     fetched.length = 0;
     routes[detailUrl("gt2")] = (path) => { fetched.push(path); return okResponse(path, orderHtml("850", sheetGroup("ギフト", [[425, 0, "済み", U2], [425, 0, "未", U3]]))); };
     giftUrlForceRefresh.checked = true;
-    await runTask(refetchGiftUrlsTask);
+    await runFixtureTask(refetchGiftUrlsTask);
     giftUrlForceRefresh.checked = false;
     check("キャッシュ無視ならギフトを含む注文を全件取り直す", fetched.sort(), [detailUrl("gt1"), detailUrl("gt2")].sort());
     check("取り直しても giftId は保たれる", state.cache.gt2.items.map(i => i.giftId), [U2, U3]);
@@ -3580,7 +3649,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
 
     // 二度目は未受取(U1)だけを見に行く
     fetched.length = 0;
-    await runTask(checkGiftStatusTask);
+    await runFixtureTask(checkGiftStatusTask);
     check("二度目は未受取だけを見に行く", fetched, [giftUrl(U1)]);
 
     // キャッシュを無視して指定範囲を再取得: 受取済みも開き直す(メモの変更を拾う)
@@ -3588,14 +3657,14 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
     giftForceRefresh.checked = true;
     updateGiftPlannedCount();
     check("キャッシュ無視の予定件数", giftPlannedCount.textContent.startsWith("確認予定: 3件"), true);
-    await runTask(checkGiftStatusTask);
+    await runFixtureTask(checkGiftStatusTask);
     check("キャッシュ無視なら範囲内の受取済みも開き直す", fetched.sort(), [giftUrl(U1), giftUrl(U2), giftUrl(U3)].sort());
     giftForceRefresh.checked = false;
 
     // 状態を読めないページは未受取と断定せず、前の記録も消さない
     fetched.length = 0;
     routes[giftUrl(U1)] = (path) => okResponse(path, "<html><body>メンテナンス中</body></html>");
-    await runTask(checkGiftStatusTask);
+    await runFixtureTask(checkGiftStatusTask);
     check("読めないページは前の記録を残す", state.giftStatus[U1].state, "unreceived");
     check("読めなかったことを案内する", noticeBox.textContent.includes("状態を読み取れませんでした"), true);
 
@@ -3746,8 +3815,10 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
     [assignKind.getAttribute("aria-label"), assignAvatar.getAttribute("aria-label")],
     ["なぞのふくの区分", "なぞのふくの特定アバター"]);
 
+  await ext.storage.local.set(domainStorage(state));
   assignAvatar.value = "森羅";
   assignAvatar.dispatchEvent(new Event("change", { bubbles: true }));
+  await waitUntil(() => !running && !avatarRecountBtn.disabled);
   check("割り当てが集計に効く",
     [...avatarTableBody.querySelectorAll("tr.shop-row")].map((tr) => tr.cells[1].textContent),
     ["森羅", "マヌカ"]);
@@ -3773,6 +3844,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   const swapKind = avatarAssignBody.querySelector("select[data-product-key]");
   swapKind.value = AVATAR_MULTI_TOOL_KEY;
   swapKind.dispatchEvent(new Event("change", { bubbles: true }));
+  await waitUntil(() => !running && !avatarRecountBtn.disabled);
   check("区分を選ぶとアバターの指定を置き換える",
     [await readStored(AVATAR_ASSIGN_KEY, null),
      avatarAssignBody.querySelector("input[data-product-key]").value],
@@ -3782,6 +3854,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   const undoSelect = avatarAssignBody.querySelector("select[data-product-key]");
   undoSelect.value = "";
   undoSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  await waitUntil(() => !running && !avatarRecountBtn.disabled);
   check("未分類へ戻すと保存から消える", await readStored(AVATAR_ASSIGN_KEY, null), {});
 
   // D18 再集計。BOOTHへは通信せず、保存済みのデータを読み直して集計し直す。
@@ -3800,7 +3873,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
     ["マヌカ", "森羅"]);
   avatarRecountBtn.focus();
   avatarRecountBtn.click();
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await waitUntil(() => !running && !avatarRecountBtn.disabled);
   check("再集計で保存し直された割り当てが反映される",
     [...avatarTableBody.querySelectorAll("tr.shop-row")].map((tr) =>
       [tr.cells[1].textContent, tr.cells[3].textContent]),
@@ -3811,7 +3884,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   // 連打しても壊れない(読み込み中は止まる)
   avatarRecountBtn.click();
   avatarRecountBtn.click();
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await waitUntil(() => !running && !avatarRecountBtn.disabled);
   check("連打しても順位は同じ",
     [...avatarTableBody.querySelectorAll("tr.shop-row")].map((tr) => tr.cells[1].textContent),
     ["マヌカ", "森羅"]);
@@ -3881,7 +3954,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
     dashboardDoc.querySelector('.nav-link[data-view="ranking"]').getAttribute("href"), "#/ranking");
   check("メニューに追加した画面が並んでいる",
     [...dashboardDoc.querySelectorAll(".nav-link")].map((a) => a.getAttribute("href")),
-    ["#/report", "#/ranking", "#/avatars", "#/trends", "#/summary", "#/export", "#/backup", "#/gifts"]);
+    ["#/report", "#/ranking", "#/avatars", "#/trends", "#/summary", "#/export", "#/gifts", "#/backup"]);
   // D14 沼レポートの断り書き。アバター別の金額もショップ別と同じく商品の合計なので、
   // 外すと少ない額を「そのアバターに使った額」として見せることになる
   check("沼レポートに合計と一致しない旨の断りがある",
@@ -3931,7 +4004,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   check("CSVとバックアップに機密性の警告を出す",
     dashboardDoc.querySelectorAll(".sensitive-note strong").length, 2);
   check("復元ファイルに明示的なラベルがある",
-    dashboardDoc.querySelector('label[for="restoreFile"]').textContent.trim(), "読み込むバックアップ");
+    dashboardDoc.querySelector('label[for="restoreFile"]').textContent.trim(), "読み込むJSON・CSV");
   check("共有文面に明示的なラベルがある",
     dashboardDoc.querySelector('label[for="shareText"]').textContent.trim(), "投稿する文面");
   check("共有カードを正式なモーダルとして宣言",
@@ -4135,11 +4208,12 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   const mediaActionsStyle = getComputedStyle(colorFixture.querySelector(".share-media-actions"));
   check("手順番号は背景を付けずアクセント色で表示",
     [stepNoStyle.color, stepNoStyle.backgroundColor], ["rgb(252, 77, 80)", "rgba(0, 0, 0, 0)"]);
-  check("主ボタンはアクセント背景に白文字",
+  // UX-02 白文字を載せる塗りはブランド色より濃い赤(白文字と4.5:1以上)。ブランド色のままだと3.3:1
+  check("主ボタンは濃いアクセント背景に白文字",
     [primaryStyle.backgroundColor, primaryStyle.color, primaryStyle.fontWeight],
-    ["rgb(252, 77, 80)", "rgb(255, 255, 255)", "400"]);
-  check("選択中の切り替えはアクセント背景に白文字",
-    [segmentedStyle.backgroundColor, segmentedStyle.color], ["rgb(252, 77, 80)", "rgb(255, 255, 255)"]);
+    ["rgb(211, 47, 47)", "rgb(255, 255, 255)", "400"]);
+  check("選択中の切り替えは濃いアクセント背景に白文字",
+    [segmentedStyle.backgroundColor, segmentedStyle.color], ["rgb(211, 47, 47)", "rgb(255, 255, 255)"]);
   check("共有画像ボタンの背面に枠や背景を付けない",
     [mediaActionsStyle.borderTopWidth, mediaActionsStyle.backgroundColor, mediaActionsStyle.paddingTop],
     ["0px", "rgba(0, 0, 0, 0)", "0px"]);
@@ -4504,7 +4578,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   // 1.2.0 ギフト・注文の画面。本物のHTMLで、内訳がレポートから移っていることと、
   // 8画面を1行に収めるため「作者について」がタブ列からヘッダーへ移っていることを見る
   const realNavViews = [...dashboardDoc.querySelectorAll("#navDrawer .nav-link")].map((a) => a.dataset.view);
-  check("本物のナビは8画面でギフト・注文が末尾", realNavViews, VIEW_NAMES);
+  check("本物のナビは8画面でデータの引っ越しが末尾", realNavViews, VIEW_NAMES);
   check("注文ごとの内訳はギフト・注文の画面にだけある",
     [dashboardDoc.querySelector("#view-gifts #breakdownSection") !== null,
      dashboardDoc.querySelector("#view-report #breakdownSection")],

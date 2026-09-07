@@ -43,8 +43,8 @@
       <a class="nav-link" href="#/trends" data-view="trends">支出推移・前年比較</a>
       <a class="nav-link" href="#/summary" data-view="summary">今年のまとめ</a>
       <a class="nav-link" href="#/export" data-view="export">データ出力</a>
-      <a class="nav-link" href="#/backup" data-view="backup">データの引っ越し</a>
       <a class="nav-link" href="#/gifts" data-view="gifts">ギフト・注文</a>
+      <a class="nav-link" href="#/backup" data-view="backup">データの引っ越し</a>
       <!-- 引き出し(狭い画面)用。広い画面ではヘッダー右の authorHeaderBtn を使う -->
       <button type="button" id="authorBtn" class="nav-author-btn">作者について</button>
     </nav>
@@ -282,6 +282,7 @@
       <p class="hint">
         保存したデータを消します。消したデータはBOOTHから取り直すことになるため、
         再取得には時間がかかります。
+        注文履歴と金額を両方削除しても、ギフトの受取状況・メモとアバターの手動割り当ては残ります。
       </p>
       <div class="step-controls">
         <button id="clearIndexBtn" class="secondary">注文履歴を削除</button>
@@ -505,8 +506,8 @@
      </section>
    </div>
 
-   <!-- D14 沼レポート。商品名の末尾括弧(バリエーション名)を素体名の辞書と
-        突き合わせて、アバターごとの支出を出す。商品ページへは一切アクセスしない -->
+   <!-- 沼レポート。保存した商品名と手動割り当てからアバター別に集計する。
+        表記ゆれの名簿と購入商品から作る候補を使い、商品ページへはアクセスしない -->
    <div class="view" id="view-avatars" hidden>
      <section class="step">
        <div class="section-head">
@@ -523,15 +524,15 @@
                  title="保存済みのデータから集計し直します（BOOTHへはアクセスしません）">再集計</button>
        </div>
        <p class="hint">
-         商品名の末尾に付くバリエーション名（「商品名 (エク)」の括弧の中）を言葉ごとに分け、
-         同じ言葉を持つ商品どうしをアバターとしてまとめます。アバター名を1つに絞れないものは
-         「複数対応」、見つからないものは「未分類」として別に数えます（推測で振り分けません）。
+         手動の割り当てを優先し、商品名の末尾に付くバリエーション名、商品名本体の順に
+         アバターを探してまとめます。複数対応やギミック・ツール、ワールド関連の商品は
+         別の枠へ分け、分類できないものは「未分類」として数えます。
          「再集計」は保存済みのデータから集計し直すだけで、BOOTHへはアクセスしません。
        </p>
        <p class="hint" id="avatarCoverageNote">
          これは<strong>アバター名を読み取れた買い物だけの集計</strong>で、全支出の内訳ではありません。
-         アバター名を書かない商品（髪型・小物など）は「未分類」に入り、
-         順位表の合計には出てきません。
+         アバターを特定できない商品は別の分類枠や「未分類」に入り、
+         アバターの順位表の合計には出てきません。
        </p>
 
        <div id="avatarEmpty" class="empty-note">
@@ -634,8 +635,12 @@
        <p class="hint">
          収集したデータをCSVで書き出します。Excelでそのまま開けるようUTF-8のBOM付きで保存します。
          金額の列は集計に使えるよう桁区切りを付けません。
+         末尾の復元用データを含めて保存すると、「データの引っ越し」で読み戻せます。
+         全データの移行には集計対象を「すべて」にしてください。
+         復元用データは分割され、必要な場合は注文番号の空いた補助行が付きます。
+         読み戻すときは、表計算ソフトで編集・再保存せず、出力した原本を使ってください。
        </p>
-       <p class="sensitive-note"><strong>CSVには注文番号・商品名・ショップ名・購入金額が含まれます。第三者へ共有せず、安全な場所で保管してください。</strong></p>
+       <p class="sensitive-note"><strong>CSVには注文番号・商品名・購入金額のほか、復元用のギフトURL・受取状況・メモ・手動割り当てが含まれます。第三者へ共有せず、安全な場所で保管してください。</strong></p>
 
        <div id="exportEmpty" class="empty-note">
          まだ収集したデータがありません。「お買いものレポート」で収集してください。
@@ -673,9 +678,11 @@
        <p class="hint">
          収集したデータをファイルに保存し、別のブラウザやプロファイルで読み込み直せます。
          注文が多いとBOOTHからの再取得に数分かかるため、環境を移すときはこちらを使ってください。
-         保存されるのは注文履歴と収集した金額だけで、BOOTHのログイン情報は含まれません。
+         注文履歴・金額・商品明細・アバターの手動割り当て・ギフトIDを保存します。
+         ギフトの受取状況とメモも含みます。
+         BOOTHのログイン情報は含まれません。
        </p>
-       <p class="sensitive-note"><strong>バックアップには注文番号・商品名・ショップ名・購入金額が含まれます。第三者へ共有せず、安全な場所で保管してください。</strong></p>
+       <p class="sensitive-note"><strong>バックアップには注文番号・商品名・購入金額・ギフトURL・受取状況とメモが含まれます。第三者へ共有せず、安全な場所で保管してください。</strong></p>
 
        <div class="index-status">
          <div class="status" id="backupStats">まだ取得していません</div>
@@ -691,13 +698,15 @@
        <h2>バックアップから復元</h2>
        <p class="hint" id="restoreDescription">
          今あるデータは消えません。読み込んだ内容と<b>併合</b>し、同じ注文があれば
-         収集済みの方を残します。注文履歴の「取得済みの範囲」は、両方が全期間のときだけ
+         既知の値を残して不足する項目を補います。明細は完全なものを優先し、異なる値も保管します。
+         1.0.0・1.1.0のJSON・注文CSV・商品CSVも読み込めます。CSVは複数選択して補完できますが、
+         元のCSVにない情報は復元できません。注文履歴の「取得済みの範囲」は、両方が全期間のときだけ
          全期間のままにします(片方でも途中までだと、つないだ結果に抜けが無いとは
          言い切れないため)。
        </p>
        <div class="step-controls">
-         <label class="restore-field" for="restoreFile">読み込むバックアップ</label>
-         <input type="file" id="restoreFile" accept="application/json,.json" aria-describedby="restoreDescription">
+         <label class="restore-field" for="restoreFile">読み込むJSON・CSV</label>
+         <input type="file" id="restoreFile" accept="application/json,text/csv,.json,.csv" multiple aria-describedby="restoreDescription">
        </div>
        <div class="status" id="restoreStatus" role="status" aria-live="polite"></div>
      </section>
@@ -834,7 +843,7 @@
     <div class="foot-body">
       <div class="foot-totals">
         <div class="foot-item">
-          <span class="foot-label">合計額</span>
+          <span class="foot-label" id="footTotalLabel">合計額</span>
           <div class="foot-figures">
             <div class="foot-figures-main">
               <span class="foot-value" id="footTotal">¥0</span>

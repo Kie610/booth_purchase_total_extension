@@ -521,14 +521,15 @@ function resolveSummaryYear(years) {
 
 // 年を選ぶプルダウンは、まとめと支出推移の両方で使う。
 // 中身が同じなら作り直さない(開いたまま再描画すると選択が閉じてしまう)
-function renderYearOptions(select, years, selected) {
+function renderYearOptions(select, years, selected, label = (year) => `${year}年`) {
   const same =
     select.options.length === years.length &&
-    years.every((year, index) => select.options[index].value === String(year));
+    years.every((year, index) => select.options[index].value === String(year) &&
+      select.options[index].textContent === label(year));
   if (!same) {
     select.innerHTML = "";
     for (const year of years) {
-      select.appendChild(el("option", "", `${year}年`)).value = String(year);
+      select.appendChild(el("option", "", label(year))).value = String(year);
     }
   }
   select.value = String(selected);
@@ -765,12 +766,18 @@ function renderSpendingTrends(now = new Date(), results = currentResults()) {
   const years = orderYears(results);
   const [year, baseYear] = resolveTrendYears(years, now.getFullYear());
   renderYearOptions(trendYear, years, year);
-  // 同じ年どうしを比べても意味がないので、選んでいる年は相手側から外す
+  // 同じ年どうしを比べても意味がないので、選んでいる年は相手側から外す。
+  // 比べる相手が無い(1年分しか無い)ときは、計算が前年を0円として扱っていることを
+  // 選択欄に出し、空の選択欄を見せない。選べるものが無いので選択欄は無効にする
+  const baseCandidates = years.filter((candidate) => candidate !== year);
+  const noBase = baseCandidates.length === 0;
   renderYearOptions(
     trendBaseYear,
-    years.filter((candidate) => candidate !== year),
-    baseYear
+    noBase ? [baseYear] : baseCandidates,
+    baseYear,
+    (candidate) => `${candidate}年${noBase ? "（購入記録なし）" : ""}`
   );
+  trendBaseYear.disabled = noBase;
 
   // 今年は途中までしか買っていないので今月で切る。過ぎた年は12月まで見る
   const throughMonth = year === now.getFullYear() ? now.getMonth() + 1 : 12;
@@ -790,7 +797,7 @@ function renderSpendingTrends(now = new Date(), results = currentResults()) {
     statCard(
       `${trend.baseYear}年 同期間`,
       formatYen(trend.previousToDate),
-      `${trend.baseYear}年の1月から同じ月まで`
+      noBase ? "購入記録なし（0円として比較）" : `${trend.baseYear}年の1月から同じ月まで`
     )
   );
   const differenceClass =
