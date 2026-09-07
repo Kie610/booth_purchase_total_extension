@@ -14,6 +14,9 @@ complete:
 - C: docs/reviews/2026-09-07/evidence を修正後の期待値へ更新。
 - C: 1.2.0を正式リリース。ブランチ1.2.0へリネーム、main・origin/main・1.2.0・origin/1.2.0はすべて5b74920。注釈付きタグv1.2.0(タグオブジェクト29030ff)。GitHub Release v1.2.0にZIPとSHA-256を添付。origin/1.2.0-devは削除。
 - C: 配布ZIPはtools/release.ps1で7487a2c以降のコードから再生成。26ファイル、version 1.2.0、SHA256=253b00a0ee5acf0b81b16e8d9a34ad1422f09a3654e45cc7fc0fee2946e1b935。
+- C: BOOTH商品ページ用の画像2点を販売ページ準備/1.2.0画像/へ生成(10_gifts.png・06_data_move_v1.2.0.png)。2048x2048、架空データのためぼかし不要。撮影スクリプトはリポジトリ外の一時領域にあり保存していない。
+- C: Notionの商品ページ仮案を1.2.0へ更新。親ページ(改題・決定事項・未決事項)、00 索引・決定事項、01 商品概要、02 BOOTH本文案。03・05・06は画像の採否が決まっていないため未更新。
+- U: BOOTH商品ページ自体は未編集。manage.booth.pm/items/8667966/edit での差し替えは未実施。
 
 verified:
 - C: 2026-09-07 — evidence: status=PASS; kind=runtime; command=node test/migration-check.cjs; environment=Windows/Node24; scope=移行・往復; counts=passed=37, failed=0, skipped=0, not-run=0
@@ -45,9 +48,10 @@ not-run:
 
 ## Next
 
-1. BOOTH商品ページの画像とNotionの商品ページ仮案を1.2.0へ更新 — blocked-by: none
-2. EFF-01を1.3.0で実施 — blocked-by: none
-3. 年1回のmirror更新と復元確認(2027-09まで) — blocked-by: none
+1. BOOTH商品ページを実際に編集して下書き保存する(画像の採否・掲載順、商品名末尾の日付表記、ZIP差し替え) — blocked-by: ユーザーの判断
+2. Notionの03・05・06(画像順・公開前チェック・サムネイル)を1.2.0へ更新 — blocked-by: 1の画像採否
+3. EFF-01を1.3.0で実施 — blocked-by: none
+4. 年1回のmirror更新と復元確認(2027-09まで) — blocked-by: none
 
 ## Paths
 
