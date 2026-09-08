@@ -18,7 +18,7 @@ const AVATAR_ASSIGN_KEY = "boothAvatarAssign";
 // 通常確認では受取済みを除外し、force指定ではメモの変更も拾うため受取済みを含めて再確認する。
 const GIFT_STATUS_KEY = "boothGiftStatus";
 // 保存形式の版。注文ごとの取得項目を表す CACHE_SCHEMA_VERSION とは別に管理する。
-const DATA_VERSION = "1.2.0";
+const DATA_VERSION = "1.2.1";
 const DATA_VERSION_KEY = "boothDataVersion";
 const MIGRATION_CONFLICTS_KEY = "boothMigrationConflicts";
 const MIGRATION_JOURNAL_KEY = "boothDataMigration";

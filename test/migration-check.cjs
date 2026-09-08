@@ -13,7 +13,7 @@ const root = path.resolve(__dirname, "..");
 const context = vm.createContext({
   console, URL, URLSearchParams, TextEncoder, TextDecoder, Uint8Array, ArrayBuffer,
   Date, setTimeout, clearTimeout, atob, btoa,
-  browser: { runtime: { getManifest: () => ({ version: "1.2.0" }) } },
+  browser: { runtime: { getManifest: () => ({ version: "1.2.1" }) } },
 });
 for (const file of ["avatar-master.js", "common.js", "csv.js", "backup.js"]) {
   vm.runInContext(fs.readFileSync(path.join(root, "extension", file), "utf8"), context, {
@@ -125,7 +125,7 @@ function builtBackup(data = FULL_DOMAIN) {
 }
 function rawModernBackup(data = FULL_DOMAIN) {
   return {
-    format: "booth-purchase-report", version: 1, appVersion: "1.2.0",
+    format: "booth-purchase-report", version: 1, appVersion: "1.2.1",
     exportedAt: EXPORTED_AT, ...clone(data),
   };
 }
@@ -154,23 +154,23 @@ check("v1.1.0 JSONの手動割り当てを保持する", () => {
 });
 
 check("新出力名にはアプリ版を含め、部分CSVは対象も明示する", () => {
-  assert.equal(invoke("backupFileName", EXPORT_DATE), "booth-backup-1.2.0-20260102.json");
-  assert.equal(invoke("csvFileName", "orders", EXPORT_DATE), "booth-orders-1.2.0-20260102.csv");
-  assert.equal(invoke("csvFileName", "items", EXPORT_DATE, "gift"), "booth-items-gift-1.2.0-20260102.csv");
+  assert.equal(invoke("backupFileName", EXPORT_DATE), "booth-backup-1.2.1-20260102.json");
+  assert.equal(invoke("csvFileName", "orders", EXPORT_DATE), "booth-orders-1.2.1-20260102.csv");
+  assert.equal(invoke("csvFileName", "items", EXPORT_DATE, "gift"), "booth-items-gift-1.2.1-20260102.csv");
 });
 
 check("CSVと壊れたJSONを理由付きで拒否する", () => {
-  rejected([ORDER_HEADER, ORDER_ROW].join(String.fromCharCode(10)), "booth-orders-1.2.0-20260102.csv");
+  rejected([ORDER_HEADER, ORDER_ROW].join(String.fromCharCode(10)), "booth-orders-1.2.1-20260102.csv");
   rejected('{"format":', "booth-backup-20260102.json");
 });
 
 check("新JSONは取消・索引外cache・未収集・割り当て・メモを往復する", () => {
   const backup = builtBackup();
-  assert.equal(backup.appVersion, "1.2.0");
+  assert.equal(backup.appVersion, "1.2.1");
   assert.equal(backup.version, 1, "アプリ版とバックアップ構造版を混同しない");
   const result = imported(JSON.stringify(backup), invoke("backupFileName", EXPORT_DATE));
   assert.deepEqual(domain(result), FULL_DOMAIN);
-  assert.equal(result.appVersion, "1.2.0");
+  assert.equal(result.appVersion, "1.2.1");
 });
 
 check("parseBackupの既存呼び出しで旧JSONも新JSONも読み込める", () => {
@@ -179,7 +179,7 @@ check("parseBackupの既存呼び出しで旧JSONも新JSONも読み込める", 
   assert.equal(oldResult.ok, true);
   assert.deepEqual(domain(oldResult), domain(legacy));
   const modern = rawModernBackup();
-  const newResult = invoke("parseBackup", JSON.stringify(modern), "booth-backup-1.2.0-20260102.json");
+  const newResult = invoke("parseBackup", JSON.stringify(modern), "booth-backup-1.2.1-20260102.json");
   assert.equal(newResult.ok, true);
   assert.deepEqual(domain(newResult), FULL_DOMAIN);
 });
@@ -188,6 +188,14 @@ check("新CSVは表示列だけを出し、復元列・補助行を付けない"
   assert.deepEqual(csvLines(newCsv("orders")), [ORDER_HEADER, "1001," + DATE_TEXT + ",支払済み,1300,1100,1100,200,0,1"]);
   assert.deepEqual(csvLines(newCsv("items")), [ITEM_HEADER, "1001," + DATE_TEXT + ",支払済み,例," + SHOP_URL + ",服 (マヌカ),,500,2,100,はい"]);
   assert.deepEqual(csvLines(newCsv("orders", [])), [ORDER_HEADER], "0件は見出しだけ");
+});
+
+check("1.2.0のJSONは商品URLの無いまま1.2.1へ読み込める", () => {
+  const old = rawModernBackup();
+  old.appVersion = "1.2.0";
+  const result = imported(JSON.stringify(old), "booth-backup-1.2.0-20260102.json");
+  assert.equal(result.appVersion, "1.2.1");
+  assert.equal(result.cache["1001"].items[0].url, undefined);
 });
 
 check("未来アプリ版のJSONを拒否する", () => {
@@ -204,12 +212,12 @@ check("giftIdへ文字列でない値を入れたJSONを保存前に拒否する
   for (const invalid of [{ toString: null }, [], 7, true]) {
     const backup = rawModernBackup();
     backup.cache["1001"].items[0].giftId = invalid;
-    rejected(JSON.stringify(backup), "booth-backup-1.2.0-20260102.json");
+    rejected(JSON.stringify(backup), "booth-backup-1.2.1-20260102.json");
   }
 });
 
 check("新形式を併合してもgiftStatusと割り当てが消えずcache v1を維持する", () => {
-  const incoming = imported(JSON.stringify(rawModernBackup()), "booth-backup-1.2.0-20260102.json");
+  const incoming = imported(JSON.stringify(rawModernBackup()), "booth-backup-1.2.1-20260102.json");
   const result = merge(emptyDomain(), incoming);
   assert.deepEqual(domain(result), FULL_DOMAIN);
   assert.equal(result.cache["1003"].v, 1);
@@ -281,9 +289,9 @@ check("同名の複数明細は既知価格を先に対応し、URL追加だけ�
 
 check("不正な退避情報と旧項目を消して受理しない", () => {
   const malformed = rawModernBackup(); malformed.migrationConflicts={giftStatus:{x:7}};
-  rejected(JSON.stringify(malformed),"booth-backup-1.2.0-20260102.json");
+  rejected(JSON.stringify(malformed),"booth-backup-1.2.1-20260102.json");
   const index = rawModernBackup(); index.index.orders[0].importedAlternatives=7;
-  rejected(JSON.stringify(index),"booth-backup-1.2.0-20260102.json");
+  rejected(JSON.stringify(index),"booth-backup-1.2.1-20260102.json");
   const legacy = oldBackup(); legacy.appVersion="1.0.0"; legacy.avatarAssign=false; legacy.giftStatus=0;
   rejected(JSON.stringify(legacy),"booth-backup-1.0.0-20260102.json");
 });

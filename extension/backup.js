@@ -40,6 +40,7 @@ function validBackupItem(item) {
     (item.quantity === undefined || item.quantity === null ||
       (Number.isInteger(item.quantity) && item.quantity >= 0)) &&
     (item.boost === undefined || isFiniteNumberOrNull(item.boost)) &&
+    (item.url === undefined || item.url === null || typeof item.url === "string") &&
     typeof item.gift === "boolean" &&
     (item.giftId == null || (typeof item.giftId === "string" && GIFT_ID_PATTERN.test(item.giftId)));
 }
@@ -62,6 +63,8 @@ function validBackupCacheEntry(entry) {
 const DATA_MIGRATIONS = {
   "1.0.0": (data) => ({ ...data, avatarAssign: data.avatarAssign === undefined ? {} : data.avatarAssign, appVersion: "1.1.0" }),
   "1.1.0": (data) => ({ ...data, giftStatus: data.giftStatus === undefined ? {} : data.giftStatus, appVersion: "1.2.0" }),
+  // 1.2.1で増えたのは商品URL(items[].url)だけで、無い場合は収集で埋まるため形は変えない
+  "1.2.0": (data) => ({ ...data, appVersion: "1.2.1" }),
 };
 function fileDataVersion(fileName) {
   return /-(?:v)?(\d+\.\d+\.\d+)-\d{8}\.(?:json|csv)$/i.exec(fileName || "")?.[1] || null;

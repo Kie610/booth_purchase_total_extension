@@ -63,7 +63,7 @@ const check = (name, run) => tests.push({ name, run });
           original, stored: structuredClone(ext.storage.local._data), pending: ext.storage.local._data[MIGRATION_JOURNAL_KEY] ?? null };
       });
       assert.equal(result.outcome.failed, false);
-      assert.equal(result.version, "1.2.0");
+      assert.equal(result.version, "1.2.1");
       assert.equal(result.cache["0001"].v, 1);
       for (const [key,value] of Object.entries(result.original)) assert.deepEqual(result.stored[key],value);
       assert.equal(result.pending, null);
@@ -215,7 +215,7 @@ const check = (name, run) => tests.push({ name, run });
       const before = await page.evaluate(() => JSON.stringify(ext.storage.local._data[CACHE_KEY]));
       const valid = await page.evaluate(() => JSON.stringify(buildBackup(null, incomingData().cache)));
       await page.locator('#restoreFile').setInputFiles([
-        { name: "booth-backup-1.2.0-20260907.json", mimeType: "application/json", buffer: Buffer.from(valid) },
+        { name: "booth-backup-1.2.1-20260907.json", mimeType: "application/json", buffer: Buffer.from(valid) },
         { name: "bad.json", mimeType: "application/json", buffer: Buffer.from("broken") },
       ]);
       await page.waitForFunction(() => restoreStatus.textContent.includes("bad.json"));

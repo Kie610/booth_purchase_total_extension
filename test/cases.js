@@ -2456,7 +2456,7 @@ check("商品CSV 商品URLの列",
   true);
 // 黙って落とすと、その注文を買っていないように見えてしまう
 check("商品CSV 明細の無い注文も行を残す", itemsLines[3], "a2,2026年5月20日 09:00,支払済み,,,(明細なし),,,,,");
-check("CSVのファイル名に書き出した日を入れる", csvFileName("orders", new Date(2026, 6, 5)), "booth-orders-1.2.0-20260705.csv");
+check("CSVのファイル名に書き出した日を入れる", csvFileName("orders", new Date(2026, 6, 5)), "booth-orders-1.2.1-20260705.csv");
 
 // --- D16 CSVへの集計対象(ギフトフィルタ)注記 ---
 const stripBom = (csv) => displayCsv(csv).slice(CSV_BOM.length);
@@ -2470,7 +2470,7 @@ check("すべてのCSV表示列は既定と同一(商品)",
   displayCsv(buildItemsCsv(buildResults(), "all")) === displayCsv(buildItemsCsv(buildResults())), true);
 check("すべてのCSVのファイル名は既定と同一",
   [csvFileName("orders", new Date(2026, 6, 5), "all"), csvFileName("items", new Date(2026, 6, 5))],
-  ["booth-orders-1.2.0-20260705.csv", "booth-items-1.2.0-20260705.csv"]);
+  ["booth-orders-1.2.1-20260705.csv", "booth-items-1.2.1-20260705.csv"]);
 
 const giftOrdersLines = stripBom(buildOrdersCsv(buildResults(), "gift")).split("\r\n");
 check("絞り込み中の注文CSVは集計対象の列を足す", giftOrdersLines[0],
@@ -2490,7 +2490,7 @@ check("自分用CSVに対象外のギフト明細を含めない",
 
 check("絞り込み中はファイル名にも集計対象を入れる",
   [csvFileName("orders", new Date(2026, 6, 5), "gift"), csvFileName("items", new Date(2026, 6, 5), "self")],
-  ["booth-orders-gift-1.2.0-20260705.csv", "booth-items-self-1.2.0-20260705.csv"]);
+  ["booth-orders-gift-1.2.1-20260705.csv", "booth-items-self-1.2.1-20260705.csv"]);
 
 // --- 画面の切り替え ---
 // 別ページにするとJSのコンテキストごと破棄され、数分かかる収集が止まってしまうため、
@@ -2806,7 +2806,7 @@ const backup = buildBackup(state.index, state.cache, new Date(2026, 6, 5));
 check("バックアップの形式", [backup.format, backup.version], ["booth-purchase-report", 1]);
 check("バックアップに注文履歴と金額が入る",
   [backup.index.orders.length, Object.keys(backup.cache).length], [7, 3]);
-check("バックアップのファイル名", backupFileName(new Date(2026, 6, 5)), "booth-backup-1.2.0-20260705.json");
+check("バックアップのファイル名", backupFileName(new Date(2026, 6, 5)), "booth-backup-1.2.1-20260705.json");
 
 // 壊れたファイルでストレージを上書きしないよう、形を確かめてから使う
 check("読み込み JSONでない", parseBackup("これはJSONではない").ok, false);
@@ -4341,7 +4341,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   // 正式リリース後はセマンティックバージョンを使い、配布対象のversionを固定して検証する
   check("正式リリース版のセマンティックバージョン", /^[1-9]\d*\.\d+\.\d+$/.test(manifest.version), true);
   // 統合先ブランチ名とversionの一致ルールがあるため、配布対象の番号で固定する
-  check("配布対象バージョン", manifest.version, "1.2.0");
+  check("配布対象バージョン", manifest.version, "1.2.1");
 
   check("manifestのiconsに4サイズを宣言", manifest.icons, expectedIcons);
   check("ツールバー用のdefault_iconも同じ4サイズ", manifest.action.default_icon, expectedIcons);
