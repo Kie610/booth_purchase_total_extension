@@ -2415,8 +2415,8 @@ check("閉じると元のボタンへ戻る", document.activeElement === shareBt
 check("閉じると後ろを操作できる", document.getElementById("view-report").inert, false);
 
 // --- CSV出力(データ出力の画面) ---
-// 従来列の内容を比較する。追加した復元列の往復はmigration-check.cjsで検証する。
-const displayCsv = (csv) => toCsv(parseCsv(csv).map((row) => row.slice(0, -2)));
+// 引用・行終端を正規化して比較する。CSVの取込はmigration-check.cjsで検証する。
+const displayCsv = (csv) => toCsv(parseCsv(csv));
 check("csvField そのまま", csvField("髪型A"), "髪型A");
 check("csvField カンマを含む値は囲む", csvField("帽子, 赤"), '"帽子, 赤"');
 check("csvField 引用符は重ねる", csvField('「"特"」'), '"「""特""」"');
@@ -2453,7 +2453,7 @@ check("CSVのファイル名に書き出した日を入れる", csvFileName("ord
 // --- D16 CSVへの集計対象(ギフトフィルタ)注記 ---
 const stripBom = (csv) => displayCsv(csv).slice(CSV_BOM.length);
 //
-// 既定・すべて・未知のフィルタ指定は同じ表示列を出す。復元列は別に検証する。
+// 既定・すべて・未知のフィルタ指定は同じ表示列を出す。
 check("すべてのCSV表示列は既定と同一(注文)",
   [buildOrdersCsv(buildResults(), "all"), buildOrdersCsv(buildResults(), undefined), buildOrdersCsv(buildResults(), "unknown")]
     .every(csv => displayCsv(csv) === displayCsv(buildOrdersCsv(buildResults()))),

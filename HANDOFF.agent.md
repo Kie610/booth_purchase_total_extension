@@ -1,6 +1,6 @@
 # Agent handoff v1
 
-updated: 2026-09-07
+updated: 2026-09-09
 repo: Kie610/booth_purchase_total_extension
 work_branch: 1.2.0
 upstream: origin/1.2.0@5b74920
@@ -23,6 +23,7 @@ complete:
 - U: 本文の保存時にエージェントが確認なく「公開で保存する」を押した。ユーザーの指示は本文更新までで公開範囲の選択は含まれず、その時点で添付ZIPは旧版のままだった。再発防止はAGENTS.mdの「外部公開面」節。
 - C: 商品名末尾の日付表記はBOOTH側が正しく、Notion 01にあった「2025/08/10」が記載誤りだった。
 - C: v1.2.0で追加する商品画像は10_gifts.pngの1枚のみ採用。06_data_move_v1.2.0.pngは不採用。
+- C: 2026-09-09 Issue #1(商品CSVの外部ツール取り込み破損)を受け、CSVの末尾2列「データバージョン」「復元用データ」と補助行の出力を廃止(未リリース。次版1.2.1へ含める)。1.2.0が出力した復元列付きCSVの読み戻しは維持し、期待入力を test/fixtures/csv-1.2.0.cjs に固定。全データの移行はバックアップJSONのみ。
 
 verified:
 - C: 2026-09-07 — evidence: status=PASS; kind=runtime; command=node test/migration-check.cjs; environment=Windows/Node24; scope=移行・往復; counts=passed=37, failed=0, skipped=0, not-run=0
@@ -38,6 +39,11 @@ verified:
 - C: 2026-09-07 — evidence: status=PASS; kind=compile; command=tools/release.ps1 -Force; environment=PowerShell7; scope=ZIP26ファイル/version1.2.0/SHA256同梱; counts=passed=1, failed=0, skipped=0, not-run=0
 - C: 2026-09-07 — evidence: status=PASS; kind=runtime; command=gh release download v1.2.0 後にSHA-256照合とZIP内dashboard.cssの検査; environment=GitHub; scope=差し替え後の公開資産・ローカル成果物・同梱.sha256の三者一致(52a4c6ff…)、ZIP内にaccent-solid 0件・button.primaryはvar(--accent)と font-weight 700; counts=passed=5, failed=0, skipped=0, not-run=0
 
+- C: 2026-09-09 — evidence: status=PASS; kind=runtime; command=node test/migration-check.cjs; environment=Windows/Node24; scope=CSV復元列廃止後の移行・1.2.0 CSV読み戻し; counts=passed=36, failed=0, skipped=0, not-run=0
+- C: 2026-09-09 — evidence: status=PASS; kind=runtime; command=node test/migration-browser-check.cjs (NODE_PATH=既存Playwright, port 8733); environment=Chrome/合成storage; scope=保存失敗・復旧・2タブ・出力UI(CSVはメモを含まない); counts=passed=16, failed=0, skipped=0, not-run=0
+- C: 2026-09-09 — evidence: status=PASS; kind=runtime; command=Playwright で test/index.html; environment=Chrome/1280px; scope=test/cases.js; counts=passed=1151, failed=0, skipped=0, not-run=0
+- C: 2026-09-09 — evidence: status=PASS; kind=compile; command=node --check extension/*.js test/*.js test/*.cjs test/fixtures/*.cjs; environment=Node24; scope=全JS構文; counts=passed=20, failed=0, skipped=0, not-run=0
+
 not-run:
 - U: U1 DATA-04・UX-01・UX-05の実BOOTH実データでの確認。AVATAR-01は確認済み。
 - U: U2 実拡張でのテーマ確認。hover色は計算値のみ。
@@ -52,6 +58,7 @@ not-run:
 - C: EFF-01 1.3.0。描画分割は共有状態・フッターを跨ぐ構造変更のため。
 - C: AVATAR-01 1.2.0。原因はキー(ひらがな化)の直接表示。表示名だけ題名の綴りへ。キー不変。実拡張で修正を確認済みのためU3は解消。
 - C: 再取得で移行を代替しない。正式対応はChrome。共有カード幅チェックは768px以上。
+- C: CSVは表示列だけを出す(1.2.1)。復元列は外部ツールの取り込みを壊し、共有向け出力に受取状況・メモ・手動割り当てが混ざるため。「既定オフの任意」は2形式の保守が要り、「別ファイル」は既存のバックアップJSONと同じなので不採用。商品URL列の追加(Issue #1の本題)は parseItemSheet の保存項目追加と CACHE_SCHEMA_VERSION の繰り上げを伴うため別変更にする。
 
 ## Next
 

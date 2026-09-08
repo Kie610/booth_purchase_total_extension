@@ -1,7 +1,9 @@
 "use strict";
 
-// 注文・商品CSVの出力と取込。表示列と復元用JSONを同じファイルに持ち、
-// 表示セルが編集された場合は古い復元用データを黙って採用しない。
+// 注文・商品CSVの出力と取込。出力は表計算ソフト・外部ツール・他人との共有に
+// 使う表示列だけで、全データの持ち出しはバックアップJSON(backup.js)が担う。
+// 取込は、表示列だけのCSV(1.0.0以降の全版)と、1.2.0が末尾に付けていた
+// 「データバージョン」「復元用データ」列付きのCSVの両方を受け付ける。
 // DOM・ストレージ・通信を使わない。JSONの検証と版変換は backup.js が受け持つ。
 
 // Excelは先頭にBOMが無いとUTF-8と判断せず、日本語が文字化けする
@@ -44,7 +46,7 @@ const ORDER_CSV_HEADER = [
 
 // 注文単位。お支払金額の内訳(商品合計・送料)を並べて出し、それでも説明の付かない
 // 分を「差額」に残す。クーポンなど、まだ拾えていないものがあればそこに出る
-function buildOrdersCsv(results, filter, sourceBackup) {
+function buildOrdersCsv(results, filter) {
   const mode = normalizeGiftFilter(filter);
   const selected = mode === "all" ? results : filterResultsByGift(results, mode).rows;
   const rows = selected.map((r) => [
@@ -58,7 +60,7 @@ function buildOrdersCsv(results, filter, sourceBackup) {
     csvNumber(amountGapOf(r)),
     Array.isArray(r.items) ? String(r.items.length) : "",
   ]);
-  return buildRestorableCsv(ORDER_CSV_HEADER, rows, selected, mode, sourceBackup);
+  return buildViewCsv(ORDER_CSV_HEADER, rows, mode);
 }
 
 const ITEM_CSV_HEADER = [
@@ -76,7 +78,7 @@ const ITEM_CSV_HEADER = [
 
 // 商品単位。明細を取れていない注文も、欠けていると分かるように1行だけ出す
 // (黙って落とすと、その注文を買っていないように見えてしまう)
-function buildItemsCsv(results, filter, sourceBackup) {
+function buildItemsCsv(results, filter) {
   const mode = normalizeGiftFilter(filter);
   const selected = mode === "all" ? results : filterResultsByGift(results, mode).rows;
   const rows = [];
@@ -99,7 +101,7 @@ function buildItemsCsv(results, filter, sourceBackup) {
       ]);
     }
   }
-  return buildRestorableCsv(ITEM_CSV_HEADER, rows, selected, mode, sourceBackup);
+  return buildViewCsv(ITEM_CSV_HEADER, rows, mode);
 }
 
 // 種類・集計対象・アプリ版・端末のローカル日付をファイル名へ入れる。
@@ -114,19 +116,21 @@ function csvFileName(kind, date, filter) {
   return `booth-${kind}${suffix}-${DATA_VERSION}-${stamp}.csv`;
 }
 
+// 1.2.0が出力していた復元列。読み戻しの互換のためだけに残し、出力には付けない。
 const CSV_RESTORE_FORMAT = "booth-purchase-report-csv";
 const CSV_RESTORE_HEADER = ["データバージョン", "復元用データ"];
 
 // 数式として解釈され得る文字列セルには先頭にアポストロフィを付ける。
-// 数値列には使わず負の金額も数値のまま出す。復元用JSONは元の文字列を保持する。
+// 数値列には使わず負の金額も数値のまま出す。CSVから取り込むと、このアポストロフィは
+// 商品名の一部として残る(元の文字列はバックアップJSONにだけ保持される)。
 // 表計算アプリによる再保存後までの安全性を保証するものではない。
 function csvText(value) {
   const text = value == null ? "" : String(value);
   return /^[\s\u0000-\u001f\u007f-\u009f]*[=+\-@]|^[\u0000-\u001f\u007f-\u009f]/.test(text) ? `'${text}` : text;
 }
 
-// FNV-1aは表示セルの編集検出用。認証や悪意ある改ざんの防止には使えない。
-// CSVの引用方法や行区切りだけの変更ではなく、復号したセルの内容を比較する。
+// 1.2.0の復元列付きCSVの表示セルが編集されていないかを見るFNV-1a。認証や悪意ある
+// 改ざんの防止には使えない。CSVの引用方法や行区切りだけの変更ではなく、復号したセルの内容を比較する。
 function csvViewHash(header, rows) {
   const text = JSON.stringify([header, rows]);
   let hash = 0x811c9dc5;
@@ -134,69 +138,12 @@ function csvViewHash(header, rows) {
   return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
-function csvScopedValues(values, keys) {
-  return Object.fromEntries(Object.entries(values || {}).filter(([key]) => keys.has(key)));
-}
-
-// 全件出力では保存原本を使い、表示対象外の注文・キャッシュ・メモも保持する。
-// 原本が無い場合と部分出力では可視明細から作り、履歴が完全だとは記録しない。
-function csvSourceBackup(results, mode, source) {
-  if (mode === "all" && source) {
-    return buildBackup(source.index, source.cache,
-      source.exportedAt ? new Date(source.exportedAt) : undefined,
-      source.avatarAssign, source.giftStatus, source.migrationConflicts);
-  }
-  const cache = Object.create(null);
-  const orders = [];
-  const products = new Set();
-  const gifts = new Set();
-  for (const result of results) {
-    const items = Array.isArray(result.items) ? result.items : null;
-    orders.push({ id: String(result.id), status: result.status || "unknown", date: result.date || "" });
-    cache[result.id] = {
-      ...(typeof result.v === "number" ? { v: result.v } : {}),
-      amount: mode === "all" && typeof result.amount === "number" ? result.amount : null,
-      gift: mode === "all" && typeof result.gift === "number" ? result.gift : null,
-      status: result.status || "unknown", date: result.date || "", items,
-      shipping: mode === "all" && typeof result.shipping === "number" ? result.shipping : null,
-      ...(mode !== "all" ? { partialItems: true } : {}),
-    };
-    for (const item of items || []) {
-      products.add(itemProductKey(item));
-      if (typeof item.giftId === "string") gifts.add(item.giftId);
-    }
-  }
-  const conflicts = {};
-  for (const [name, keys] of [["avatarAssign", products], ["giftStatus", gifts]]) {
-    const selected = csvScopedValues(source?.migrationConflicts?.[name], keys);
-    if (Object.keys(selected).length) conflicts[name] = selected;
-  }
-  return buildBackup({ updatedAt: new Date().toISOString(), complete: false, orders }, cache,
-    undefined, csvScopedValues(source?.avatarAssign, products),
-    csvScopedValues(source?.giftStatus, gifts), conflicts);
-}
-
-function buildRestorableCsv(baseHeader, dataRows, results, mode, source) {
+// 表示列だけのCSV。絞り込み中は末尾に集計対象の列を足し、それ以外の列は
+// 足さない(外部ツールが列位置や行数に依存して読むため、補助行や巨大セルを出さない)。
+function buildViewCsv(baseHeader, dataRows, mode) {
   const label = giftFilterCsvLabel(mode);
-  const header = label ? [...baseHeader, GIFT_FILTER_CSV_COLUMN] : [...baseHeader];
-  const rows = dataRows.map((row) => label ? [...row, label] : row);
-  // 注文0件でも、削除後に残るメモや割り当てを運べるよう1行を確保する。
-  if (rows.length === 0) rows.push(header.map(() => ""));
-  const payloadData = {
-    format: CSV_RESTORE_FORMAT, appVersion: DATA_VERSION,
-    viewHash: "00000000", backup: csvSourceBackup(results, mode, source),
-  };
-  // Excelの1セル32,767文字制限を避ける。u付きでサロゲートペアを分断せず、
-  // 8,000コードポイントずつ保存する。表示行が足りない場合だけ空の補助行を足す。
-  const chunkCount = JSON.stringify(payloadData).match(/[\s\S]{1,8000}/gu).length;
-  while (rows.length < chunkCount) rows.push(header.map(() => ""));
-  payloadData.viewHash = csvViewHash(header, rows);
-  const chunks = JSON.stringify(payloadData).match(/[\s\S]{1,8000}/gu);
-  return toCsv([
-    [...header, ...CSV_RESTORE_HEADER],
-    ...rows.map((row, index) => [...row, DATA_VERSION,
-      index < chunks.length ? `part ${index + 1}/${chunks.length}:${chunks[index]}` : ""]),
-  ]);
+  const header = label ? [...baseHeader, GIFT_FILTER_CSV_COLUMN] : baseHeader;
+  return toCsv([header, ...dataRows.map((row) => label ? [...row, label] : row)]);
 }
 
 // ヘッダーを含むstring[][]を返す。BOM・引用内改行・CRLF/LF/CRの行終端を扱う。
@@ -258,7 +205,7 @@ function csvNumeric(value, label, integer = false) {
   return number;
 }
 
-// 旧CSVは表に実在する情報だけを復元する。集計に使わない派生列や重複行も
+// 表示列だけのCSVは、表に実在する情報だけを復元する。集計に使わない派生列や重複行も
 // csvFactsに原型で残し、支払額・送料・元の取得範囲などを推測で補わない。
 function parseLegacyCsv(header, rows, layout, fileName) {
   const cache = Object.create(null);
@@ -303,19 +250,20 @@ function parseLegacyCsv(header, rows, layout, fileName) {
   }
   const backup = buildBackup({ updatedAt: new Date().toISOString(), complete: false,
     orders: Array.from(orders.values()) }, cache);
-  // 無版の旧1.0/1.1 CSVは見分けられない。元版を創作せず、旧JSONと同じ互換経路へ渡す。
+  // ファイル名に版があればそれを使う。無版の旧1.0/1.1 CSVは見分けられないので、
+  // 元版を創作せず旧JSONと同じ互換経路へ渡す。
   const namedVersion = fileDataVersion(fileName);
   if (namedVersion) backup.appVersion = namedVersion;
   else delete backup.appVersion;
   const result = parseBackup(JSON.stringify(backup), fileName);
   if (result.ok) result.warnings.push(layout.kind === "orders"
-    ? "旧注文CSVの行を取り込みました。商品明細・取得範囲・手動割り当て・受取状況は復元できません。"
-    : "旧商品CSVから明細を復元しました。お支払金額・送料・取得範囲・手動割り当て・受取状況は復元できません。");
+    ? "注文CSVの行を取り込みました。商品明細・取得範囲・手動割り当て・受取状況は復元できません。"
+    : "商品CSVから明細を復元しました。お支払金額・送料・取得範囲・手動割り当て・受取状況は復元できません。");
   return result;
 }
 
 // JSONと既知形式のCSVを同じ取込結果へ変換する。受理できないファイルは理由付きで返す。
-// 復元列があるCSVは表示行との一致も必須とし、不一致時に旧CSVへ降格して読まない。
+// 1.2.0の復元列があるCSVは表示行との一致も必須とし、不一致時に表示列だけの取込へ降格して読まない。
 function parseImportFile(text, fileName = "") {
   try {
     const source = String(text).replace(/^\uFEFF/, "");

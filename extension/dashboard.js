@@ -161,21 +161,17 @@ window.addEventListener("hashchange", () => {
 // 一瞬だけレポート画面が見えてしまう
 renderCurrentView();
 
-// 出力時にもロック内で最新データを読み、別タブで更新された注文やメモを含める。
-function currentBackup() {
-  return buildBackup(state.index, state.cache, undefined, state.avatarAssign,
-    state.giftStatus, state.migrationConflicts);
-}
+// 出力時にもロック内で最新データを読み、別タブで更新された注文を含める。
 exportOrdersBtn.addEventListener("click", () =>
   runTask(() => downloadCsv(
-    buildOrdersCsv(currentResults(), giftFilter, currentBackup()),
+    buildOrdersCsv(currentResults(), giftFilter),
     csvFileName("orders", undefined, giftFilter)
   ), { persistCache: false })
 );
 
 exportItemsBtn.addEventListener("click", () =>
   runTask(() => downloadCsv(
-    buildItemsCsv(currentResults(), giftFilter, currentBackup()),
+    buildItemsCsv(currentResults(), giftFilter),
     csvFileName("items", undefined, giftFilter)
   ), { persistCache: false })
 );

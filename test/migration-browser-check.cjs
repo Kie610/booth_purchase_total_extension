@@ -204,7 +204,9 @@ const check = (name, run) => tests.push({ name, run });
       for (const file of result) {
         assert.match(file.fileName, /^booth-(backup|orders|items)-1\.2\.0-\d{8}\.(json|csv)$/);
         assert.equal(file.parsed.ok, true, file.parsed.message);
-        assert.equal(Object.values(file.parsed.giftStatus)[0].memo, "保存メモ");
+        // メモを持ち出せるのはJSONだけ。CSVは表示列だけなのでメモを作らない
+        if (file.fileName.endsWith(".json")) assert.equal(Object.values(file.parsed.giftStatus)[0].memo, "保存メモ");
+        else assert.deepEqual(Object.keys(file.parsed.giftStatus || {}), []);
       }
     });
 

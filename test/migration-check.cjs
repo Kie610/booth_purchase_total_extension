@@ -8,6 +8,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
+const { ORDERS_CSV_1_2_0, ITEMS_CSV_1_2_0 } = require("./fixtures/csv-1.2.0.cjs");
 
 const root = path.resolve(__dirname, "..");
 const context = vm.createContext({
@@ -132,8 +133,8 @@ function rawModernBackup(data = FULL_DOMAIN) {
     exportedAt: EXPORTED_AT, ...clone(data),
   };
 }
-function newCsv(kind, data = FULL_DOMAIN, rows = VISIBLE_RESULTS) {
-  return invoke(kind === "orders" ? "buildOrdersCsv" : "buildItemsCsv", clone(rows), "all", builtBackup(data));
+function newCsv(kind, rows = VISIBLE_RESULTS) {
+  return invoke(kind === "orders" ? "buildOrdersCsv" : "buildItemsCsv", clone(rows), "all");
 }
 function emptyDomain() { return { index: null, cache: {}, avatarAssign: {}, giftStatus: {} }; }
 function merge(current, incoming) {
@@ -309,46 +310,43 @@ check("parseBackupの既存呼び出しで旧JSONも新JSONも読み込める", 
   assert.deepEqual(domain(newResult), FULL_DOMAIN);
 });
 
-check("新注文CSVは可視行から落ちた保存データもsourceBackupから復元する", () => {
-  const result = imported(newCsv("orders"), invoke("csvFileName", "orders", EXPORT_DATE));
+check("1.2.0の復元列付き注文CSVは可視行から落ちた保存データも復元する", () => {
+  const result = imported(ORDERS_CSV_1_2_0, "booth-orders-1.2.0-20260102.csv");
   assert.deepEqual(domain(result), FULL_DOMAIN);
 });
 
-check("新商品CSVは可視行から落ちた保存データもsourceBackupから復元する", () => {
-  const result = imported(newCsv("items"), invoke("csvFileName", "items", EXPORT_DATE));
+check("1.2.0の復元列付き商品CSVは可視行から落ちた保存データも復元する", () => {
+  const result = imported(ITEMS_CSV_1_2_0, "booth-items-1.2.0-20260102.csv");
   assert.deepEqual(domain(result), FULL_DOMAIN);
 });
 
-check("注文0件の新CSVでも残っている手動割り当てとメモを復元する", () => {
-  const empty = {
-    index: null, cache: {},
-    avatarAssign: clone(FULL_DOMAIN.avatarAssign), giftStatus: clone(FULL_DOMAIN.giftStatus),
-  };
-  for (const kind of ["orders", "items"]) {
-    const result = imported(newCsv(kind, empty, []), invoke("csvFileName", kind, EXPORT_DATE));
-    assert.deepEqual(domain(result), empty, kind);
-  }
-});
-
-check("新CSVの先頭列は従来の列順・商品BOOST・数値表現を保つ", () => {
+check("新CSVは表示列だけを出し、復元列・補助行を付けない", () => {
   const orderLines = newCsv("orders").replace(/^\uFEFF/, "").split("\r\n");
-  assert.ok(orderLines[0].startsWith(`${ORDER_HEADER},`), "復元列は注文の既存列より後に置く");
-  assert.ok(orderLines[1].startsWith(`1001,${DATE_TEXT},支払済み,1300,1100,1100,200,0,1,`));
+  assert.deepEqual(orderLines, [ORDER_HEADER, `1001,${DATE_TEXT},支払済み,1300,1100,1100,200,0,1`]);
   const itemLines = newCsv("items").replace(/^\uFEFF/, "").split("\r\n");
-  assert.ok(itemLines[0].startsWith(`${ITEM_HEADER},`), "復元列は商品の既存列より後に置く");
-  assert.ok(itemLines[1].startsWith(`1001,${DATE_TEXT},支払済み,例,${SHOP_URL},服 (マヌカ),500,2,100,はい,`));
+  assert.deepEqual(itemLines, [ITEM_HEADER, `1001,${DATE_TEXT},支払済み,例,${SHOP_URL},服 (マヌカ),500,2,100,はい`]);
+  assert.equal(newCsv("orders", []).replace(/^\uFEFF/, ""), ORDER_HEADER, "0件は見出しだけ");
+});
+
+check("新CSVは表示列だけを取り込み、版付きファイル名を内容の版にする", () => {
+  const result = imported(newCsv("items"), invoke("csvFileName", "items", EXPORT_DATE));
+  assert.deepEqual(Object.keys(result.cache), ["1001"]);
+  assert.equal(result.cache["1001"].amount, null, "商品CSVからお支払金額を作らない");
+  assert.equal(result.cache["1001"].items[0].giftId, undefined, "表示列にないギフトIDを作らない");
+  assert.deepEqual(Object.keys(result.giftStatus || {}), [], "表示列にないメモを作らない");
+  assert.ok(result.warnings.length > 0, "欠落情報を通知する");
 });
 
 check("未来アプリ版のJSONとCSVファイル名を拒否する", () => {
   const future = rawModernBackup();
   future.appVersion = "99.0.0";
   rejected(JSON.stringify(future), "booth-backup-99.0.0-20260102.json");
-  rejected(newCsv("orders"), "booth-orders-99.0.0-20260102.csv");
+  rejected(ORDERS_CSV_1_2_0, "booth-orders-99.0.0-20260102.csv");
 });
 
 check("JSONとCSVのファイル名と内容の版が一致しない場合は拒否する", () => {
   rejected(JSON.stringify(rawModernBackup()), "booth-backup-1.1.0-20260102.json");
-  rejected(newCsv("orders"), "booth-orders-1.1.0-20260102.csv");
+  rejected(ORDERS_CSV_1_2_0, "booth-orders-1.1.0-20260102.csv");
 });
 
 check("giftIdへ文字列でない値を入れたJSONを保存前に拒否する", () => {
@@ -367,12 +365,11 @@ check("新形式を併合してもgiftStatusと割り当てが消えずcache v1�
   assert.deepEqual(domain(merge(result, incoming)), FULL_DOMAIN);
 });
 
-check("新CSVの表示セルを編集したら古い復元payloadを黙って使わない", () => {
-  const csv = newCsv("orders");
-  rejected(csv.replace("支払済み", "未払い"), "booth-orders-1.2.0-20260102.csv");
+check("1.2.0のCSVの表示セルを編集したら古い復元payloadを黙って使わない", () => {
+  rejected(ORDERS_CSV_1_2_0.replace("支払済み", "未払い"), "booth-orders-1.2.0-20260102.csv");
 });
 
-check("文字列の数式開始を抑制し、負の金額と復元時の元文字列を保持する", () => {
+check("文字列の数式開始を抑制し、負の金額を数値のまま出す", () => {
   const source = domain(FULL_DOMAIN);
   source.cache["1001"] = {
     ...clone(OLD_ENTRY), amount: -1200, shipping: 0,
@@ -380,11 +377,11 @@ check("文字列の数式開始を抑制し、負の金額と復元時の元文�
       ({ ...clone(OLD_ITEM), name, price: -100, quantity: 2, boost: 0 })),
   };
   const rows = [{ id: "1001", ...clone(source.cache["1001"]) }];
-  const csv = newCsv("items", source, rows);
+  const csv = newCsv("items", rows);
   for (const prefix of ["'=1+1", "'+1+2", "'-1+2", "'@SUM(1)", "'\t=1+1", "' =1+1", "'\u0085=1+1"]) {
     assert.ok(csv.includes(`,${prefix},-100,2,0,`), `文字列は保護し金額は数値にする: ${JSON.stringify(prefix)}`);
   }
-  assert.deepEqual(domain(imported(csv, "booth-items-1.2.0-20260102.csv")), source);
+  assert.equal(imported(csv, "booth-items-1.2.0-20260102.csv").cache["1001"].amount, null);
 });
 
 check("旧商品CSVの同内容2行は別明細として残し、原行も2件保存する", () => {
@@ -396,45 +393,22 @@ check("旧商品CSVの同内容2行は別明細として残し、原行も2件�
   assert.equal(result.cache["1001"].csvFacts[0].values["BOOST"], "100");
 });
 
-check("新部分CSVは該当明細と関連メモ・割り当てだけを持ち出す", () => {
+check("新部分CSVは該当明細だけを持ち出し、注文全体の金額を作らない", () => {
   const source = domain(FULL_DOMAIN);
   source.cache["1001"].items.push({ ...clone(OLD_ITEM), name: "自分用", gift: false });
-  source.migrationConflicts = {
-    avatarAssign: { [PRODUCT_KEY]: ["shinano"], "旧ショップ / 保存名": ["manuka"] },
-    giftStatus: {
-      [GIFT_ID]: [{ ...clone(source.giftStatus[GIFT_ID]), memo: "関連する別メモ" }],
-      [ORPHAN_GIFT_ID]: [{ ...clone(source.giftStatus[ORPHAN_GIFT_ID]), memo: "対象外の別メモ" }],
-    },
-  };
   for (const kind of ["orders", "items"]) {
     const csv = invoke(kind === "orders" ? "buildOrdersCsv" : "buildItemsCsv",
-      [{ id: "1001", ...clone(source.cache["1001"]) }], "gift", builtBackup(source));
+      [{ id: "1001", ...clone(source.cache["1001"]) }], "gift");
     const result = imported(csv, `booth-${kind}-gift-1.2.0-20260102.csv`);
     assert.deepEqual(Object.keys(result.cache), ["1001"]);
     assert.equal(result.cache["1001"].amount, null);
     assert.equal(result.cache["1001"].shipping, null);
     assert.equal(result.cache["1001"].partialItems, true);
-    assert.equal(result.cache["1001"].items.length, 1);
-    assert.equal(result.cache["1001"].items[0].gift, true);
     assert.equal(result.index.complete, false);
-    assert.deepEqual(Object.keys(result.giftStatus), [GIFT_ID]);
-    assert.deepEqual(Object.keys(result.avatarAssign), [PRODUCT_KEY]);
-    assert.deepEqual(Object.keys(result.migrationConflicts.avatarAssign), [PRODUCT_KEY]);
-    assert.deepEqual(Object.keys(result.migrationConflicts.giftStatus), [GIFT_ID]);
-  }
-});
-
-check("新全件CSVはcheckedAtの数値と文字列および競合記録を保持する", () => {
-  const source = domain(FULL_DOMAIN);
-  source.giftStatus[ORPHAN_GIFT_ID].checkedAt = 1767312000000;
-  source.migrationConflicts = {
-    avatarAssign: { [PRODUCT_KEY]: ["shinano"] },
-    giftStatus: { [GIFT_ID]: [{ ...clone(source.giftStatus[GIFT_ID]), memo: "別の保存値" }] },
-  };
-  for (const kind of ["orders", "items"]) {
-    const result = imported(newCsv(kind, source), `booth-${kind}-1.2.0-20260102.csv`);
-    assert.deepEqual(domain(result), domain(source));
-    assert.deepEqual(clone(result.migrationConflicts), source.migrationConflicts);
+    if (kind === "items") {
+      assert.equal(result.cache["1001"].items.length, 1, "対象外の自分用明細を含めない");
+      assert.equal(result.cache["1001"].items[0].gift, true);
+    } else assert.equal(result.cache["1001"].items, null, "注文CSVから明細を作らない");
   }
 });
 
@@ -491,15 +465,13 @@ check("成功データで復元できた取得失敗は再取得対象に残さ�
   assert.equal(invoke("needsCollect",result),false);
 });
 
-check("長いメモをセル上限内で分割し、欠けた断片は拒否する", () => {
-  const source=clone(FULL_DOMAIN);
-  source.giftStatus[GIFT_ID].memo="長いメモ😀".repeat(8000);
-  const csv=newCsv("orders",source);
-  const rows=invoke("parseCsv",csv);
-  assert.ok(rows.slice(1).every(row=>row.at(-1).length<32767));
-  assert.deepEqual(domain(imported(csv,"booth-orders-1.2.0-20260102.csv")),source);
-  rows[2][rows[2].length-1]="";
-  rejected(invoke("toCsv",rows),"booth-orders-1.2.0-20260102.csv");
+check("1.2.0のCSVの復元断片が欠けていれば拒否する", () => {
+  const rows = invoke("parseCsv", ORDERS_CSV_1_2_0);
+  assert.ok(rows[1].at(-1).startsWith("part 1/1:"), "1.2.0の復元列を持つ");
+  rows[1][rows[1].length - 1] = rows[1].at(-1).replace("part 1/1:", "part 1/2:");
+  rejected(invoke("toCsv", rows), "booth-orders-1.2.0-20260102.csv");
+  rows[1][rows[1].length - 1] = "";
+  rejected(invoke("toCsv", rows), "booth-orders-1.2.0-20260102.csv");
 });
 
 let passed = 0;

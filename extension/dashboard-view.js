@@ -801,7 +801,7 @@ function renderExportArea(results = currentResults()) {
   exportOrdersBtn.disabled = running || !available;
   exportItemsBtn.disabled = running || !available;
   if (results.length === 0) {
-    exportStats.textContent = available ? "表示対象の注文は0件です。保存済みの情報を復元用データへ含めます。" : "";
+    exportStats.textContent = available ? "表示対象の注文は0件です。CSVは見出しだけになります。" : "";
     exportGap.hidden = true;
     exportPreviewBody.innerHTML = "";
     return;
