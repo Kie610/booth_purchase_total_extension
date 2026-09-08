@@ -2,10 +2,10 @@
 
 updated: 2026-09-09
 repo: Kie610/booth_purchase_total_extension
-work_branch: 1.2.0
-upstream: origin/1.2.0@5b74920
-base: 1.1.0@67f206d
-goal: 1.2.0はリリース済み。BOOTH商品ページとNotionの更新、次版1.3.0の準備。
+work_branch: 1.2.1
+upstream: origin/1.2.1@cd9fd3c
+base: 1.2.0@fb55ee7
+goal: 1.2.1はリリース済み。BOOTH商品ページの保存待ちと次版1.3.0の準備。
 
 ## State
 
@@ -63,11 +63,20 @@ not-run:
 - C: Issue #2(旧版データを引き継ぐと再取得してもエクスポートが更新されない)はIssue #1と同じ原因。商品CSVの列は保存項目の版数に依存しないため、正しく再取得しても出力は1バイトも変わらない(合成データで確認)。利用者が見た差は未取得の商品URLで、キャッシュ削除でも解消しない。商品URLの保存と CACHE_SCHEMA_VERSION=3 への繰り上げで両方が解消する。
 - C: `isOutdatedEntry` は現行版より古ければ真を返すだけにした。v3の商品URLは全商品に増えるため、v1→v2のようにギフトを含む注文だけへ絞る余地がない。ギフトURL取り直しボタンの対象は版数ではなく giftId の有無(`needsGiftId`)で判定する。
 
+- C: v1.2.1を2026-09-09にリリース。タグ v1.2.1 = cd9fd3c、配布ZIPのSHA-256は
+  6c8ee9ef834a9aba58da44e0d52ba2287623e996df13abe1cd1a904d108f3178。main・origin/main・1.2.1・origin/1.2.1が同一SHA。
+  GitHub Releaseの添付を再取得してハッシュ一致を確認済み。
+- C: Notionの商品ページ仮案を1.2.1へ更新(親ページ改題、00 索引・決定事項、01 商品概要、02 BOOTH本文案)。
+  商品名末尾の日付見出しは据え置き(1.2.1は見出しを差し替える規模の機能追加ではない)。
+- C: BOOTHの添付ZIPはv1.2.0のまま。本文と配布物の版をそろえるまで保存しない。
+
 ## Next
 
-1. Notionの03・05・06(画像順・公開前チェック・サムネイル)を1.2.0の実態へ更新 — blocked-by: none
-2. EFF-01を1.3.0で実施 — blocked-by: none
-3. 年1回のmirror更新と復元確認(2027-09まで) — blocked-by: none
+1. BOOTH商品ページの保存 — blocked-by: 添付ZIPをv1.2.1へ差し替えること、保存方法(非公開/公開)のユーザー選択。
+   本文はmanage.booth.pm/items/8667966/editへ入力済みで未保存(2026-09-09)。
+2. Notionの03・05・06(画像順・公開前チェック・サムネイル)を1.2.0の実態へ更新 — blocked-by: none
+3. EFF-01を1.3.0で実施 — blocked-by: none
+4. 年1回のmirror更新と復元確認(2027-09まで) — blocked-by: none
 
 ## Paths
 
