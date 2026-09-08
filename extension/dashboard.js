@@ -204,7 +204,7 @@ restoreFile.addEventListener("change", async () => {
   const parsedFiles = [];
   try {
     for (const file of files) {
-      const parsed = parseImportFile(await file.text(), file.name);
+      const parsed = parseBackup(await file.text(), file.name);
       if (!parsed.ok) throw new Error(`${file.name}: ${parsed.message}`);
       parsedFiles.push(parsed);
     }

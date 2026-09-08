@@ -49,8 +49,8 @@ const check = (name, run) => tests.push({ name, run });
       window.incomingData = () => ({ index: null, cache: { "0002": { v: 1, amount: 0, items: [], shipping: 0 } } });
     });
 
-    check("ヘッダーはギフト・注文の次がデータの引っ越し", async () => {
-      assert.deepEqual(await page.locator('.nav-link').evaluateAll((nodes) => nodes.map((node) => node.dataset.view).slice(-2)), ["gifts", "backup"]);
+    check("ヘッダーはデータ出力の次がデータの引っ越し", async () => {
+      assert.deepEqual(await page.locator('.nav-link').evaluateAll((nodes) => nodes.map((node) => node.dataset.view).slice(-3)), ["gifts", "export", "backup"]);
       assert.equal(await page.locator('#restoreFile').getAttribute('multiple'), '');
     });
 
@@ -198,15 +198,15 @@ const check = (name, run) => tests.push({ name, run });
           exportOrdersBtn.click(); await wait();
           exportItemsBtn.click(); await wait();
         } finally { downloadFile = originalDownload; }
-        return exports.map(({ text, fileName }) => ({ fileName, parsed: parseImportFile(text, fileName) }));
+        return exports.map(({ text, fileName }) => ({ fileName, text,
+          parsed: fileName.endsWith(".json") ? parseBackup(text, fileName) : null }));
       });
       assert.equal(result.length, 3);
       for (const file of result) {
         assert.match(file.fileName, /^booth-(backup|orders|items)-1\.2\.0-\d{8}\.(json|csv)$/);
-        assert.equal(file.parsed.ok, true, file.parsed.message);
-        // メモを持ち出せるのはJSONだけ。CSVは表示列だけなのでメモを作らない
-        if (file.fileName.endsWith(".json")) assert.equal(Object.values(file.parsed.giftStatus)[0].memo, "保存メモ");
-        else assert.deepEqual(Object.keys(file.parsed.giftStatus || {}), []);
+        // メモを持ち出せるのはJSONだけ。CSVは表示列だけなのでメモを含まない
+        if (file.parsed) assert.equal(Object.values(file.parsed.giftStatus)[0].memo, "保存メモ");
+        else assert.ok(!file.text.includes("保存メモ"), "CSVはメモを含まない");
       }
     });
 
@@ -279,7 +279,7 @@ const check = (name, run) => tests.push({ name, run });
         let writes=0, output=null;
         ext.storage.local.set=()=>{writes++;return Promise.reject(new Error("quota fixture"));};
         ext.storage.local.remove=()=>{writes++;return Promise.reject(new Error("remove fixture"));};
-        downloadFile=(text,fileName)=>{output=parseImportFile(text,fileName);};
+        downloadFile=(text,fileName)=>{output=parseBackup(text,fileName);};
         let failedRun, enabled;
         try {
           failedRun=await runTask(()=>{});

@@ -697,15 +697,14 @@
        <p class="hint" id="restoreDescription">
          今あるデータは消えません。読み込んだ内容と<b>併合</b>し、同じ注文があれば
          既知の値を残して不足する項目を補います。明細は完全なものを優先し、異なる値も保管します。
-         1.0.0以降のJSON・注文CSV・商品CSVを読み込めます。CSVは複数選択して補完できますが、
-         元のCSVにない情報は復元できません。1.2.0が出力した末尾に復元用データの付くCSVは、
-         その復元用データから読み戻します。注文履歴の「取得済みの範囲」は、両方が全期間のときだけ
+         1.0.0以降のバックアップJSONを読み込めます(CSVは読み込めません)。
+         複数選択すると順に併合します。注文履歴の「取得済みの範囲」は、両方が全期間のときだけ
          全期間のままにします(片方でも途中までだと、つないだ結果に抜けが無いとは
          言い切れないため)。
        </p>
        <div class="step-controls">
-         <label class="restore-field" for="restoreFile">読み込むJSON・CSV</label>
-         <input type="file" id="restoreFile" accept="application/json,text/csv,.json,.csv" multiple aria-describedby="restoreDescription">
+         <label class="restore-field" for="restoreFile">読み込むJSON</label>
+         <input type="file" id="restoreFile" accept="application/json,.json" multiple aria-describedby="restoreDescription">
        </div>
        <div class="status" id="restoreStatus" role="status" aria-live="polite"></div>
      </section>

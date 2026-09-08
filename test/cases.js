@@ -2415,8 +2415,7 @@ check("閉じると元のボタンへ戻る", document.activeElement === shareBt
 check("閉じると後ろを操作できる", document.getElementById("view-report").inert, false);
 
 // --- CSV出力(データ出力の画面) ---
-// 引用・行終端を正規化して比較する。CSVの取込はmigration-check.cjsで検証する。
-const displayCsv = (csv) => toCsv(parseCsv(csv));
+const displayCsv = (csv) => csv;
 check("csvField そのまま", csvField("髪型A"), "髪型A");
 check("csvField カンマを含む値は囲む", csvField("帽子, 赤"), '"帽子, 赤"');
 check("csvField 引用符は重ねる", csvField('「"特"」'), '"「""特""」"');
@@ -4004,7 +4003,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
   check("CSVとバックアップに機密性の警告を出す",
     dashboardDoc.querySelectorAll(".sensitive-note strong").length, 2);
   check("復元ファイルに明示的なラベルがある",
-    dashboardDoc.querySelector('label[for="restoreFile"]').textContent.trim(), "読み込むJSON・CSV");
+    dashboardDoc.querySelector('label[for="restoreFile"]').textContent.trim(), "読み込むJSON");
   check("共有文面に明示的なラベルがある",
     dashboardDoc.querySelector('label[for="shareText"]').textContent.trim(), "投稿する文面");
   check("共有カードを正式なモーダルとして宣言",

@@ -1,6 +1,6 @@
 "use strict";
 
-// JSON/CSVの移行契約を実関数で検証する。fixtureは架空の注文だけを使い、
+// JSONの移行契約とCSV出力を実関数で検証する。fixtureは架空の注文だけを使い、
 // ブラウザ・ストレージ・ネットワークにはアクセスしない。
 // 旧形式の根拠: v1.0.0 (7e884d2) / v1.1.0 (67f206d) の
 // extension/backup.js、csv.js、dashboard-parse.js。生成側を期待値の算出に使わない。
@@ -8,7 +8,6 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
-const { ORDERS_CSV_1_2_0, ITEMS_CSV_1_2_0 } = require("./fixtures/csv-1.2.0.cjs");
 
 const root = path.resolve(__dirname, "..");
 const context = vm.createContext({
@@ -38,14 +37,14 @@ function domain(value) {
   });
 }
 function imported(text, fileName) {
-  const result = invoke("parseImportFile", text, fileName);
+  const result = invoke("parseBackup", text, fileName);
   assert.equal(result.ok, true, result.message || "取り込みが拒否された");
   assert.ok(Array.isArray(result.warnings), "warningsは文字列配列で返す");
   assert.ok(result.warnings.every((warning) => typeof warning === "string"));
   return result;
 }
 function rejected(text, fileName) {
-  const result = invoke("parseImportFile", text, fileName);
+  const result = invoke("parseBackup", text, fileName);
   assert.equal(result.ok, false, "不正入力を受理しない");
   assert.equal(typeof result.message, "string");
   assert.ok(result.message.length > 0, "拒否理由を返す");
@@ -82,10 +81,6 @@ function oldBackup(withAssignment = false) {
 const ORDER_HEADER = "注文番号,注文日時,ステータス,お支払金額,ギフト額,商品合計,送料,差額,商品点数";
 const ITEM_HEADER = "注文番号,注文日時,ステータス,ショップ名,ショップURL,商品名,単価,数量,BOOST,ギフト";
 const ORDER_ROW = `1001,${DATE_TEXT},支払済み,1300,0,1100,200,0,1`;
-const ITEM_ROW = `1001,${DATE_TEXT},支払済み,例,${SHOP_URL},服 (マヌカ),500,2,100,いいえ`;
-const OLD_ORDERS_CSV = `\uFEFF${ORDER_HEADER}\r\n${ORDER_ROW}\r\n`;
-const OLD_ITEMS_CSV = `\uFEFF${ITEM_HEADER}\r\n${ITEM_ROW}\r\n`;
-
 // 表示対象にない取消注文・索引外cache・未収集注文・孤立した割り当てとメモを
 // 同時に含める。CSVの可視行だけを復元元にすると、これらのどれかが失われる。
 const FULL_DOMAIN = {
@@ -133,6 +128,10 @@ function rawModernBackup(data = FULL_DOMAIN) {
     exportedAt: EXPORTED_AT, ...clone(data),
   };
 }
+// BOMを外してCRLFで分ける
+function csvLines(csv) {
+  return csv.replace(String.fromCharCode(0xFEFF), "").split(String.fromCharCode(13, 10));
+}
 function newCsv(kind, rows = VISIBLE_RESULTS) {
   return invoke(kind === "orders" ? "buildOrdersCsv" : "buildItemsCsv", clone(rows), "all");
 }
@@ -140,21 +139,6 @@ function emptyDomain() { return { index: null, cache: {}, avatarAssign: {}, gift
 function merge(current, incoming) {
   return invoke("mergeBackup", clone(current), clone(incoming), new Date(EXPORTED_AT));
 }
-function legacyItemFields(items) {
-  assert.ok(Array.isArray(items));
-  return clone(items.map(({ shop, shopUrl, name, price, quantity, boost, gift }) =>
-    ({ shop, shopUrl, name, price, quantity, boost, gift })));
-}
-function assertComplemented(result) {
-  assert.equal(result.index.orders.length, 1);
-  assert.equal(result.index.orders[0].id, "1001");
-  assert.equal(result.cache["1001"].amount, 1300, "注文CSVのお支払金額を残す");
-  assert.equal(result.cache["1001"].shipping, 200);
-  assert.equal(result.cache["1001"].gift, 0);
-  assert.deepEqual(legacyItemFields(result.cache["1001"].items), [OLD_ITEM], "商品CSVの明細で補う");
-  assert.equal(result.index.complete, false, "CSVだけで履歴の完全性を保証しない");
-}
-
 check("v1.0.0 JSONの金額・数量・BOOST・cache版数を保持する", () => {
   const legacy = oldBackup();
   const result = imported(JSON.stringify(legacy), "booth-backup-20260102.json");
@@ -174,120 +158,9 @@ check("新出力名にはアプリ版を含め、部分CSVは対象も明示す�
   assert.equal(invoke("csvFileName", "items", EXPORT_DATE, "gift"), "booth-items-gift-1.2.0-20260102.csv");
 });
 
-check("旧注文CSV単体は支払額を復元し、存在しない明細を作らない", () => {
-  const result = imported(OLD_ORDERS_CSV, "booth-orders-20260102.csv");
-  const entry = result.cache["1001"];
-  assert.equal(entry.amount, 1300);
-  assert.equal(entry.shipping, 200);
-  assert.equal(entry.gift, 0);
-  assert.equal(entry.items, null);
-  assert.equal(result.index.complete, false);
-  assert.ok(result.warnings.length > 0, "旧CSVの欠落情報を通知する");
-});
-
-check("旧商品CSV単体は明細を復元し、商品合計を支払額にしない", () => {
-  const result = imported(OLD_ITEMS_CSV, "booth-items-20260102.csv");
-  const entry = result.cache["1001"];
-  assert.deepEqual(legacyItemFields(entry.items), [OLD_ITEM]);
-  assert.equal(entry.amount, null);
-  assert.ok(entry.shipping == null, "商品CSVにない送料を0円確定にしない");
-  assert.equal(result.index.complete, false);
-});
-
-check("旧CSVの状態5種・注文日時・先頭ゼロ付き注文IDを保持する", () => {
-  const rows = [
-    `001,${DATE_TEXT},発送完了,0,0,0,0,0,0`,
-    `002,${DATE_TEXT},支払済み,0,0,0,0,0,0`,
-    `003,${DATE_TEXT},未払い,0,0,0,0,0,0`,
-    `004,${DATE_TEXT},キャンセル,0,0,0,0,0,0`,
-    `005,${DATE_TEXT},不明,0,0,0,0,0,0`,
-  ];
-  const result = imported(`${ORDER_HEADER}\n${rows.join("\n")}`, "booth-orders-20260102.csv");
-  assert.deepEqual(clone(result.index.orders.map(({ id, status, date }) => [id, status, date])), [
-    ["001", "completed", DATE_TEXT], ["002", "paid", DATE_TEXT], ["003", "unpaid", DATE_TEXT],
-    ["004", "cancelled", DATE_TEXT], ["005", "unknown", DATE_TEXT],
-  ]);
-});
-
-check("旧注文CSVの空欄を0円へ変換せず、正常な0円は保持する", () => {
-  const csv = `${ORDER_HEADER}\r\n` +
-    `1001,${DATE_TEXT},支払済み,0,0,0,0,0,0\r\n` +
-    `1002,${DATE_TEXT},支払済み,,,,,,`;
-  const result = imported(csv, "booth-orders-20260102.csv");
-  assert.equal(result.cache["1001"].amount, 0);
-  assert.equal(result.cache["1002"].amount, null);
-  assert.ok(result.cache["1002"].shipping == null);
-});
-
-check("旧商品CSVの未知の数量・BOOSTを1個や0円で埋めない", () => {
-  const csv = `${ITEM_HEADER}\r\n1001,${DATE_TEXT},支払済み,例,${SHOP_URL},不明明細,500,,,はい`;
-  const result = imported(csv, "booth-items-20260102.csv");
-  const item = result.cache["1001"].items[0];
-  assert.equal(item.quantity, null);
-  assert.equal(item.boost, null);
-  assert.equal(item.gift, true);
-  assert.equal(result.cache["1001"].amount, null);
-});
-
-check("CSVの引用符・区切り文字・セル内改行を商品名として保持する", () => {
-  const csv = `${ITEM_HEADER}\r\n` +
-    `1001,${DATE_TEXT},支払済み,"例,ショップ","${SHOP_URL}","服 ""A""\r\n続き",500,2,100,いいえ\r\n`;
-  const result = imported(csv, "booth-items-20260102.csv");
-  assert.equal(result.cache["1001"].items[0].shop, "例,ショップ");
-  assert.equal(result.cache["1001"].items[0].name, '服 "A"\r\n続き');
-});
-
-check("注文CSVの後に商品CSVを取り込むと支払額と明細を相互補完する", () => {
-  const orders = imported(OLD_ORDERS_CSV, "booth-orders-20260102.csv");
-  const items = imported(OLD_ITEMS_CSV, "booth-items-20260102.csv");
-  assertComplemented(merge(merge(emptyDomain(), orders), items));
-});
-
-check("商品CSVの後に注文CSVを取り込んでも同じ情報が残る", () => {
-  const orders = imported(OLD_ORDERS_CSV, "booth-orders-20260102.csv");
-  const items = imported(OLD_ITEMS_CSV, "booth-items-20260102.csv");
-  const forward = merge(merge(emptyDomain(), orders), items);
-  const reverse = merge(merge(emptyDomain(), items), orders);
-  assertComplemented(forward);
-  assertComplemented(reverse);
-});
-
-check("同じ旧CSVを再度取り込んでも注文・商品が増殖しない", () => {
-  const orders = imported(OLD_ORDERS_CSV, "booth-orders-20260102.csv");
-  const items = imported(OLD_ITEMS_CSV, "booth-items-20260102.csv");
-  const once = merge(merge(emptyDomain(), orders), items);
-  const repeated = merge(merge(once, orders), items);
-  assertComplemented(repeated);
-  assert.deepEqual(domain(repeated), domain(once));
-});
-
-check("旧部分注文CSVの表示用合計を注文のお支払金額にしない", () => {
-  const csv = `${ORDER_HEADER},集計対象\r\n1001,${DATE_TEXT},支払済み,1100,1100,1100,0,0,1,ギフト`;
-  const result = imported(csv, "booth-orders-gift-20260102.csv");
-  assert.equal(result.cache["1001"].amount, null);
-  assert.equal(result.cache["1001"].items, null);
-  assert.equal(result.index.complete, false);
-  assert.ok(result.warnings.length > 0);
-});
-
-check("旧部分商品CSVは部分明細を保ち、注文全体の金額を作らない", () => {
-  const csv = `${ITEM_HEADER},集計対象\r\n1001,${DATE_TEXT},支払済み,例,${SHOP_URL},贈り物,500,2,100,はい,ギフト`;
-  const result = imported(csv, "booth-items-gift-20260102.csv");
-  assert.equal(result.cache["1001"].amount, null);
-  assert.equal(result.cache["1001"].items.length, 1);
-  assert.equal(result.cache["1001"].items[0].gift, true);
-  assert.equal(result.index.complete, false);
-  assert.ok(result.warnings.length > 0);
-});
-
-check("未知ヘッダーと壊れたJSONを理由付きで拒否する", () => {
-  rejected("日付,金額\n2026-01-01,500", "booth-orders-20260102.csv");
+check("CSVと壊れたJSONを理由付きで拒否する", () => {
+  rejected([ORDER_HEADER, ORDER_ROW].join(String.fromCharCode(10)), "booth-orders-1.2.0-20260102.csv");
   rejected('{"format":', "booth-backup-20260102.json");
-  rejected(`${ITEM_HEADER}\n"1001`, "booth-items-20260102.csv");
-  rejected(`${ITEM_HEADER}\n1001,${DATE_TEXT},支払済み,例,${SHOP_URL},服"壊れた引用,500,2,100,いいえ`, "booth-items-20260102.csv");
-  rejected(`${ITEM_HEADER}\n"1001"x,${DATE_TEXT},支払済み,例,${SHOP_URL},服,500,2,100,いいえ`, "booth-items-20260102.csv");
-  rejected(`${ORDER_HEADER},注文番号\n${ORDER_ROW},1001`, "booth-orders-20260102.csv");
-  rejected(`${ORDER_HEADER}\n1001,${DATE_TEXT}`, "booth-orders-20260102.csv");
 });
 
 check("新JSONは取消・索引外cache・未収集・割り当て・メモを往復する", () => {
@@ -310,43 +183,20 @@ check("parseBackupの既存呼び出しで旧JSONも新JSONも読み込める", 
   assert.deepEqual(domain(newResult), FULL_DOMAIN);
 });
 
-check("1.2.0の復元列付き注文CSVは可視行から落ちた保存データも復元する", () => {
-  const result = imported(ORDERS_CSV_1_2_0, "booth-orders-1.2.0-20260102.csv");
-  assert.deepEqual(domain(result), FULL_DOMAIN);
-});
-
-check("1.2.0の復元列付き商品CSVは可視行から落ちた保存データも復元する", () => {
-  const result = imported(ITEMS_CSV_1_2_0, "booth-items-1.2.0-20260102.csv");
-  assert.deepEqual(domain(result), FULL_DOMAIN);
-});
-
 check("新CSVは表示列だけを出し、復元列・補助行を付けない", () => {
-  const orderLines = newCsv("orders").replace(/^\uFEFF/, "").split("\r\n");
-  assert.deepEqual(orderLines, [ORDER_HEADER, `1001,${DATE_TEXT},支払済み,1300,1100,1100,200,0,1`]);
-  const itemLines = newCsv("items").replace(/^\uFEFF/, "").split("\r\n");
-  assert.deepEqual(itemLines, [ITEM_HEADER, `1001,${DATE_TEXT},支払済み,例,${SHOP_URL},服 (マヌカ),500,2,100,はい`]);
-  assert.equal(newCsv("orders", []).replace(/^\uFEFF/, ""), ORDER_HEADER, "0件は見出しだけ");
+  assert.deepEqual(csvLines(newCsv("orders")), [ORDER_HEADER, "1001," + DATE_TEXT + ",支払済み,1300,1100,1100,200,0,1"]);
+  assert.deepEqual(csvLines(newCsv("items")), [ITEM_HEADER, "1001," + DATE_TEXT + ",支払済み,例," + SHOP_URL + ",服 (マヌカ),500,2,100,はい"]);
+  assert.deepEqual(csvLines(newCsv("orders", [])), [ORDER_HEADER], "0件は見出しだけ");
 });
 
-check("新CSVは表示列だけを取り込み、版付きファイル名を内容の版にする", () => {
-  const result = imported(newCsv("items"), invoke("csvFileName", "items", EXPORT_DATE));
-  assert.deepEqual(Object.keys(result.cache), ["1001"]);
-  assert.equal(result.cache["1001"].amount, null, "商品CSVからお支払金額を作らない");
-  assert.equal(result.cache["1001"].items[0].giftId, undefined, "表示列にないギフトIDを作らない");
-  assert.deepEqual(Object.keys(result.giftStatus || {}), [], "表示列にないメモを作らない");
-  assert.ok(result.warnings.length > 0, "欠落情報を通知する");
-});
-
-check("未来アプリ版のJSONとCSVファイル名を拒否する", () => {
+check("未来アプリ版のJSONを拒否する", () => {
   const future = rawModernBackup();
   future.appVersion = "99.0.0";
   rejected(JSON.stringify(future), "booth-backup-99.0.0-20260102.json");
-  rejected(ORDERS_CSV_1_2_0, "booth-orders-99.0.0-20260102.csv");
 });
 
-check("JSONとCSVのファイル名と内容の版が一致しない場合は拒否する", () => {
+check("JSONのファイル名と内容の版が一致しない場合は拒否する", () => {
   rejected(JSON.stringify(rawModernBackup()), "booth-backup-1.1.0-20260102.json");
-  rejected(ORDERS_CSV_1_2_0, "booth-orders-1.1.0-20260102.csv");
 });
 
 check("giftIdへ文字列でない値を入れたJSONを保存前に拒否する", () => {
@@ -365,10 +215,6 @@ check("新形式を併合してもgiftStatusと割り当てが消えずcache v1�
   assert.deepEqual(domain(merge(result, incoming)), FULL_DOMAIN);
 });
 
-check("1.2.0のCSVの表示セルを編集したら古い復元payloadを黙って使わない", () => {
-  rejected(ORDERS_CSV_1_2_0.replace("支払済み", "未払い"), "booth-orders-1.2.0-20260102.csv");
-});
-
 check("文字列の数式開始を抑制し、負の金額を数値のまま出す", () => {
   const source = domain(FULL_DOMAIN);
   source.cache["1001"] = {
@@ -381,35 +227,17 @@ check("文字列の数式開始を抑制し、負の金額を数値のまま出�
   for (const prefix of ["'=1+1", "'+1+2", "'-1+2", "'@SUM(1)", "'\t=1+1", "' =1+1", "'\u0085=1+1"]) {
     assert.ok(csv.includes(`,${prefix},-100,2,0,`), `文字列は保護し金額は数値にする: ${JSON.stringify(prefix)}`);
   }
-  assert.equal(imported(csv, "booth-items-1.2.0-20260102.csv").cache["1001"].amount, null);
 });
 
-check("旧商品CSVの同内容2行は別明細として残し、原行も2件保存する", () => {
-  const csv = `${ITEM_HEADER}\r\n${ITEM_ROW}\r\n${ITEM_ROW}\r\n`;
-  const result = imported(csv, "booth-items-20260102.csv");
-  assert.deepEqual(legacyItemFields(result.cache["1001"].items), [OLD_ITEM, OLD_ITEM]);
-  assert.equal(result.cache["1001"].csvFacts.length, 2);
-  assert.equal(result.cache["1001"].csvFacts[0].kind, "items");
-  assert.equal(result.cache["1001"].csvFacts[0].values["BOOST"], "100");
-});
-
-check("新部分CSVは該当明細だけを持ち出し、注文全体の金額を作らない", () => {
+check("新部分CSVは該当明細だけを出し、集計対象の列を付ける", () => {
   const source = domain(FULL_DOMAIN);
   source.cache["1001"].items.push({ ...clone(OLD_ITEM), name: "自分用", gift: false });
-  for (const kind of ["orders", "items"]) {
-    const csv = invoke(kind === "orders" ? "buildOrdersCsv" : "buildItemsCsv",
-      [{ id: "1001", ...clone(source.cache["1001"]) }], "gift");
-    const result = imported(csv, `booth-${kind}-gift-1.2.0-20260102.csv`);
-    assert.deepEqual(Object.keys(result.cache), ["1001"]);
-    assert.equal(result.cache["1001"].amount, null);
-    assert.equal(result.cache["1001"].shipping, null);
-    assert.equal(result.cache["1001"].partialItems, true);
-    assert.equal(result.index.complete, false);
-    if (kind === "items") {
-      assert.equal(result.cache["1001"].items.length, 1, "対象外の自分用明細を含めない");
-      assert.equal(result.cache["1001"].items[0].gift, true);
-    } else assert.equal(result.cache["1001"].items, null, "注文CSVから明細を作らない");
-  }
+  const rows = [{ id: "1001", ...clone(source.cache["1001"]) }];
+  const lines = csvLines(invoke("buildItemsCsv", rows, "gift"));
+  assert.equal(lines[0], ITEM_HEADER + ",集計対象");
+  assert.equal(lines.length, 2, "対象外の自分用明細を含めない");
+  assert.ok(lines[1].endsWith(",はい,ギフト"));
+  assert.equal(csvLines(invoke("buildOrdersCsv", rows, "gift"))[0], ORDER_HEADER + ",集計対象");
 });
 
 check("保存形式の版はmanifest版と一致し、旧版を順に変換する", () => {
@@ -463,15 +291,6 @@ check("成功データで復元できた取得失敗は再取得対象に残さ�
   const result=invoke("mergeCacheEntry",{amount:null,items:null,collectionFailed:true,v:2},
     {amount:1300,items:[clone(OLD_ITEM)],v:2});
   assert.equal(invoke("needsCollect",result),false);
-});
-
-check("1.2.0のCSVの復元断片が欠けていれば拒否する", () => {
-  const rows = invoke("parseCsv", ORDERS_CSV_1_2_0);
-  assert.ok(rows[1].at(-1).startsWith("part 1/1:"), "1.2.0の復元列を持つ");
-  rows[1][rows[1].length - 1] = rows[1].at(-1).replace("part 1/1:", "part 1/2:");
-  rejected(invoke("toCsv", rows), "booth-orders-1.2.0-20260102.csv");
-  rows[1][rows[1].length - 1] = "";
-  rejected(invoke("toCsv", rows), "booth-orders-1.2.0-20260102.csv");
 });
 
 let passed = 0;
