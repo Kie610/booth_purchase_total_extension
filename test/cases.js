@@ -3954,7 +3954,7 @@ const NEW = [{ id: "n1", status: "completed", date: "2026年6月1日 00:00" }];
     dashboardDoc.querySelector('.nav-link[data-view="ranking"]').getAttribute("href"), "#/ranking");
   check("メニューに追加した画面が並んでいる",
     [...dashboardDoc.querySelectorAll(".nav-link")].map((a) => a.getAttribute("href")),
-    ["#/report", "#/ranking", "#/avatars", "#/trends", "#/summary", "#/export", "#/gifts", "#/backup"]);
+    ["#/report", "#/ranking", "#/avatars", "#/trends", "#/summary", "#/gifts", "#/export", "#/backup"]);
   // D14 沼レポートの断り書き。アバター別の金額もショップ別と同じく商品の合計なので、
   // 外すと少ない額を「そのアバターに使った額」として見せることになる
   check("沼レポートに合計と一致しない旨の断りがある",

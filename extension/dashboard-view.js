@@ -232,7 +232,7 @@ const ACTION_BUTTONS = [
 // (ポップアップではなく専用タブで処理しているのと同じ理由)。
 // 現在の画面はURLのハッシュに持たせるので、再読み込みしても同じ画面に戻る。
 
-const VIEW_NAMES = ["report", "ranking", "avatars", "trends", "summary", "export", "gifts", "backup"];
+const VIEW_NAMES = ["report", "ranking", "avatars", "trends", "summary", "gifts", "export", "backup"];
 const DEFAULT_VIEW = "report";
 // 見出しの右に添える画面名。既定の画面では何も足さない
 const VIEW_TITLES = {
