@@ -68,6 +68,7 @@ const ITEM_CSV_HEADER = [
   "ショップ名",
   "ショップURL",
   "商品名",
+  "商品URL",
   "単価",
   "数量",
   "BOOST",
@@ -83,7 +84,7 @@ function buildItemsCsv(results, filter) {
   for (const r of selected) {
     const head = [csvText(r.id), csvText(r.date), csvText(STATUS_LABELS[r.status] || r.status)];
     if (!Array.isArray(r.items) || r.items.length === 0) {
-      rows.push([...head, "", "", "(明細なし)", "", "", "", ""]);
+      rows.push([...head, "", "", "(明細なし)", "", "", "", "", ""]);
       continue;
     }
     for (const item of r.items) {
@@ -92,6 +93,7 @@ function buildItemsCsv(results, filter) {
         csvText(item.shop),
         csvText(item.shopUrl),
         csvText(item.name),
+        csvText(item.url),
         csvNumber(item.price),
         csvNumber(itemQuantity(item)),
         csvNumber(item.boost),

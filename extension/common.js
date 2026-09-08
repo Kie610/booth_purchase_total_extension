@@ -94,22 +94,20 @@ function hasItems(entry) {
 //
 //   1 — 商品明細(shop/shopUrl/name/price/quantity/boost/gift)と送料
 //       v0.15.0以前は版数を持たず、配送商品の行と送料と数量が欠けている
-//   2 — ギフト商品の giftId(ギフト管理ページのUUID)。ギフトの無い注文は
-//       v1 と保存内容が同じなので取り直さない(isOutdatedEntry)
-const CACHE_SCHEMA_VERSION = 2;
+//   2 — ギフト商品の giftId(ギフト管理ページのUUID)
+//   3 — 商品ページのURL(items[].url)
+const CACHE_SCHEMA_VERSION = 3;
 
 function entrySchemaVersion(entry) {
   return entry && typeof entry.v === "number" ? entry.v : 0;
 }
 
+// 現行版より古いデータは取り直す。v3 の商品URLはすべての商品に増える項目なので、
+// 一部の注文だけを対象にする余地がない。
 // 新しい版で保存されたものは取り直さない(バックアップの復元で、この環境より
 // 新しい版のデータが入ってくることがある)
 function isOutdatedEntry(entry) {
-  const v = entrySchemaVersion(entry);
-  if (v >= CACHE_SCHEMA_VERSION) return false;
-  if (v < 1) return true;
-  // v1 → v2 で増えたのはギフトの giftId だけ。ギフトを含む注文だけを取り直す
-  return hasItems(entry) && entry.items.some((item) => item.gift);
+  return entrySchemaVersion(entry) < CACHE_SCHEMA_VERSION;
 }
 
 // 数量の行はデジタル商品の注文には無い。無ければ1個として数える

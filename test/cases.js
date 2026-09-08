@@ -146,9 +146,12 @@ check("ギフトのグループだけを合計する", [withGiftDetail.amount, w
 // 商品明細(ショップ名は外側の区切りから、ギフトかどうかはグループの見出しから決まる)
 check("商品明細の件数", withGiftDetail.items.length, 4);
 check("商品明細の1件目", withGiftDetail.items[0],
-  { shop: "SOUR FLAVOR", shopUrl: "https://sourflavor.booth.pm/", name: "髪型A", price: 425, quantity: 1, boost: 0, gift: false });
+  { shop: "SOUR FLAVOR", shopUrl: "https://sourflavor.booth.pm/", name: "髪型A",
+    url: "https://sourflavor.booth.pm/items/1", price: 425, quantity: 1, boost: 0, gift: false });
 check("ギフトのグループの商品には印が付く", withGiftDetail.items.map(i => i.gift), [false, false, true, true]);
-check("BOOSTは単価と分けて持つ", withGiftDetail.items[3], { shop: "SOUR FLAVOR", shopUrl: "https://sourflavor.booth.pm/", name: "髪型B", price: 425, quantity: 1, boost: 100, gift: true });
+check("BOOSTは単価と分けて持つ", withGiftDetail.items[3],
+  { shop: "SOUR FLAVOR", shopUrl: "https://sourflavor.booth.pm/", name: "髪型B",
+    url: "https://sourflavor.booth.pm/items/4", price: 425, quantity: 1, boost: 100, gift: true });
 check("数量の行が無ければ1個として数える", withGiftDetail.items.every(i => i.quantity === 1), true);
 check("ダウンロードのみの注文は送料0", withGiftDetail.shipping, 0);
 // ダウンロードファイル名の行も .u-tpg-caption1 だが金額を含まないので単価に混ざらない
@@ -425,14 +428,14 @@ check("版数が無ければ取り直す", [isOutdatedEntry(oldEntry), needsColl
 check("現行版なら取り直さない", [isOutdatedEntry(newEntry), needsCollect(newEntry)], [false, false]);
 // バックアップの復元で、この環境より新しい版のデータが入ってくることがある
 check("新しい版は取り直さない", isOutdatedEntry({ ...newEntry, v: CACHE_SCHEMA_VERSION + 1 }), false);
-// v2 で増えたのはギフトの giftId だけ。ギフトを含まない v1 の注文まで取り直すと、
-// 全ユーザーに無関係な再取得を強いる
-check("v1 でもギフトが無ければ取り直さない",
-  isOutdatedEntry({ v: 1, amount: 500, items: [{ name: "x", price: 500, gift: false }] }), false);
-check("v1 でギフトを含む注文は取り直す",
-  isOutdatedEntry({ v: 1, amount: 500, items: [{ name: "x", price: 500, gift: true }] }), true);
-check("v1 で明細が無ければ取り直さない(明細なしは needsCollect が別に拾う)",
-  isOutdatedEntry({ v: 1, amount: 500, items: null }), false);
+// v3 の商品URLはすべての商品に増える項目なので、旧版のデータは中身を問わず取り直す。
+// ギフトの有無や明細の有無で対象を絞ると、URLの無い明細が「収集済み」のまま残る
+check("旧版の注文はギフトの有無にかかわらず取り直す",
+  [isOutdatedEntry({ v: 1, amount: 500, items: [{ name: "x", price: 500, gift: false }] }),
+   isOutdatedEntry({ v: 2, amount: 500, items: [{ name: "x", price: 500, gift: false }] })],
+  [true, true]);
+check("旧版で明細が無くても取り直す",
+  isOutdatedEntry({ v: 1, amount: 500, items: null }), true);
 // 混在注文の欠落は差額に出るが、差額はクーポン利用でも出るので判定材料にはしない
 check("欠落したエントリの差額は0にならない",
   amountGapOf({ amount: 4060, items: [item("髪型A", 500)] }), 3560);
@@ -2440,13 +2443,19 @@ const shippedCsv = displayCsv(buildOrdersCsv([{
 check("\u6CE8\u6587CSV \u9001\u6599\u3092\u5206\u3051\u3066\u51FA\u3059", shippedCsv[1], "s1,2026\u5E747\u670820\u65E5 17:01,\u767A\u9001\u5B8C\u4E86,4060,0,3560,500,0,1");
 
 const itemsLines = displayCsv(buildItemsCsv(buildResults())).replace(/^\uFEFF/, "").split("\r\n");
-check("商品CSVの見出し", itemsLines[0], "注文番号,注文日時,ステータス,ショップ名,ショップURL,商品名,単価,数量,BOOST,ギフト");
+check("商品CSVの見出し", itemsLines[0], "注文番号,注文日時,ステータス,ショップ名,ショップURL,商品名,商品URL,単価,数量,BOOST,ギフト");
 check("商品CSVは1商品1行", itemsLines.length, 1 + 2 + 1 + 1 + 1 + 1 + 1);
 check("商品CSV 商品の行", itemsLines[1],
-  "a1,2026年5月3日 12:34,発送完了,SOUR FLAVOR,https://sourflavor.booth.pm/,髪型A,600,1,0,いいえ");
-check("商品CSV ギフトの印", itemsLines[2].endsWith("髪型B,400,1,0,はい"), true);
+  "a1,2026年5月3日 12:34,発送完了,SOUR FLAVOR,https://sourflavor.booth.pm/,髪型A,,600,1,0,いいえ");
+check("商品CSV ギフトの印", itemsLines[2].endsWith("髪型B,,400,1,0,はい"), true);
+// 商品URLは保存していれば出す。旧版のデータには無いので空欄のままになる
+check("商品CSV 商品URLの列",
+  displayCsv(buildItemsCsv([{ id: "u1", date: "2026年5月3日 12:34", status: "completed", amount: 600,
+    items: [{ ...item("髪型A", 600), url: "https://sourflavor.booth.pm/items/1" }] }]))
+    .includes("髪型A,https://sourflavor.booth.pm/items/1,600,1,0,いいえ"),
+  true);
 // 黙って落とすと、その注文を買っていないように見えてしまう
-check("商品CSV 明細の無い注文も行を残す", itemsLines[3], "a2,2026年5月20日 09:00,支払済み,,,(明細なし),,,,");
+check("商品CSV 明細の無い注文も行を残す", itemsLines[3], "a2,2026年5月20日 09:00,支払済み,,,(明細なし),,,,,");
 check("CSVのファイル名に書き出した日を入れる", csvFileName("orders", new Date(2026, 6, 5)), "booth-orders-1.2.0-20260705.csv");
 
 // --- D16 CSVへの集計対象(ギフトフィルタ)注記 ---
@@ -2472,7 +2481,7 @@ check("絞り込み中の注文CSVは対象注文だけを出す", giftOrdersLin
 
 const selfItemsLines = stripBom(buildItemsCsv(buildResults(), "self")).split("\r\n");
 check("絞り込み中の商品CSVは集計対象の列を足す", selfItemsLines[0],
-  "注文番号,注文日時,ステータス,ショップ名,ショップURL,商品名,単価,数量,BOOST,ギフト,集計対象");
+  "注文番号,注文日時,ステータス,ショップ名,ショップURL,商品名,商品URL,単価,数量,BOOST,ギフト,集計対象");
 check("絞り込み中の商品CSVは全データ行に集計対象を入れる",
   selfItemsLines.slice(1).every(line => line.endsWith(",自分用")), true);
 // 対象を判別できない明細なし注文や、ギフトの明細を部分CSVへ混ぜない。

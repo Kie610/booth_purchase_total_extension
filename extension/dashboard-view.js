@@ -950,7 +950,7 @@ function renderMonthArea() {
     outdatedCount.textContent =
       `拡張機能の更新で、注文詳細から保存する項目が増えました。` +
       `以前の版で収集した${outdated}件を取り直します(金額の集計は今のままで、` +
-      `商品明細・数量・送料が増えます)。`;
+      `商品URLなど、以前は保存していなかった項目が増えます)。`;
   }
 
   const unknown = stats.find((s) => s.key === null);

@@ -79,7 +79,8 @@ function oldBackup(withAssignment = false) {
 }
 
 const ORDER_HEADER = "注文番号,注文日時,ステータス,お支払金額,ギフト額,商品合計,送料,差額,商品点数";
-const ITEM_HEADER = "注文番号,注文日時,ステータス,ショップ名,ショップURL,商品名,単価,数量,BOOST,ギフト";
+// 旧版のcacheは商品URLを持たないため、その列は空欄で出る
+const ITEM_HEADER = "注文番号,注文日時,ステータス,ショップ名,ショップURL,商品名,商品URL,単価,数量,BOOST,ギフト";
 const ORDER_ROW = `1001,${DATE_TEXT},支払済み,1300,0,1100,200,0,1`;
 // 表示対象にない取消注文・索引外cache・未収集注文・孤立した割り当てとメモを
 // 同時に含める。CSVの可視行だけを復元元にすると、これらのどれかが失われる。
@@ -185,7 +186,7 @@ check("parseBackupの既存呼び出しで旧JSONも新JSONも読み込める", 
 
 check("新CSVは表示列だけを出し、復元列・補助行を付けない", () => {
   assert.deepEqual(csvLines(newCsv("orders")), [ORDER_HEADER, "1001," + DATE_TEXT + ",支払済み,1300,1100,1100,200,0,1"]);
-  assert.deepEqual(csvLines(newCsv("items")), [ITEM_HEADER, "1001," + DATE_TEXT + ",支払済み,例," + SHOP_URL + ",服 (マヌカ),500,2,100,はい"]);
+  assert.deepEqual(csvLines(newCsv("items")), [ITEM_HEADER, "1001," + DATE_TEXT + ",支払済み,例," + SHOP_URL + ",服 (マヌカ),,500,2,100,はい"]);
   assert.deepEqual(csvLines(newCsv("orders", [])), [ORDER_HEADER], "0件は見出しだけ");
 });
 
@@ -225,7 +226,7 @@ check("文字列の数式開始を抑制し、負の金額を数値のまま出�
   const rows = [{ id: "1001", ...clone(source.cache["1001"]) }];
   const csv = newCsv("items", rows);
   for (const prefix of ["'=1+1", "'+1+2", "'-1+2", "'@SUM(1)", "'\t=1+1", "' =1+1", "'\u0085=1+1"]) {
-    assert.ok(csv.includes(`,${prefix},-100,2,0,`), `文字列は保護し金額は数値にする: ${JSON.stringify(prefix)}`);
+    assert.ok(csv.includes(`,${prefix},,-100,2,0,`), `文字列は保護し金額は数値にする: ${JSON.stringify(prefix)}`);
   }
 });
 
@@ -288,8 +289,9 @@ check("不正な退避情報と旧項目を消して受理しない", () => {
 });
 
 check("成功データで復元できた取得失敗は再取得対象に残さない", () => {
-  const result=invoke("mergeCacheEntry",{amount:null,items:null,collectionFailed:true,v:2},
-    {amount:1300,items:[clone(OLD_ITEM)],v:2});
+  const current = vm.runInContext("CACHE_SCHEMA_VERSION", context);
+  const result=invoke("mergeCacheEntry",{amount:null,items:null,collectionFailed:true,v:current},
+    {amount:1300,items:[clone(OLD_ITEM)],v:current});
   assert.equal(invoke("needsCollect",result),false);
 });
 

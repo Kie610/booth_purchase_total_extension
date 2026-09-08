@@ -147,6 +147,7 @@ function parseItemSheet(sheet, shop, gift) {
     shop: shop.name,
     shopUrl: shop.url,
     name: link.textContent.trim(),
+    url: absoluteHref(link.getAttribute("href"), shop.url),
     price,
     quantity,
     boost,
@@ -157,6 +158,17 @@ function parseItemSheet(sheet, shop, gift) {
   const giftId = gift ? extractGiftId(sheet.querySelector(GIFT_LINK_SELECTOR)) : null;
   if (giftId) item.giftId = giftId;
   return item;
+}
+
+// リンクのhrefを絶対URLへそろえる。相対パスはショップURLを基準にする。
+// 読めなければ項目を空文字で埋めず null にする(URLがあるように見せない)
+function absoluteHref(href, base) {
+  if (!href) return null;
+  try {
+    return new URL(href, base || undefined).href;
+  } catch {
+    return null;
+  }
 }
 
 function extractGiftId(link) {

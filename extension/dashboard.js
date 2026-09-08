@@ -1815,17 +1815,23 @@ async function runAllTask(signal) {
 // とは切り離し、この画面のボタンからしか取りに行かない(サーバーへの負荷を増やさない)。
 
 // (a) ギフトのURL(giftId)を保存していない注文の詳細ページを取り直す。
-// 対象は isOutdatedEntry(v1 でギフトを含む注文)だけなので、他の注文には触れない。
+// 対象はギフトを含む注文だけなので、他の注文には触れない。
 // 「キャッシュを無視して」ではギフトを含む注文をすべて取り直す(ギフトの無い注文は対象外のまま)
 function orderHasGift(entry) {
   return hasItems(entry) && entry.items.some((item) => item.gift);
+}
+
+// giftId を持たないギフトがある注文。保存項目の版数ではなく giftId の有無で見る
+// (版数が上がる理由はギフト以外にもあり、それでこのボタンの対象を広げない)
+function needsGiftId(entry) {
+  return hasItems(entry) && entry.items.some((item) => item.gift && !item.giftId);
 }
 
 async function refetchGiftUrlsTask(signal) {
   const force = giftUrlForceRefresh.checked;
   const orders = targetOrders().filter((o) => {
     const entry = state.cache[o.id];
-    return force ? orderHasGift(entry) : isOutdatedEntry(entry);
+    return force ? orderHasGift(entry) : needsGiftId(entry);
   });
   if (orders.length === 0) {
     showNotice("取り直す注文はありません(すべてのギフトのURLを保存済みです)。");
