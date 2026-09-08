@@ -92,7 +92,7 @@ themeSwitch.addEventListener("click", (event) => {
   saveTheme(theme);
 });
 
-// D12 集計対象(すべて/自分用/ギフト)の切り替え。選択は保存しない
+// 集計対象(すべて/自分用/ギフト)の切り替え。選択は保存しない
 // (保存すると、次に開いたときに絞り込まれた数字を全体の合計だと思わせる)
 giftFilterSwitch.addEventListener("click", (event) => {
   const btn = event.target.closest("button[data-gift-filter]");
@@ -455,7 +455,7 @@ async function shareRanking() {
   });
 }
 
-// D14 沼レポート。順位のずれる理由はランキングと同じに加え、未分類が残っていること。
+// 沼レポート。順位のずれる理由はランキングと同じに加え、未分類が残っていること。
 // 伏せ字(hideNames)はアバター名に効かせない(根拠は share.js の沼レポートの節)
 async function shareAvatarReport() {
   if (!avatarShareStats || avatarShareStats.rows.length === 0) return;
@@ -509,7 +509,7 @@ shareRatioToggle.addEventListener("click", (event) => {
 
 shareScaleInput.addEventListener("input", () => setShareBackgroundScale(shareScaleInput.value));
 
-// D13 品名・ショップ名を出さない。開いたまま切り替えられるよう、その場で組み直す
+// 品名・ショップ名を出さない。開いたまま切り替えられるよう、その場で組み直す
 shareHideNames.addEventListener("change", applyShareNameMask);
 
 // C17 背景の作り方のタブ。role=tablist の作法どおり、左右キーでも行き来できるようにする
@@ -736,7 +736,7 @@ rankingSortToggle.addEventListener("click", (event) => {
   if (btn) setRankingSort(btn.dataset.sort);
 });
 
-// D14 沼レポートの対象期間と基準。推し作者ランキングと同じ作法にそろえる
+// 沼レポートの対象期間と基準。推し作者ランキングと同じ作法にそろえる
 avatarYear.addEventListener("change", () => setAvatarYear(avatarYear.value));
 
 avatarSortToggle.addEventListener("click", (event) => {
@@ -745,7 +745,7 @@ avatarSortToggle.addEventListener("click", (event) => {
 });
 
 // 手動割り当ても復元・収集と直列化し、最新の保存値へ選んだ商品だけを反映する。
-// D22 区分(select)と特定アバター(datalist付きの入力欄)のどちらからでも決められる。
+// 区分(select)と特定アバター(datalist付きの入力欄)のどちらからでも決められる。
 // 片方を決めたらもう片方は空へ戻す。両方に値が残ると、どちらが効いているのか
 // 画面から読めなくなる(保存できるのは商品ごとに1つだけ)
 avatarAssignBody.addEventListener("change", async (event) => {
@@ -777,7 +777,7 @@ avatarAssignBody.addEventListener("change", async (event) => {
   }, { persistCache: false });
 });
 
-// D18 沼レポートの「再集計」。**BOOTHへは通信しない。**保存済みのデータを読み直して
+// 沼レポートの「再集計」。**BOOTHへは通信しない。**保存済みのデータを読み直して
 // 集計と描画をやり直すだけ。別のタブで手動割り当てを変えた場合もこれで揃う。
 // 読み直しの間はボタンを止める(連打で読み込みが重なると、最後に返ってきた古い方で
 // stateを上書きしうる)。押した人の指はボタンの上にあるので、終わったら焦点を戻す
@@ -1086,7 +1086,7 @@ function currentResults() {
   return refreshResults();
 }
 
-// 表示用の一覧。D12の絞り込みはここが唯一の入口なので、全ビュー・CSV・共有が
+// 表示用の一覧。集計対象の絞り込みはここが唯一の入口なので、全ビュー・CSV・共有が
 // 自動で追従する。分けられなかった差額は giftFilterGap に控えて画面へ出す
 function buildResults() {
   const { rows, gap, gapUnknown } = filterResultsByGift(buildAllResults(), giftFilter);
@@ -1131,7 +1131,7 @@ function buildAllResults() {
 }
 
 // ポップアップに見せる要約。
-// **D12の絞り込みを掛けない。** ポップアップは現行のまま「全体の合計」を出す約束で、
+// **集計対象の絞り込みを掛けない。** ポップアップは「全体の合計」を出す約束で、
 // 集計ページで一時的に絞っただけの数字を保存すると、別画面の数字が黙って減る
 function buildSummary(partial) {
   const results = buildAllResults();
@@ -1426,7 +1426,7 @@ function listPageLooksUnreadable({ orders, maxPage, pagerFound, emptyFound = fal
 // 揃っていないとき(前回が中断で終わったときなど)は、既知の注文より古いところに
 // 取得できていない範囲が残っている可能性があるため、既知の注文は読み飛ばして
 // 最後のページまで進み、抜けている分を拾う
-// D10 ステータス再取得の間は、既知の注文も読み飛ばさずそのまま取り込む。
+// ステータス再取得の間は、既知の注文も読み飛ばさずそのまま取り込む。
 // 索引は注文IDで上書きマージされるので、これだけでステータスと日時表記が新しくなる
 // (金額キャッシュには触れないため、収集済みの金額は残る)。
 // refresh は { cutoffSortKey, done } の入れ物。cutoffSortKey より古い注文まで来たら
@@ -1552,7 +1552,7 @@ async function fetchIndexTask(signal, force, refreshStatus = false) {
   const stopAtKnown = previousComplete;
   // 前回が途中で終わっている索引。既知の注文の先に抜けが残っているかもしれない
   const hadPartialIndex = !force && Boolean(state.index) && !previousComplete;
-  // D10 ステータス再取得。全件再取得は索引ごと作り直すので、そちらが優先されているときは何もしない。
+  // ステータス再取得。全件再取得は索引ごと作り直すので、そちらが優先されているときは何もしない。
   // まだ変わりうる注文が1件も無ければ、巡回を伸ばす意味がないので通常の増分取得に任せる
   const cutoffSortKey = force ? null : statusRefreshCutoff(state.index);
   const refresh =
@@ -1717,7 +1717,7 @@ async function collectAmounts(orders, force, signal) {
 
   let done = 0;
   let failed = 0;
-  // D15 収集健全性。実際に取得を試み切った注文(attempted)のうち、最終的に金額か
+  // 収集健全性。実際に取得を試み切った注文(attempted)のうち、最終的に金額か
   // 商品明細を読めなかったもの(unreadable)を数える。fetchDocWithRetry が再試行して
   // 成功したものは success 側なので数に入らない。
   // 中断・ログイン切れで途中終了しても数えた分は残すため finally で書き出す

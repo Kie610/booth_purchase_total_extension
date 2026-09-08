@@ -59,7 +59,7 @@ function resultsInRankingPeriod(results, year = rankingSelectedYear) {
 
 // 選択肢は「全期間」と、注文のある年。中身が同じなら作り直さない
 // (開いたまま再描画すると選択が閉じてしまう)。
-// 沼レポート(D14)も同じ選び方をするので、対象の select と選択値を受け取る
+// 沼レポートも同じ選び方をするので、対象の select と選択値を受け取る
 function renderRankingYearOptions(years, select = rankingYear, selected = rankingSelectedYear) {
   const values = [RANKING_ALL_PERIOD, ...years.map(String)];
   const same =
@@ -241,7 +241,7 @@ function toggleShopItems(key) {
   });
 }
 
-// ---- D14 沼レポート(アバター別支出内訳) --------------------------------
+// ---- 沼レポート(アバター別支出内訳) ------------------------------------
 //
 // 集計そのものは common.js の aggregateByAvatar。ここは画面への出し方と、
 // 未分類を手で直すための操作だけを持つ。
@@ -249,7 +249,7 @@ function toggleShopItems(key) {
 // 期間と基準(金額編・購入数編)は推し作者ランキングと同じ作法にそろえるが、
 // 選択は画面ごとに別で持つ。共有すると片方だけ見て「同じ期間の話」と
 // 読み違えるため、どちらの画面にも自分の期間を出す。
-// D12の集計対象(すべて/自分用/ギフト)は results が既に絞られているので自動で従う。
+// 集計対象(すべて/自分用/ギフト)は results が既に絞られているので自動で従う。
 
 let avatarSort = DEFAULT_SHOP_SORT;
 let avatarSelectedYear = RANKING_ALL_PERIOD;
@@ -274,7 +274,7 @@ function avatarPeriodLabel() {
   return avatarSelectedYear === RANKING_ALL_PERIOD ? "" : `${avatarSelectedYear}年`;
 }
 
-// D22 割り当てUIは「区分」と「特定アバター」の2つに分ける。
+// 割り当てUIは「区分」と「特定アバター」の2つに分ける。
 // アバターは数百体になりうるので、1つの select に全部並べると目当ての1体まで
 // 延々とスクロールすることになる。区分(5択)は select、アバターは datalist 付きの
 // 入力欄にして、名前を打てば絞り込めるようにする(2026-08-09 ユーザー要望)。
@@ -468,7 +468,7 @@ function renderAvatarArea(results = currentResults()) {
   }
 
   const shown = stats.rows.slice(0, RANKING_LIMIT);
-  // D20 分類は排他なので、4つの点数を足すと全商品の点数になる。
+  // 分類は排他なので、4つの点数を足すと全商品の点数になる。
   // 数が合うことをその場で確かめられるよう、内訳と全体を同じ行に出す
   const avatarCount = stats.rows.reduce((sum, row) => sum + row.count, 0);
   const multiCount = stats.multiItem.count + stats.multiTool.count;
@@ -548,8 +548,8 @@ function renderYearSummary(results = currentResults()) {
 
   summarySelectedYear = resolveSummaryYear(years);
   renderYearOptions(summaryYear, years, summarySelectedYear);
-  // D12 絞り込み中のまとめを、その年の全体として外へ出さない。
-  // D14 その年の最推しアバターも添える(素体名を1つも読み取れなければ空のまま)
+  // 絞り込み中のまとめを、その年の全体として外へ出さない。
+  // その年の最推しアバターも添える(素体名を1つも読み取れなければ空のまま)
   const stats = {
     ...buildYearSummary(results, summarySelectedYear),
     giftFilter,

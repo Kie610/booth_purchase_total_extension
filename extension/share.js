@@ -15,7 +15,7 @@ const RANKING_SORT_LABELS = { amount: "金額編", count: "購入数編" };
 
 const SHARE_HASHTAG = "#BOOTHお買いものレポート";
 
-// D12 集計対象を絞っているときの見出し。**文面とカードの両方に必ず出す。**
+// 集計対象を絞っているときの見出し。**文面とカードの両方に必ず出す。**
 // 画像だけが転載されることがあるので、片方だけでは部分集計が全体の数字に見える
 function giftFilterShareLabel(stats) {
   return (stats && GIFT_FILTER_SHARE_LABELS[stats.giftFilter]) || "";
@@ -32,7 +32,7 @@ function shareSubtitle(stats) {
   return label ? `BOOTHお買いものレポート・${label}` : "BOOTHお買いものレポート";
 }
 
-// D13 品名・ショップ名を伏せたときに文面へ残す断り。
+// 品名・ショップ名を伏せたときに文面へ残す断り。
 // 何も書かずに名前だけ消すと、もともと作者が居なかったように読める
 const HIDE_NAMES_NOTE = "※ショップ名は伏せています";
 
@@ -158,9 +158,9 @@ function rankingShareConfirmMessage(stats) {
   );
 }
 
-// ---- D14 沼レポートの共有 ----------------------------------------------
+// ---- 沼レポートの共有 --------------------------------------------------
 //
-// **伏せ字(D13「品名・ショップ名を出さない」)でもアバター名は出す。**
+// **品名・ショップ名を伏せてもアバター名は出す。**
 // 根拠: 伏せたいのは「誰から何を買ったか」という購買行動の細部であり、
 // アバター名はVRChatの利用者が日常的に公開している一般名詞に近い。
 // マヌカ・森羅といった素体名は数万人規模で共有されていて、
@@ -681,7 +681,7 @@ const SHARE_TEMPLATE_PATTERNS = [
   { id: "flakes", label: "フレーク", draw: patternFlakes },
 ];
 
-// 既定は淡い紫の無地。以前の既定の下地と同じ見え方にそろえてある
+// 既定は淡い紫の無地。画像や模様を指定しない場合もこの下地を使う
 const DEFAULT_SHARE_COLOR = "purple";
 const DEFAULT_SHARE_PATTERN = "gradient";
 

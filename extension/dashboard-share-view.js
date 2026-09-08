@@ -20,12 +20,12 @@ function buildRankingShareStats(results, shops, periodLabel = "") {
     pending: results.filter((r) => needsCollect(state.cache[r.id])).length,
     unknown: shops.reduce((sum, row) => sum + row.unknown, 0),
     indexComplete: indexIsComplete(state.index),
-    // D12 絞り込み中のランキングを全期間・全対象のものとして外へ出さない
+    // 絞り込み中のランキングを全期間・全対象のものとして外へ出さない
     giftFilter,
   };
 }
 
-// D14 沼レポートの共有。ランキングと同じで、画面に出した順位をそのまま持ち回る
+// 沼レポートの共有。ランキングと同じで、画面に出した順位をそのまま持ち回る
 function buildAvatarShareStats(results, stats, periodLabel = "") {
   return {
     sort: avatarSort,
@@ -144,12 +144,12 @@ function trapSharePanelFocus(event) {
 }
 
 // payload は { name, build(hideNames) => { text, card } }。
-// D13 のチェックはパネルを開いたまま切り替えられるので、押した時点の値を
+// 品名・ショップ名の表示設定はパネルを開いたまま切り替えられるので、押した時点の値を
 // 持ち回るのではなく、組み立て方そのものを持たせて何度でも組み直す
 function openSharePanel(payload) {
   shareReturnFocus = document.activeElement;
   sharePayload = payload;
-  // D14 伏せる名前を持たない共有(沼レポート)では、効かないチェックを出さない
+  // 伏せる名前を持たない共有(沼レポート)では、効かないチェックを出さない
   shareHideNamesRow.hidden = payload.maskable === false;
   applyShareNameMask();
   setShareCardStatus("");
@@ -168,7 +168,7 @@ function openSharePanel(payload) {
   shareCloseBtn.focus();
 }
 
-// D13 「品名・ショップ名を出さない」の反映。文面とカードを同じ設定で組み直す
+// 「品名・ショップ名を出さない」の反映。文面とカードを同じ設定で組み直す
 // (片方だけ伏せると、画像に無い名前が文面から出ていく)
 function applyShareNameMask() {
   if (!sharePayload) return;

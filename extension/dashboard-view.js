@@ -9,7 +9,7 @@
 
 const fetchIndexBtn = document.getElementById("fetchIndexBtn");
 const forceRefreshIndex = document.getElementById("forceRefreshIndex");
-// D10 発送状況などが変わった注文のステータスだけを取り直す(金額は取り直さない)
+// 発送状況などが変わった注文のステータスだけを取り直す(金額は取り直さない)
 const refreshIndexStatus = document.getElementById("refreshIndexStatus");
 const indexStatus = document.getElementById("indexStatus");
 const indexCoverage = document.getElementById("indexCoverage");
@@ -67,7 +67,7 @@ const giftUnknownArea = document.getElementById("giftUnknownArea");
 const giftUnknownCount = document.getElementById("giftUnknownCount");
 const giftForceRefresh = document.getElementById("giftForceRefresh");
 const giftUrlForceRefresh = document.getElementById("giftUrlForceRefresh");
-// D12 集計対象のバー。ギフト・注文の画面ではギフトそのものが対象なので隠す
+// 集計対象のバー。ギフト・注文の画面ではギフトそのものが対象なので隠す
 const giftFilterBar = document.getElementById("giftFilterBar");
 const authorHeaderBtn = document.getElementById("authorHeaderBtn");
 const footTotal = document.getElementById("footTotal");
@@ -108,7 +108,7 @@ const errorBox = document.getElementById("errorBox");
 const menuBtn = document.getElementById("menuBtn");
 const themeSwitch = document.getElementById("themeSwitch");
 const themeModeName = document.getElementById("themeModeName");
-// D12 集計対象(すべて/自分用/ギフト)。全ビューの上に1つだけ置く
+// 集計対象(すべて/自分用/ギフト)。全ビューの上に1つだけ置く
 const giftFilterSwitch = document.getElementById("giftFilterSwitch");
 const giftFilterNote = document.getElementById("giftFilterNote");
 const navDrawer = document.getElementById("navDrawer");
@@ -169,11 +169,11 @@ const rankingSortToggle = document.getElementById("rankingSortToggle");
 const rankingHideNumbers = document.getElementById("rankingHideNumbers");
 const pendingBanner = document.getElementById("pendingBanner");
 const pendingBannerText = document.getElementById("pendingBannerText");
-// D15 収集健全性の警報
+// 収集健全性の警報
 const collectHealthBanner = document.getElementById("collectHealthBanner");
 const collectHealthText = document.getElementById("collectHealthText");
 const collectHealthClose = document.getElementById("collectHealthClose");
-// D16 絞り込み中のCSVが部分集計であることの断り書き
+// 絞り込み中のCSVが部分集計であることの断り書き
 const exportFilterNote = document.getElementById("exportFilterNote");
 const backupStats = document.getElementById("backupStats");
 const backupCoverage = document.getElementById("backupCoverage");
@@ -205,9 +205,9 @@ const shareCopyBtn = document.getElementById("shareCopyBtn");
 const shareSaveBtn = document.getElementById("shareSaveBtn");
 const shareOpenBtn = document.getElementById("shareOpenBtn");
 const shareCardStatus = document.getElementById("shareCardStatus");
-// D13 品名・ショップ名を出さずに共有する
+// 品名・ショップ名を出さずに共有する
 const shareHideNames = document.getElementById("shareHideNames");
-// D14 沼レポートには伏せる品名・ショップ名が無いので、その共有では行ごと隠す。
+// 沼レポートには伏せる品名・ショップ名が無いので、その共有では行ごと隠す。
 // 押しても何も変わらないチェックが残っていると、効いていないのか壊れているのか分からない
 const shareHideNamesRow = shareHideNames.closest(".share-hide-names");
 
@@ -336,7 +336,7 @@ function dismissPendingBanner() {
   pendingBanner.hidden = true;
 }
 
-// ---- D15 収集健全性の警報 ----------------------------------------------
+// ---- 収集健全性の警報 --------------------------------------------------
 //
 // 直近の1回の収集で数えた { attempted, unreadable }。ストレージへは書かない
 // (閾値も状態も次の収集で数え直す)。収集していない間は null で何も出さない
@@ -399,7 +399,7 @@ function renderThemeSwitch(theme) {
   if (themeModeName) themeModeName.textContent = THEME_MODE_NAMES[current];
 }
 
-// ---- D12 集計対象の絞り込み --------------------------------------------
+// ---- 集計対象の絞り込み -----------------------------------------------
 //
 // 既定は「すべて」。保存しないので、開き直せば必ず全体の集計から始まる。
 // 絞っている間の金額は商品の内訳から出すため、注文単位のお支払金額との差
